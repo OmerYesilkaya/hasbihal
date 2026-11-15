@@ -48,7 +48,10 @@ async function launch(dataDir = userData): Promise<Page> {
   return app.firstWindow();
 }
 
-/** With E2E_SCREENSHOTS=<dir>, saves what the user sees at key moments, for UI review. */
+/**
+ * With E2E_SCREENSHOTS=<dir>, saves what the user sees at key moments, for UI review. Use a
+ * folder outside test-results/: Playwright empties that one at the start of every run.
+ */
 async function snap(page: Page, name: string): Promise<void> {
   const dir = process.env.E2E_SCREENSHOTS;
   if (dir) await page.screenshot({ path: path.join(dir, `${name}.png`) });
