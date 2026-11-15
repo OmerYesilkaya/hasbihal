@@ -1,0 +1,24 @@
+{
+  "name": "@hasbihal/spike-media",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway M0 spikes S1 (screen share + system audio) and S2 (DeepFilterNet). Not product code.",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "package": "electron-vite build && electron-builder --config electron-builder.yml --dir"
+  },
+  "dependencies": {
+    "livekit-server-sdk": "2.19.3"
+  },
+  "devDependencies": {
+    "@workadventure/noise-suppression": "0.2.0",
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0",
+    "electron-vite": "6.0.0",
+    "livekit-client": "2.24.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.8"
+  }
+}

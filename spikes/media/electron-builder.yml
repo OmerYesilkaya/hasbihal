@@ -1,0 +1,22 @@
+appId: com.hasbihal.spike.media
+productName: Hasbihal Spike
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+mac:
+  target: dir
+  # Self-signed certificate from the build machine's Keychain (DECISIONS A50). It gives the
+  # app a stable identity, so macOS keeps privacy permissions across updates. Not notarized.
+  identity: Hasbihal Self-Signed
+  hardenedRuntime: false
+  minimumSystemVersion: '14.2'
+  extendInfo:
+    NSMicrophoneUsageDescription: Spike S2 tests noise suppression on your microphone.
+    NSCameraUsageDescription: Not used by the spike.
+    NSAudioCaptureUsageDescription: Spike S1 captures system audio while screen sharing.
+win:
+  target: dir
+  # Built on a Mac: editing the .exe resources would need Wine. The spike doesn't need its own icon or metadata.
+  signAndEditExecutable: false
