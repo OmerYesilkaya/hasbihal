@@ -1,0 +1,75 @@
+# Production on one VPS (ARCHITECTURE §10.1, ROADMAP M1 step 9). See README.md for the runbook.
+# Everything is configured through .env next to this file (copy .env.example).
+name: hasbihal
+
+services:
+  postgres:
+    image: postgres:17.12
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hasbihal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: hasbihal
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hasbihal -d hasbihal']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  server:
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://hasbihal:${POSTGRES_PASSWORD}@postgres:5432/hasbihal
+      AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:?set AUTH_SIGNING_KEY in .env}
+      LIVEKIT_URL: wss://${HASBIHAL_HOST}/livekit
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}
+      # Behind Caddy: rate limits must see the client's address, not Caddy's.
+      TRUST_PROXY: 'true'
+      # The packaged desktop app's origin (A30: there is no web client).
+      ALLOWED_ORIGINS: app://hasbihal
+      LOG_LEVEL: info
+    volumes:
+      - files:/data/files
+
+  # Media goes straight to LiveKit (UDP); only its signaling WebSocket goes through Caddy.
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    restart: unless-stopped
+    network_mode: host
+    command: --config /etc/livekit.yaml
+    environment:
+      LIVEKIT_KEYS: '${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}'
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+
+  caddy:
+    image: caddy:2.11.9
+    restart: unless-stopped
+    depends_on: [server]
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      HASBIHAL_HOST: ${HASBIHAL_HOST:?set HASBIHAL_HOST in .env}
+    extra_hosts:
+      # LiveKit uses host networking; this name reaches the host from Caddy's container.
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  postgres-data:
+  files:
+  caddy-data:
+  caddy-config:

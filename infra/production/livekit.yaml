@@ -1,0 +1,31 @@
+# LiveKit in production. Keys come from LIVEKIT_KEYS (compose.yml). Keep `room.enabled_codecs` in
+# step with infra/livekit.dev.yaml (DECISIONS T8).
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  # The VPS has a public address: LiveKit discovers it and announces it to clients.
+  use_external_ip: true
+turn:
+  # For networks that block UDP media (hotels, some mobile carriers). TURN over TLS (5349) needs
+  # a certificate and comes later (ROADMAP M6).
+  enabled: true
+  udp_port: 3478
+room:
+  enabled_codecs:
+    - mime: audio/opus
+    - mime: audio/red
+    - mime: video/vp8
+    - mime: video/vp9
+    - mime: video/av1
+    - mime: video/h265
+    - mime: video/h264
+    - mime: video/h264
+      fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+    - mime: video/h264
+      fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f
+    - mime: video/h264
+      fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032
+logging:
+  level: info

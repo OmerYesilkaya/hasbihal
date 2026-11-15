@@ -27,3 +27,15 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @hasbihal/desktop build
+
+  # The production image (infra/production) must keep building, and its native modules loading,
+  # even while nothing is deployed.
+  server-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f apps/server/Dockerfile -t hasbihal-server:ci .
+      - name: Native modules load in the image
+        run: >
+          docker run --rm hasbihal-server:ci node --disable-warning=ExperimentalWarning -e
+          "Promise.all([import('sharp'), import('argon2')]).then(() => console.log('ok'))"
