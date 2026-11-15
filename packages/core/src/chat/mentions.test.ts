@@ -28,6 +28,13 @@ describe('extractMentions', () => {
     expect(extractMentions(body)).toEqual({ usernames: ['ayse'], everyone: false });
   });
 
+  it('finds mentions in quotes and lists too', () => {
+    expect(extractMentions('> @omer dedi ki\n- @ayse')).toEqual({
+      usernames: ['omer', 'ayse'],
+      everyone: false,
+    });
+  });
+
   it('ignores names that are too short or too long', () => {
     expect(extractMentions('@ab @abcdefghijklmnopqrstu')).toEqual({
       usernames: [],
