@@ -7,6 +7,7 @@ import { EventChip } from '../events/EventChip.tsx';
 import { EventsDialog } from '../events/EventsDialog.tsx';
 import { nextOccurrence, useEvents } from '../events/useEvents.ts';
 import { HangoutPanel } from '../hangout/HangoutPanel.tsx';
+import { RoomPrefsMenu } from '../rooms/RoomPrefsMenu.tsx';
 import { Composer, type ComposerHandle } from './Composer.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { MessageList } from './MessageList.tsx';
@@ -99,16 +100,19 @@ export function RoomView({ roomId }: { roomId: string }) {
           <span aria-hidden>#</span> {room.name}
         </h1>
         {room.topic && <p className="room-view__topic">{room.topic}</p>}
-        {/* Members see it when something is coming up; admins always, to add one. */}
-        {(nextOccurrence(events, roomId) !== undefined || state.me?.role === 'admin') && (
-          <EventChip
-            view={events}
-            roomId={roomId}
-            onOpen={() => {
-              setEventsOpen(true);
-            }}
-          />
-        )}
+        <div className="room-view__actions">
+          {/* Members see it when something is coming up; admins always, to add one. */}
+          {(nextOccurrence(events, roomId) !== undefined || state.me?.role === 'admin') && (
+            <EventChip
+              view={events}
+              roomId={roomId}
+              onOpen={() => {
+                setEventsOpen(true);
+              }}
+            />
+          )}
+          <RoomPrefsMenu roomId={roomId} />
+        </div>
       </header>
       {eventsOpen && (
         <EventsDialog

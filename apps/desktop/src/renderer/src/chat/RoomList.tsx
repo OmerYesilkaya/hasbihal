@@ -85,7 +85,10 @@ export function RoomList({
       <ul>
         {rooms.map((room) => {
           const selected = room.id === selectedId;
-          const unread = !selected && room.unreadCount > 0;
+          // A muted room keeps only its mention badge (A28).
+          const muted = room.prefs.notify === 'muted';
+          const unread = !selected && (muted ? room.unreadMentionCount > 0 : room.unreadCount > 0);
+          const count = muted ? room.unreadMentionCount : room.unreadCount;
           return (
             <li key={room.id}>
               <button
@@ -93,6 +96,7 @@ export function RoomList({
                 className="room"
                 data-testid="room"
                 aria-current={selected ? 'page' : undefined}
+                data-muted={muted ? true : undefined}
                 data-unread={unread ? true : undefined}
                 onClick={() => {
                   onSelect(room.id);
@@ -116,7 +120,7 @@ export function RoomList({
                     data-mention={room.unreadMentionCount > 0 ? true : undefined}
                     data-testid="unread"
                   >
-                    {room.unreadCount > 99 ? '99+' : room.unreadCount}
+                    {count > 99 ? '99+' : count}
                   </span>
                 )}
               </button>

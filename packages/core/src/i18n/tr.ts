@@ -226,6 +226,24 @@ export const tr = {
   'admin.deleteRoom': 'Sil',
   'admin.deleteRoomConfirm':
     '#{name} ve tüm mesajları kalıcı olarak silinsin mi? Bunun yerine arşivleyebilirsin.',
+  'prefs.heading': 'Bildirimler',
+  'prefs.notify.mentions': 'Yalnızca benden bahsedilince',
+  'prefs.notify.all': 'Her mesajda',
+  'prefs.notify.muted': 'Sessiz',
+  'prefs.sound': 'Her mesajda ses çal',
+  'prefs.hangoutAlerts': 'Sesli sohbet başlayınca haber ver',
+  'prefs.hint':
+    'Çağrılar ve etkinlik hatırlatmaları her zaman gelir. Meşgulken hiçbir bildirim gelmez.',
+  'tray.open': 'Hasbihal’ı aç',
+  'tray.launchAtStartup': 'Bilgisayar açılınca başlat',
+  'tray.quit': 'Hasbihal’dan çık',
+  'tray.mentions': '{count, plural, one {# bahsetme} other {# bahsetme}}',
+  'tray.stillRunningTitle': 'Hasbihal arka planda açık',
+  'tray.stillRunningBody':
+    'Çağrılar ve bildirimler gelmeye devam eder. Çıkmak için buradaki simgeye sağ tıkla.',
+  'profile.launchAtStartup': 'Bilgisayar açılınca Hasbihal’ı başlat',
+  'profile.launchAtStartupHint':
+    'Böylece çağrılar ve hatırlatmalar hep gelir. Pencereyi kapatınca da arka planda çalışır.',
   'hangout.join': 'Sesli sohbete katıl',
   'hangout.leave': 'Ayrıl',
   'hangout.mute': 'Mikrofonu kapat',

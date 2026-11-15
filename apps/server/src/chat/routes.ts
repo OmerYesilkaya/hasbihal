@@ -8,6 +8,7 @@ import {
   Id,
   MarkReadRequest,
   MessagePageQuery,
+  RoomPrefs,
   SearchQuery,
   SendMessageRequest,
   type SearchResults,
@@ -518,6 +519,26 @@ export function registerChat(
   );
 
   // ---- read state ----------------------------------------------------------------------------
+
+  /** How this member hears about the room (A28); their other devices follow at once. */
+  app.put('/rooms/:id/prefs', { preHandler: requireAuth }, async (request): Promise<RoomPrefs> => {
+    const { id: roomId } = parseRequest(IdParam, request.params, 'params');
+    const prefs = parseRequest(RoomPrefs, request.body, 'body');
+    const { userId } = auth(request);
+    await roomFor(db, roomId);
+    const values = {
+      notify_level: prefs.notify,
+      sound_on_message: prefs.sound,
+      hangout_start_alerts: prefs.hangoutAlerts,
+    };
+    await db
+      .insertInto('room_user_prefs')
+      .values({ room_id: roomId, user_id: userId, ...values })
+      .onConflict((oc) => oc.columns(['room_id', 'user_id']).doUpdateSet(values))
+      .execute();
+    hub.sendToUser(userId, { type: 'room_prefs', roomId, prefs });
+    return prefs;
+  });
 
   /** Unread badges only; never shown to others (A22: no read receipts). */
   app.post('/rooms/:id/read', { preHandler: requireAuth }, async (request, reply) => {

@@ -81,8 +81,28 @@ export type Message = z.infer<typeof Message>;
 // ---- HTTP ------------------------------------------------------------------------------------
 
 /** A room as one member sees it: with their unread state. */
+/**
+ * How one member wants to hear about a room (A28). By default: notify on mentions only, no sound
+ * for ordinary messages, and say when a hangout starts.
+ */
+export const RoomPrefs = z.object({
+  /** `mentions`: only mentions notify; `all`: every message; `muted`: nothing (mentions keep a badge). */
+  notify: z.enum(['mentions', 'all', 'muted']),
+  /** With `all`: play a sound for every message. */
+  sound: z.boolean(),
+  /** Say when someone starts a hangout here (A28). */
+  hangoutAlerts: z.boolean(),
+});
+export type RoomPrefs = z.infer<typeof RoomPrefs>;
+export const DEFAULT_ROOM_PREFS: RoomPrefs = {
+  notify: 'mentions',
+  sound: false,
+  hangoutAlerts: true,
+};
+
 export const RoomWithState = Room.extend({
   lastReadMessageId: Id.nullable(),
+  prefs: RoomPrefs,
   /** Messages by others after the read marker. */
   unreadCount: z.number().int().nonnegative(),
   /** Of those, how many mention this member or @everyone. */

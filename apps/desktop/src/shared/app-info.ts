@@ -58,6 +58,11 @@ export interface SystemBridge {
   onShortcut(listener: (action: 'mute' | 'deafen') => void): () => void;
   /** Brings the window to the front, e.g. after a notification is clicked. */
   focusWindow(): void;
+  /** Whether the app starts with the computer (A39); null in builds that don't manage it. */
+  launchAtStartup(): Promise<boolean | null>;
+  setLaunchAtStartup(on: boolean): Promise<void>;
+  /** Unread mentions, for the macOS dock badge and the tray tooltip. */
+  setMentions(count: number): void;
 }
 
 /** Something that can be shared (A14): a whole screen or one window. */
@@ -96,6 +101,9 @@ export const IPC = {
   systemShortcuts: 'system:shortcuts',
   shortcut: 'system:shortcut',
   focusWindow: 'system:focus-window',
+  launchAtStartup: 'system:launch-at-startup',
+  setLaunchAtStartup: 'system:set-launch-at-startup',
+  mentions: 'system:mentions',
   screenSources: 'screen:sources',
   screenChoose: 'screen:choose',
 } as const;

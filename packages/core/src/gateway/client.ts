@@ -8,6 +8,7 @@ import {
   type HangoutParticipant,
   type PresenceMode,
   type PresenceStatus,
+  type RoomPrefs,
   type ServerWelcome,
 } from '@hasbihal/protocol';
 import { DEFAULT_BACKOFF, reconnectDelay, type BackoffOptions } from './backoff.ts';
@@ -61,6 +62,8 @@ export interface GatewayClientOptions {
   onTyping?: (roomId: string, userId: string) => void;
   /** This member's read marker moved, possibly on another device. */
   onReadState?: (roomId: string, lastReadMessageId: string) => void;
+  /** This member changed a room's notification settings, possibly on another device (A28). */
+  onRoomPrefs?: (roomId: string, prefs: RoomPrefs) => void;
   /** A room's hangout changed: everyone in it now. */
   onHangout?: (roomId: string, participants: HangoutParticipant[]) => void;
   /** Someone joined an empty room (A28). */
@@ -208,6 +211,9 @@ export class GatewayClient {
           return;
         case 'read_state':
           this.options.onReadState?.(message.roomId, message.lastReadMessageId);
+          return;
+        case 'room_prefs':
+          this.options.onRoomPrefs?.(message.roomId, message.prefs);
           return;
         case 'hangout':
           this.options.onHangout?.(message.roomId, message.participants);
