@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import {
@@ -10,11 +10,23 @@ import {
 } from '@hasbihal/protocol';
 import { buildApp } from './app.ts';
 import { loadConfig } from './config.ts';
+import { createDatabase } from './db/database.ts';
+import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 
 let app: FastifyInstance;
+let testDb: TestDatabase;
+const config = loadConfig({ LOG_LEVEL: 'silent', HELLO_TIMEOUT_MS: '200' });
+
+beforeAll(async () => {
+  testDb = await createTestDatabase();
+});
+
+afterAll(async () => {
+  await testDb.drop();
+});
 
 beforeEach(async () => {
-  app = await buildApp(loadConfig({ LOG_LEVEL: 'silent', HELLO_TIMEOUT_MS: '200' }));
+  app = await buildApp(config, { db: testDb.db });
   await app.ready();
 });
 
@@ -46,7 +58,22 @@ describe('GET /health', () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(200);
     const body = HealthResponse.parse(res.json());
+    expect(body.status).toBe('ok');
     expect(body.protocolVersion).toBe(PROTOCOL_VERSION);
+  });
+
+  it('reports 503 when the database is unreachable', async () => {
+    // Port 1 refuses connections immediately.
+    const unreachable = createDatabase('postgres://nobody@127.0.0.1:1/none');
+    const broken = await buildApp(config, { db: unreachable });
+    try {
+      const res = await broken.inject({ method: 'GET', url: '/health' });
+      expect(res.statusCode).toBe(503);
+      expect(HealthResponse.parse(res.json()).status).toBe('unavailable');
+    } finally {
+      await broken.close();
+      await unreachable.destroy();
+    }
   });
 
   it('allows the desktop dev origin and rejects others', async () => {

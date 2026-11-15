@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 export const HealthResponse = z.object({
-  status: z.literal('ok'),
+  /** `unavailable` (HTTP 503) when a dependency such as the database can't be reached. */
+  status: z.enum(['ok', 'unavailable']),
   serverVersion: z.string(),
   protocolVersion: z.number().int(),
 });

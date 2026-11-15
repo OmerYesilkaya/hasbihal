@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@hasbihal/protocol": "workspace:*",
-    "intl-messageformat": "12.1.5"
+    "intl-messageformat": "12.1.5",
+    "uuid": "14.0.3"
   },
   "devDependencies": {
     "@hasbihal/config": "workspace:*"
