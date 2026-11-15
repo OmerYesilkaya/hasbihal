@@ -1,0 +1,127 @@
+name: Release
+
+# Builds the installers (DECISIONS A30: plain .dmg and .exe, no auto-update) and puts them on a
+# draft GitHub Release for the owner to check and publish. Push a tag that matches the app's
+# version (apps/desktop/package.json), e.g. `git tag v1.0.0 && git push origin v1.0.0`, or run it
+# by hand from the Actions tab (then the installers are only kept as workflow artifacts).
+#
+# Needs, under the repository's Settings → Secrets and variables → Actions:
+#   - variable HASBIHAL_SERVER_URL: the server the app talks to, e.g. https://hasbihal.duckdns.org
+#     (it is built into the app, A30);
+#   - secrets MAC_CERT_P12 (the "Hasbihal Self-Signed" certificate and key, .p12, base64) and
+#     MAC_CERT_PASSWORD (A50).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  MAIN_VITE_SERVER_URL: ${{ vars.HASBIHAL_SERVER_URL }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The server address is set
+        run: |
+          if [ -z "$MAIN_VITE_SERVER_URL" ]; then
+            echo "::error::Set the HASBIHAL_SERVER_URL variable: the app has its server built in (A30)."
+            exit 1
+          fi
+      - name: The tag matches the app's version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} doesn't match the app's version ${version}."
+            exit 1
+          fi
+
+  macos:
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A50: a stable self-signed identity, so macOS keeps everyone's permissions across updates.
+      # An ad-hoc build would lose them, so there is no fallback: without the certificate, stop.
+      - name: Install the signing certificate
+        env:
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          if [ -z "$MAC_CERT_P12" ]; then
+            echo "::error::Add the MAC_CERT_P12 and MAC_CERT_PASSWORD secrets (DECISIONS A50)."
+            exit 1
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          echo "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p ci "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p ci "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          # A self-signed certificate is only usable for code signing once it is trusted.
+          openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -passin env:MAC_CERT_PASSWORD -nokeys -legacy \
+            -out "$RUNNER_TEMP/cert.pem" 2>/dev/null ||
+            openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -passin env:MAC_CERT_PASSWORD -nokeys \
+              -out "$RUNNER_TEMP/cert.pem"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
+          security find-identity -v -p codesigning "$keychain" | grep -q "Hasbihal Self-Signed"
+          rm "$RUNNER_TEMP/cert.p12"
+      - run: pnpm --filter @hasbihal/desktop package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hasbihal-macos
+          path: apps/desktop/release/*.dmg
+          if-no-files-found: error
+
+  windows:
+    needs: check
+    runs-on: windows-latest
+    env:
+      # Unsigned (A30): don't look for a code-signing certificate.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hasbihal/desktop package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hasbihal-windows
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      # A draft: the owner tests the installers, then publishes it and tells the family (A30).
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" installers/* --draft --title "Hasbihal
+          ${GITHUB_REF_NAME#v}" --notes-file docs/KURULUM.md
