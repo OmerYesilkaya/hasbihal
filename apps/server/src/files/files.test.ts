@@ -182,6 +182,40 @@ describe('attachments (A26)', () => {
   });
 });
 
+describe('voice messages (A22)', () => {
+  const uploadVoice = (data: Buffer, mime: string, query: string) => {
+    const body = multipart(data, 'sesli-mesaj.webm', mime);
+    return h.app.inject({
+      method: 'POST',
+      url: `/files?${query}`,
+      headers: { authorization: `Bearer ${as(ayse)}`, ...body.headers },
+      payload: body.payload,
+    });
+  };
+
+  it('takes a recording with the recorder’s duration, and sends it as a message', async () => {
+    // Not real Opus: without a duration in the file, the recorder's measurement is used.
+    const res = await uploadVoice(
+      Buffer.from('opus'),
+      'audio/webm;codecs=opus',
+      'kind=voice&durationMs=4200',
+    );
+    expect(res.statusCode, res.body).toBe(201);
+    const voice = Attachment.parse(res.json());
+    expect(voice).toMatchObject({ kind: 'voice', mime: 'audio/webm', durationMs: 4200 });
+    const sent = await send(ayse, [voice.id]);
+    expect(Message.parse(sent.json()).attachments).toEqual([voice]);
+  });
+
+  it('refuses anything that isn’t recorded audio, and recordings over five minutes', async () => {
+    expect((await uploadVoice(Buffer.from('x'), 'video/mp4', 'kind=voice')).statusCode).toBe(400);
+    expect(
+      (await uploadVoice(Buffer.from('x'), 'audio/webm', 'kind=voice&durationMs=400000'))
+        .statusCode,
+    ).toBe(400);
+  });
+});
+
 describe('unused files', () => {
   it('removes abandoned uploads and the files of deleted messages, nothing else', async () => {
     const kept = await uploaded(admin, await photo(), 'kalsın.jpg', 'image/jpeg');

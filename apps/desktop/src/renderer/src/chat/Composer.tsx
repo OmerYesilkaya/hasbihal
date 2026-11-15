@@ -12,10 +12,11 @@ import { decorate, foldTurkish, newId, type Decoration, type MessageKey } from '
 import { Message, MESSAGE_BODY_MAX, type User } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useT } from '../i18n.tsx';
-import { formatSize } from '../files.ts';
+import { formatSize, uploadFile } from '../files.ts';
 import { locale } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { useUploads } from './useUploads.ts';
+import { VoiceRecorder, type Recording } from './VoiceRecorder.tsx';
 
 /** Typing notices go out at most this often while typing (the server throttles too). */
 const TYPING_EVERY_MS = 3_000;
@@ -71,6 +72,41 @@ export function Composer({
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
 
   const { uploads, add, remove, retry, clear } = useUploads(info.serverUrl);
+  const [recording, setRecording] = useState(false);
+  /** A voice message on its way: upload progress, 0–1. */
+  const [voiceProgress, setVoiceProgress] = useState<number | null>(null);
+
+  const sendVoice = async ({ file, durationMs }: Recording) => {
+    setRecording(false);
+    setVoiceProgress(0);
+    const replyToId = replyTo?.id;
+    const upload = await uploadFile(
+      info.serverUrl,
+      file,
+      setVoiceProgress,
+      new AbortController().signal,
+      { durationMs },
+    );
+    const result = upload.ok
+      ? await api(info.serverUrl, 'POST', `/rooms/${roomId}/messages`, {
+          body: {
+            id: newId(),
+            body: '',
+            attachmentIds: [upload.value.id],
+            ...(replyToId ? { replyToId } : {}),
+          },
+          schema: Message,
+        })
+      : upload;
+    setVoiceProgress(null);
+    if (result.ok && result.value) {
+      store.apply({ type: 'message_created', message: result.value });
+      onCancel();
+    } else {
+      setError('voice.sendFailed');
+    }
+    input.current?.focus();
+  };
   const addFiles = (files: File[]) => {
     if (!files.length || editing) return;
     setError(add(files));
@@ -299,99 +335,128 @@ export function Composer({
           ))}
         </ul>
       )}
-      <div className="composer__field">
-        {!editing && (
-          <>
-            <button
-              type="button"
-              className="composer__attach"
-              aria-label={t('composer.attach')}
-              title={t('composer.attach')}
-              onClick={() => picker.current?.click()}
-            >
-              📎
-            </button>
-            <input
-              ref={picker}
-              type="file"
-              multiple
-              hidden
-              data-testid="file-picker"
-              onChange={(e) => {
-                addFiles([...(e.target.files ?? [])]);
-                e.target.value = '';
-              }}
-            />
-          </>
-        )}
-        <div className="composer__mirror" ref={mirror} aria-hidden>
-          {renderDecorated(text)}
-          {'​'}
-        </div>
-        <textarea
-          ref={input}
-          className="composer__input"
-          rows={1}
-          value={text}
-          placeholder={t('composer.placeholder', { room: roomName })}
-          aria-label={t('composer.label')}
-          spellCheck
-          onChange={(e) => {
-            setText(e.target.value);
-            setCaret(e.target.selectionStart);
-            setDismissedAt(null);
-            setSelected(0);
-            const now = Date.now();
-            if (!editing && e.target.value.trim() && now - lastTyping.current > TYPING_EVERY_MS) {
-              lastTyping.current = now;
-              typing(roomId);
-            }
-          }}
-          onSelect={(e) => {
-            setCaret(e.currentTarget.selectionStart);
-          }}
-          onScroll={(e) => {
-            if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop;
-          }}
-          onKeyDown={onKeyDown}
-          onPaste={(e) => {
-            // Pasted pictures and files (a screenshot, a copied photo) become attachments.
-            const files = [...e.clipboardData.files];
-            if (!files.length || editing) return;
-            e.preventDefault();
-            addFiles(files);
+      {recording ? (
+        <VoiceRecorder
+          onSend={(r) => void sendVoice(r)}
+          onCancel={(why) => {
+            setRecording(false);
+            setError(why ?? null);
           }}
         />
-        {suggestions.length > 0 && (
-          <ul className="suggestions" role="listbox" aria-label={t('composer.mentions')}>
-            {suggestions.map((choice, i) => (
-              <li
-                key={choice === 'everyone' ? 'everyone' : choice.id}
-                role="option"
-                aria-selected={i === selected}
+      ) : voiceProgress !== null ? (
+        <div className="recorder">
+          <span className="recorder__hint">{t('voice.sending')}</span>
+          <progress className="recorder__progress" value={voiceProgress} max={1} />
+        </div>
+      ) : (
+        <div className="composer__field">
+          {!editing && (
+            <>
+              <button
+                type="button"
+                className="composer__attach"
+                aria-label={t('composer.attach')}
+                title={t('composer.attach')}
+                onClick={() => picker.current?.click()}
               >
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault(); // keep the textarea focused
-                    insertMention(choice);
-                  }}
+                📎
+              </button>
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                hidden
+                data-testid="file-picker"
+                onChange={(e) => {
+                  addFiles([...(e.target.files ?? [])]);
+                  e.target.value = '';
+                }}
+              />
+            </>
+          )}
+          <div className="composer__mirror" ref={mirror} aria-hidden>
+            {renderDecorated(text)}
+            {'​'}
+          </div>
+          <textarea
+            ref={input}
+            className="composer__input"
+            rows={1}
+            value={text}
+            placeholder={t('composer.placeholder', { room: roomName })}
+            aria-label={t('composer.label')}
+            spellCheck
+            onChange={(e) => {
+              setText(e.target.value);
+              setCaret(e.target.selectionStart);
+              setDismissedAt(null);
+              setSelected(0);
+              const now = Date.now();
+              if (!editing && e.target.value.trim() && now - lastTyping.current > TYPING_EVERY_MS) {
+                lastTyping.current = now;
+                typing(roomId);
+              }
+            }}
+            onSelect={(e) => {
+              setCaret(e.currentTarget.selectionStart);
+            }}
+            onScroll={(e) => {
+              if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop;
+            }}
+            onKeyDown={onKeyDown}
+            onPaste={(e) => {
+              // Pasted pictures and files (a screenshot, a copied photo) become attachments.
+              const files = [...e.clipboardData.files];
+              if (!files.length || editing) return;
+              e.preventDefault();
+              addFiles(files);
+            }}
+          />
+          {suggestions.length > 0 && (
+            <ul className="suggestions" role="listbox" aria-label={t('composer.mentions')}>
+              {suggestions.map((choice, i) => (
+                <li
+                  key={choice === 'everyone' ? 'everyone' : choice.id}
+                  role="option"
+                  aria-selected={i === selected}
                 >
-                  {choice === 'everyone' ? (
-                    <>
-                      <strong>@everyone</strong> <span>{t('composer.everyone')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <strong>{choice.displayName}</strong> <span>@{choice.username}</span>
-                    </>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // keep the textarea focused
+                      insertMention(choice);
+                    }}
+                  >
+                    {choice === 'everyone' ? (
+                      <>
+                        <strong>@everyone</strong> <span>{t('composer.everyone')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <strong>{choice.displayName}</strong> <span>@{choice.username}</span>
+                      </>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!editing && !text && uploads.length === 0 && (
+            <button
+              type="button"
+              className="composer__voice"
+              aria-label={t('voice.record')}
+              title={t('voice.record')}
+              onClick={() => {
+                setError(null);
+                setRecording(true);
+              }}
+            >
+              🎤
+            </button>
+          )}
+        </div>
+      )}
       {text.length > MESSAGE_BODY_MAX - 500 && (
         <p
           className="composer__count"

@@ -2066,3 +2066,104 @@ body {
 .viewer__step--next {
   right: 16px;
 }
+
+/* Voice messages (A22) */
+
+.composer__voice {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.composer__voice:hover {
+  background: var(--hb-chip);
+}
+
+.recorder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 4px 6px 4px 14px;
+  border: 1px solid var(--hb-accent);
+  border-radius: 10px;
+  background: var(--hb-input);
+}
+
+.recorder__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--hb-primary);
+  animation: recorder-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recorder-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recorder__dot {
+    animation: none;
+  }
+}
+
+.recorder__time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.recorder__hint {
+  flex: 1;
+  color: var(--hb-text-secondary);
+  font-size: 13px;
+}
+
+.recorder__progress {
+  width: 200px;
+  accent-color: var(--hb-accent);
+}
+
+.voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 300px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--hb-border);
+  border-radius: 22px;
+  background: var(--hb-bg);
+}
+
+.voice__play {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--hb-secondary);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.voice__seek {
+  flex: 1;
+  accent-color: var(--hb-secondary);
+}
+
+.voice__time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hb-text-secondary);
+}

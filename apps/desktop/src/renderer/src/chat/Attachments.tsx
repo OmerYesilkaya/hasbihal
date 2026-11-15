@@ -32,7 +32,9 @@ export function Attachments({ attachments }: { attachments: Attachment[] }) {
         </div>
       )}
       {others.map((a) =>
-        a.kind === 'audio' ? (
+        a.kind === 'voice' ? (
+          <VoicePlayer key={a.id} attachment={a} />
+        ) : a.kind === 'audio' ? (
           <AudioPlayer key={a.id} attachment={a} />
         ) : (
           <FileCard key={a.id} attachment={a} />
@@ -102,6 +104,72 @@ function MediaThumb({
         {attachment.kind === 'video' ? t('attachment.video') : t('attachment.photo')}
       </span>
     </button>
+  );
+}
+
+/** A voice message (A22): play and pause, where it is, and how long it is. */
+function VoicePlayer({ attachment }: { attachment: Attachment }) {
+  const t = useT();
+  const { info } = useChat();
+  const addresses = useFileAddresses(info.serverUrl, attachment.id);
+  const audio = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [position, setPosition] = useState(0);
+  // Recorded WebM often has no duration in its header ("Infinity"): the recorder's measurement.
+  const total = attachment.durationMs ?? 0;
+  return (
+    <div className="voice" data-testid="voice-message" data-playing={playing ? true : undefined}>
+      <button
+        type="button"
+        className="voice__play"
+        disabled={!addresses}
+        aria-label={playing ? t('voice.pause') : t('voice.play')}
+        onClick={() => {
+          const el = audio.current;
+          if (!el) return;
+          if (el.paused) void el.play();
+          else el.pause();
+        }}
+      >
+        {playing ? '❚❚' : '▶'}
+      </button>
+      <input
+        className="voice__seek"
+        type="range"
+        min={0}
+        max={Math.max(total, 1)}
+        step={100}
+        value={Math.min(position, total)}
+        aria-label={t('voice.message')}
+        onChange={(e) => {
+          const el = audio.current;
+          if (el) el.currentTime = Number(e.target.value) / 1000;
+        }}
+      />
+      <span className="voice__time">
+        {formatDuration(playing || position > 0 ? position : total)}
+      </span>
+      {addresses && (
+        <audio
+          ref={audio}
+          src={addresses.original}
+          preload="metadata"
+          onPlay={() => {
+            setPlaying(true);
+          }}
+          onPause={() => {
+            setPlaying(false);
+          }}
+          onEnded={() => {
+            setPlaying(false);
+            setPosition(0);
+          }}
+          onTimeUpdate={(e) => {
+            setPosition(e.currentTarget.currentTime * 1000);
+          }}
+        />
+      )}
+    </div>
   );
 }
 

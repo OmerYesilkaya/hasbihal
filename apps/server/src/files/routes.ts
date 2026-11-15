@@ -13,13 +13,15 @@ import {
   FileUrlsRequest,
   Id,
   UPLOAD_MAX_BYTES,
+  UploadQuery,
+  VOICE_MAX_BYTES,
   type Attachment,
   type FileUrls,
 } from '@hasbihal/protocol';
 import type { AuthGuards } from '../auth/routes.ts';
 import type { Database, FilesTable } from '../db/schema.ts';
 import { AppError, parseRequest } from '../errors.ts';
-import { inspectUpload } from './media.ts';
+import { inspectUpload, inspectVoice } from './media.ts';
 import { FILE_URL_TTL_MS, type FileUrlSigner, type FileVariant } from './signing.ts';
 import { storageKey, type ByteRange, type FileStore } from './store.ts';
 
@@ -106,7 +108,10 @@ export function registerFiles(
 
   app.post('/files', { preHandler: requireAuth }, async (request, reply): Promise<Attachment> => {
     const { userId } = auth(request);
-    const part = await request.file({ limits: { fileSize: UPLOAD_MAX_BYTES, files: 1 } });
+    const query = parseRequest(UploadQuery, request.query, 'query');
+    const voice = query.kind === 'voice';
+    const limit = voice ? VOICE_MAX_BYTES : UPLOAD_MAX_BYTES;
+    const part = await request.file({ limits: { fileSize: limit, files: 1 } });
     if (!part) throw new AppError(400, 'validation_failed', 'Send the file as multipart.');
 
     // Streamed to a temporary file while hashing: a 100 MB video never sits in memory.
@@ -126,10 +131,21 @@ export function registerFiles(
         }),
         createWriteStream(temporary),
       );
-      if (part.file.truncated) throw tooLarge();
+      if (part.file.truncated)
+        throw voice
+          ? new AppError(413, 'validation_failed', 'The voice message is too long.')
+          : tooLarge();
       if (size === 0) throw new AppError(400, 'validation_failed', 'The file is empty.');
 
-      const info = await inspectUpload(temporary, part.mimetype);
+      let info;
+      if (voice) {
+        const recorded = await inspectVoice(temporary, part.mimetype, query.durationMs);
+        if (!recorded)
+          throw new AppError(400, 'validation_failed', 'A voice message must be Opus audio.');
+        info = { ...recorded, kind: 'voice' as const };
+      } else {
+        info = await inspectUpload(temporary, part.mimetype);
+      }
       const id = newId();
       const key = storageKey(id, 'bin');
       const thumbnailKey = info.thumbnail ? storageKey(id, 'thumb.webp') : null;
