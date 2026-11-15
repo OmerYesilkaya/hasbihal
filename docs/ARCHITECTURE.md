@@ -134,7 +134,8 @@ Notes:
 
 - **Deleting a message** sets `deleted_at` and clears `body`, mentions, and attachment links. The row remains, so the UI can show "Bu mesaj silindi." (A22). Files of deleted messages are garbage-collected.
 - **Removing a member** sets `users.removed_at` and revokes all sessions. Their messages stay (A42).
-- `last_read_message_id` drives unread badges only. It is never shown to others (A22: no read receipts).
+- `last_read_message_id` drives unread badges only. It is never shown to others (A22: no read receipts). It only moves forward. Without one, "unread" starts when the member joined, so a newcomer isn't greeted by a badge for the whole history.
+- **Message order is server time** (`created_at`, then `id`). The id is made by the client so that sends are idempotent, which means its embedded timestamp follows the client's clock and can't be trusted for ordering.
 
 ### 3.4 API style
 

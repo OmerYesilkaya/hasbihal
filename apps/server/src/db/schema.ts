@@ -13,6 +13,11 @@ export interface Database {
   invites: InvitesTable;
   recovery_links: RecoveryLinksTable;
   event_log: EventLogTable;
+  rooms: RoomsTable;
+  messages: MessagesTable;
+  message_mentions: MessageMentionsTable;
+  reactions: ReactionsTable;
+  room_user_prefs: RoomUserPrefsTable;
 }
 
 /** A timestamp with a database default: optional on insert, never updated by hand. */
@@ -75,4 +80,47 @@ export interface EventLogTable {
   type: string;
   payload: unknown;
   created_at: CreatedAt;
+}
+
+export interface RoomsTable {
+  id: string;
+  name: string;
+  topic: string | null;
+  position: number;
+  created_by: string | null;
+  created_at: CreatedAt;
+  archived_at: NullableTime;
+}
+
+export interface MessagesTable {
+  id: string;
+  room_id: string;
+  author_id: string;
+  body: string;
+  reply_to_id: string | null;
+  mentions_everyone: Generated<boolean>;
+  created_at: CreatedAt;
+  edited_at: NullableTime;
+  deleted_at: NullableTime;
+}
+
+export interface MessageMentionsTable {
+  message_id: string;
+  user_id: string;
+}
+
+export interface ReactionsTable {
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: CreatedAt;
+}
+
+export interface RoomUserPrefsTable {
+  room_id: string;
+  user_id: string;
+  notify_level: Generated<'mentions' | 'all' | 'muted'>;
+  sound_on_message: Generated<boolean>;
+  hangout_start_alerts: Generated<boolean>;
+  last_read_message_id: ColumnType<string | null, string | null | undefined, string | null>;
 }

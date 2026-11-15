@@ -10,6 +10,7 @@ import { registerErrorHandling } from './errors.ts';
 import { GatewayHub } from './gateway/hub.ts';
 import { registerGateway } from './gateway/routes.ts';
 import { registerMembers } from './members/routes.ts';
+import { registerChat } from './chat/routes.ts';
 
 /** What the app needs from outside. The caller owns these and closes them. */
 export interface AppDeps {
@@ -65,6 +66,7 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     gateway: hub,
   });
   registerMembers(app, deps.db, guards);
+  registerChat(app, { db: deps.db, hub, guards });
   registerGateway(app, config, { db: deps.db, keys, hub });
 
   return app;

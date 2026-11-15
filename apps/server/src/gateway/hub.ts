@@ -12,6 +12,8 @@ import { eventsAfter, logBounds, pruneEvents } from './events.ts';
 
 const PUMP_BATCH = 500;
 const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+/** Typing notices per person and room are passed on at most this often. */
+const TYPING_THROTTLE_MS = 2_000;
 
 /** One authenticated gateway connection. */
 export interface Connection {
@@ -61,6 +63,8 @@ export class GatewayHub implements SessionCloser, EventNotifier {
   #pumpAgain = false;
   #pruneTimer: ReturnType<typeof setInterval> | undefined;
   #started = false;
+  /** `${userId}:${roomId}` → when their last typing notice went out. */
+  readonly #lastTyping = new Map<string, number>();
 
   constructor(db: Kysely<Database>) {
     this.#db = db;
@@ -119,6 +123,22 @@ export class GatewayHub implements SessionCloser, EventNotifier {
   closeUserSessions(userId: string): void {
     for (const c of this.#connectionsOf(userId))
       c.socket.close(GatewayCloseCode.unauthorized, 'session ended');
+  }
+
+  /** A private message to every connection of one member (e.g. their read marker moved). */
+  sendToUser(userId: string, message: ServerMessage): void {
+    for (const c of this.#connectionsOf(userId)) if (c.welcomed) send(c.socket, message);
+  }
+
+  /** Tells everyone else that `userId` is typing in a room, at most every 2 seconds. */
+  typing(userId: string, roomId: string, now = Date.now()): void {
+    const key = `${userId}:${roomId}`;
+    if (now - (this.#lastTyping.get(key) ?? 0) < TYPING_THROTTLE_MS) return;
+    this.#lastTyping.set(key, now);
+    if (this.#lastTyping.size > 10_000) this.#lastTyping.clear(); // bounded, whatever happens
+    for (const c of this.#connections) {
+      if (c.welcomed && c.userId !== userId) send(c.socket, { type: 'typing', roomId, userId });
+    }
   }
 
   // ---- presence (A21) ------------------------------------------------------------------------
