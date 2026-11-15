@@ -128,8 +128,10 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     signer: new FileUrlSigner(keys.privateKey),
     guards,
   });
+  // The run in progress, so closing waits for it rather than pulling the database from under it.
+  let collecting: Promise<void> = Promise.resolve();
   const collect = () => {
-    collectOrphanFiles(deps.db, files).then(
+    collecting = collectOrphanFiles(deps.db, files).then(
       (count) => {
         if (count) app.log.info({ count }, 'removed unused files');
       },
@@ -144,8 +146,9 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     collect(); // in the background: startup doesn't wait for it
     done();
   });
-  app.addHook('onClose', () => {
+  app.addHook('onClose', async () => {
     clearInterval(cleanup);
+    await collecting;
   });
   registerProfile(app, { db: deps.db, store: files, hub, guards });
   const tracker = new HangoutTracker({
