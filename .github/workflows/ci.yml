@@ -39,3 +39,11 @@ jobs:
         run: >
           docker run --rm hasbihal-server:ci node --disable-warning=ExperimentalWarning -e
           "Promise.all([import('sharp'), import('argon2')]).then(() => console.log('ok'))"
+
+  # Backups (A31): back up, pass a restore drill, catch a damaged file, restore onto a fresh
+  # database, all with throwaway containers.
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: infra/production/backup/test.sh

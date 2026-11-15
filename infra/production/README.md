@@ -48,6 +48,7 @@ Fill in `.env`:
 - `HASBIHAL_HOST`: your hostname.
 - `POSTGRES_PASSWORD` and `LIVEKIT_API_SECRET`: each one the output of `openssl rand -base64 32`.
 - `AUTH_SIGNING_KEY`: generate it as shown below, and paste it in quotes.
+- `RESTIC_PASSWORD`: the output of `openssl rand -base64 32`. It encrypts the backups; **keep a copy in your password manager**, because without it the backups can't be read. Leave `RESTIC_REPOSITORY=/backups` for now (see Backups below).
 
 To generate the signing key, already in the one-line form `.env` needs:
 
@@ -85,6 +86,61 @@ MAIN_VITE_SERVER_URL=https://hasbihal.duckdns.org pnpm --filter @hasbihal/deskto
 
 The installers end up in `apps/desktop/release/`. The macOS build needs the "Hasbihal Self-Signed" certificate (A50). Send family members the installer with the install notes from A30.
 
+## Backups (A31)
+
+The `backup` service backs up the database and all files every night at 03:30 (Istanbul time):
+
+- encrypted with `RESTIC_PASSWORD` and deduplicated, using restic;
+- keeps a week of daily backups, two months of weekly ones, and two years of monthly ones;
+- on Sundays, reads back a tenth of the stored data to catch corruption early.
+
+**A restore drill** runs on the 1st of every month. It restores the latest backup into a scratch database next to the real one, checks every table and 50 random files against their checksums, and logs `PASSED` or `FAILED`. Nothing live is touched. To see the backups and run either by hand:
+
+```bash
+docker compose logs backup
+```
+
+```bash
+docker compose exec backup backup.sh
+```
+
+```bash
+docker compose exec backup drill.sh
+```
+
+`docker compose ps` shows the service as _unhealthy_ if no backup has succeeded for over 26 hours.
+
+### Off-site storage
+
+`RESTIC_REPOSITORY=/backups` keeps the backups in `infra/production/backups/` **on the same machine**. That protects against mistakes, but not against losing the VPS. For off-site backups (about €1/month at this size), use Backblaze B2:
+
+1. At backblaze.com, create a private bucket (e.g. `hasbihal-yedek`), in the EU region.
+2. Create an application key for that bucket only.
+3. In `.env`, set the three lines shown in `.env.example` (`RESTIC_REPOSITORY=s3:https://…`, `BACKUP_KEY_ID`, `BACKUP_KEY`). The endpoint is on the bucket's page.
+4. Apply the change and take the first backup:
+
+   ```bash
+   docker compose up -d backup && docker compose exec backup backup.sh
+   ```
+
+### Restoring
+
+On a working server, or a new one set up with this runbook and the same `.env`:
+
+```bash
+docker compose stop server
+```
+
+```bash
+docker compose run --rm backup restore.sh
+```
+
+```bash
+docker compose start server
+```
+
+`restore.sh` restores the latest backup. To pick an older one, list them with `docker compose run --rm backup restic snapshots` and pass the ID: `restore.sh 4f2a9c1e`.
+
 ## Updating
 
 ```bash
@@ -95,7 +151,7 @@ Migrations run when the server starts. Clients that are too old get the "new ver
 
 ## Notes
 
-- **Data** lives in Docker volumes: `postgres-data` (everything) and `files` (photos and, later, attachments). Back up both; automated backups come in M6 (A31).
+- **Data** lives in Docker volumes: `postgres-data` (everything) and `files` (photos and attachments). The `backup` service covers both (see Backups).
 - **TURN over TLS** (port 5349), for very strict networks, needs a certificate and comes in M6.
 - **Logs:**
 
