@@ -60,6 +60,11 @@ export const tr = {
   'error.rateLimited': 'Çok fazla deneme yapıldı. Biraz bekleyip yeniden dene.',
   'error.unavailable': 'Sunucuya ulaşılamıyor. İnternet bağlantını kontrol et.',
   'error.unexpected': 'Bir şeyler ters gitti. Lütfen yeniden dene.',
+  'presence.available': 'Müsait',
+  'presence.away': 'Uzakta',
+  'presence.busy': 'Meşgul',
+  'presence.offline': 'Çevrimdışı',
+  'presence.choose': 'Durum',
 } as const;
 
 export type MessageKey = keyof typeof tr;

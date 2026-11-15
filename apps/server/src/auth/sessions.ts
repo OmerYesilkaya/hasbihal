@@ -83,6 +83,8 @@ export async function refreshSession(
   db: Kysely<Database>,
   keys: SigningKeys,
   refreshToken: string,
+  /** Told when a replayed token revokes the session, so its live connections can be closed. */
+  onRevoked?: (sessionId: string) => void,
 ): Promise<AuthTokens> {
   const parsed = parseRefreshToken(refreshToken);
   if (!parsed) throw invalidRefresh();
@@ -120,6 +122,7 @@ export async function refreshSession(
       .where('id', '=', parsed.sessionId)
       .where('revoked_at', 'is', null)
       .execute();
+    onRevoked?.(parsed.sessionId);
     throw invalidRefresh();
   }
 
@@ -155,17 +158,15 @@ export async function revokeAllSessions(db: Kysely<Database>, userId: string): P
 }
 
 /**
- * Checks the bearer token, and that its session is still live and its user not removed. The
+ * Checks an access token, and that its session is still live and its user not removed. The
  * database check makes sign-out, revocation, and removal take effect at once, not after the
- * access token's 15 minutes.
+ * access token's 15 minutes. Used for HTTP requests and the gateway's hello.
  */
-export async function authenticate(
+export async function authenticateToken(
   db: Kysely<Database>,
   keys: SigningKeys,
-  request: FastifyRequest,
+  token: string | undefined,
 ): Promise<AuthContext> {
-  const header = request.headers.authorization;
-  const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined;
   const claims = token ? await verifyAccessToken(keys, token) : undefined;
   if (!claims) throw new AppError(401, 'unauthorized', 'Sign in to continue.');
 
@@ -181,4 +182,18 @@ export async function authenticate(
     .executeTakeFirst();
   if (!row) throw new AppError(401, 'unauthorized', 'The session has ended. Sign in again.');
   return { userId: row.userId, sessionId: claims.sessionId, role: row.role };
+}
+
+/** `authenticateToken` for an HTTP request's `Authorization: Bearer …` header. */
+export function authenticate(
+  db: Kysely<Database>,
+  keys: SigningKeys,
+  request: FastifyRequest,
+): Promise<AuthContext> {
+  const header = request.headers.authorization;
+  return authenticateToken(
+    db,
+    keys,
+    header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined,
+  );
 }

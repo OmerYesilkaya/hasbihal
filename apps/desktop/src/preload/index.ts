@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DeepLink } from '../shared/deep-link.ts';
-import { IPC, type AppInfo, type AuthBridge, type DeepLinkBridge } from '../shared/app-info.ts';
+import {
+  IPC,
+  type AppInfo,
+  type AuthBridge,
+  type DeepLinkBridge,
+  type SystemBridge,
+} from '../shared/app-info.ts';
 import type { HasbihalBridge } from './api';
 
 const takePending = () => ipcRenderer.invoke(IPC.deepLinkTakePending) as Promise<DeepLink | null>;
@@ -11,7 +17,7 @@ const auth: AuthBridge = {
   signUp: (request) => ipcRenderer.invoke(IPC.authSignUp, request),
   signIn: (request) => ipcRenderer.invoke(IPC.authSignIn, request),
   recover: (request) => ipcRenderer.invoke(IPC.authRecover, request),
-  accessToken: () => ipcRenderer.invoke(IPC.authAccessToken),
+  accessToken: (refresh) => ipcRenderer.invoke(IPC.authAccessToken, refresh ?? false),
   signOut: () => ipcRenderer.invoke(IPC.authSignOut),
   onSessionEnded: (listener) => {
     const handler = () => {
@@ -36,11 +42,23 @@ const deepLinks: DeepLinkBridge = {
   },
 };
 
+const system: SystemBridge = {
+  isIdle: () => ipcRenderer.invoke(IPC.systemIsIdle) as Promise<boolean>,
+  onIdleChanged: (listener) => {
+    const handler = (_event: unknown, idle: boolean) => {
+      listener(idle);
+    };
+    ipcRenderer.on(IPC.systemIdleChanged, handler);
+    return () => ipcRenderer.off(IPC.systemIdleChanged, handler);
+  },
+};
+
 /** The only main-process capabilities the renderer can reach (ARCHITECTURE §4.1). */
 const bridge: HasbihalBridge = {
   getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo) as Promise<AppInfo>,
   auth,
   deepLinks,
+  system,
 };
 
 contextBridge.exposeInMainWorld('hasbihal', bridge);

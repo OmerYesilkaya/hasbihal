@@ -3,12 +3,19 @@ import { ClientMessage, ServerMessage, parseFrame } from './gateway.ts';
 
 describe('parseFrame', () => {
   it('parses a valid hello', () => {
-    const frame = JSON.stringify({ type: 'hello', protocolVersion: 1, clientVersion: '0.1.0' });
-    expect(parseFrame(ClientMessage, frame)).toEqual({
+    const hello = {
       type: 'hello',
       protocolVersion: 1,
       clientVersion: '0.1.0',
-    });
+      accessToken: 'jwt',
+      lastSeq: 42,
+    };
+    expect(parseFrame(ClientMessage, JSON.stringify(hello))).toEqual(hello);
+  });
+
+  it('rejects a hello without an access token', () => {
+    const frame = JSON.stringify({ type: 'hello', protocolVersion: 1, clientVersion: '0.1.0' });
+    expect(parseFrame(ClientMessage, frame)).toBeUndefined();
   });
 
   it('returns undefined for malformed JSON', () => {

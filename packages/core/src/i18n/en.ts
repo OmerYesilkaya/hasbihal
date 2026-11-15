@@ -54,4 +54,9 @@ export const en: Record<MessageKey, string> = {
   'error.rateLimited': 'Too many attempts. Wait a little and try again.',
   'error.unavailable': 'Can’t reach the server. Check your internet connection.',
   'error.unexpected': 'Something went wrong. Please try again.',
+  'presence.available': 'Available',
+  'presence.away': 'Away',
+  'presence.busy': 'Busy',
+  'presence.offline': 'Offline',
+  'presence.choose': 'Status',
 };

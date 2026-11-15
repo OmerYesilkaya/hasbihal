@@ -7,11 +7,15 @@ import { generateSigningKeyPem, signingKeysFromPem, type SigningKeys } from './a
 import type { Config } from './config.ts';
 import { isDatabaseReachable, type Db } from './db/database.ts';
 import { registerErrorHandling } from './errors.ts';
-import { registerGateway } from './gateway.ts';
+import { GatewayHub } from './gateway/hub.ts';
+import { registerGateway } from './gateway/routes.ts';
+import { registerMembers } from './members/routes.ts';
 
 /** What the app needs from outside. The caller owns these and closes them. */
 export interface AppDeps {
   db: Db;
+  /** Pass one to observe it (tests); otherwise the app makes its own. */
+  hub?: GatewayHub;
 }
 
 /**
@@ -47,12 +51,21 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     };
   });
 
-  await registerAuth(app, {
-    db: deps.db,
-    keys: signingKeys(config, app),
-    rateLimitPerMinute: config.authRateLimitPerMinute,
+  const keys = signingKeys(config, app);
+  const hub = deps.hub ?? new GatewayHub(deps.db);
+  await hub.start();
+  app.addHook('onClose', () => {
+    hub.stop();
   });
-  registerGateway(app, config);
+
+  const guards = await registerAuth(app, {
+    db: deps.db,
+    keys,
+    rateLimitPerMinute: config.authRateLimitPerMinute,
+    gateway: hub,
+  });
+  registerMembers(app, deps.db, guards);
+  registerGateway(app, config, { db: deps.db, keys, hub });
 
   return app;
 }

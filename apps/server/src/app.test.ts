@@ -93,28 +93,27 @@ describe('GET /health', () => {
   });
 });
 
-describe('WebSocket gateway', () => {
-  it('welcomes a supported client', async () => {
-    const ws = await app.injectWS('/ws');
-    const reply = nextMessage(ws);
-    ws.send(
-      JSON.stringify({ type: 'hello', protocolVersion: PROTOCOL_VERSION, clientVersion: '0.1.0' }),
-    );
-    expect(await reply).toMatchObject({ type: 'welcome', protocolVersion: PROTOCOL_VERSION });
-
-    const pong = nextMessage(ws);
-    ws.send(JSON.stringify({ type: 'ping' }));
-    expect(await pong).toEqual({ type: 'pong' });
-    ws.terminate();
-  });
+// Authenticated behaviour (welcome, events, presence) is in gateway/gateway.test.ts.
+describe('WebSocket gateway handshake', () => {
+  const hello = (protocolVersion: number) =>
+    JSON.stringify({ type: 'hello', protocolVersion, clientVersion: '0.1.0', accessToken: 'x' });
 
   it('asks an unsupported client to upgrade and closes', async () => {
     const ws = await app.injectWS('/ws');
     const reply = nextMessage(ws);
     const closed = closeCode(ws);
-    ws.send(JSON.stringify({ type: 'hello', protocolVersion: 0, clientVersion: '0.0.1' }));
+    ws.send(hello(0));
     expect((await reply).type).toBe('upgrade_required');
     expect(await closed).toBe(GatewayCloseCode.upgradeRequired);
+  });
+
+  it('closes a hello with an invalid token as unauthorized', async () => {
+    const ws = await app.injectWS('/ws');
+    const reply = nextMessage(ws);
+    const closed = closeCode(ws);
+    ws.send(hello(PROTOCOL_VERSION));
+    expect(await reply).toMatchObject({ type: 'error', code: 'unauthorized' });
+    expect(await closed).toBe(GatewayCloseCode.unauthorized);
   });
 
   it('rejects messages before hello', async () => {

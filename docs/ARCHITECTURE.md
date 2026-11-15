@@ -216,13 +216,15 @@ The embedded Chromium will age (A30), so the renderer is locked down from day on
 ### 5.3 Catch-up after a disconnect
 
 - Every durable event gets a global, monotonically increasing `seq`.
+- Events are written in the same transaction as the change they describe, under a transaction-scoped advisory lock, so they **commit in `seq` order**. Without it, seq 6 could commit before seq 5, and a client that saw 6 would never be sent 5. The gateway reads events back from the log in order (one pump), rather than pushing them from the request that wrote them.
+- A connecting client joins the live stream first and buffers it while the missed events replay, so it gets no gaps and no duplicates.
 - The client remembers the last `seq` it applied. On reconnect it sends `lastSeq`, and the server replays everything newer **if** the gap is still in `event_log`. The log is retained for 30 days, which is plenty at our volume.
 - If the gap is too old, the server sends `resync_required`. The client then refetches rooms, members, and recent messages for each room.
 - Events are applied idempotently by resource id and version, so seeing an event twice is harmless.
 
 ### 5.4 Presence (A21)
 
-- The server counts live WebSocket connections per user. Zero connections means **Çevrimdışı** (offline).
+- The server counts live WebSocket connections per user. Zero connections means **Çevrimdışı** (offline). Ending a session (sign-out, a revoked device, recovery) closes its connections at once.
 - The user picks **Müsait** (available) or **Meşgul** (busy). The main process reports system idle time, and after 10 minutes idle the client sends `away`, so the user shows as **Uzakta** (away) until activity resumes.
 - "In a hangout" comes from LiveKit webhooks (§6.3), not from the client, so it can't drift.
 

@@ -1,9 +1,12 @@
-import { avatarColor } from '@hasbihal/core';
-import type { User } from '@hasbihal/protocol';
+import { useState, useSyncExternalStore } from 'react';
+import { ChatStore } from '@hasbihal/core';
+import type { PresenceMode, PresenceStatus, User } from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
 import { AuthScreen } from './auth/AuthScreen.tsx';
 import { useDeepLink, useSession } from './auth/useSession.ts';
+import { Avatar } from './components/Avatar.tsx';
 import { ConnectionBadge } from './components/ConnectionBadge.tsx';
+import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
 import { Tulip } from './components/Tulip.tsx';
 import { I18nProvider, useT } from './i18n.tsx';
 import { useGateway } from './useGateway.ts';
@@ -71,7 +74,12 @@ interface ShellProps {
 
 function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: ShellProps) {
   const t = useT();
-  const status = useGateway(info.serverUrl, info.appVersion);
+  // One store per signed-in session: signing out unmounts the shell and drops it.
+  const [store] = useState(() => new ChatStore());
+  const { status, setPresence } = useGateway(info, store);
+  const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  // The gateway's copy of me is the freshest; the sign-in answer covers the moment before it.
+  const me = state.me ?? user;
 
   if (status.kind === 'upgrade_required') {
     return (
@@ -95,7 +103,12 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
         <hr className="divider" />
         <h2 className="section-label">{t('rooms.heading')}</h2>
         <div className="sidebar__spacer" />
-        <UserPanel user={user} onSignOut={onSignOut} />
+        <UserPanel
+          user={me}
+          presence={state.presence.get(me.id) ?? 'offline'}
+          onSetPresence={setPresence}
+          onSignOut={onSignOut}
+        />
       </aside>
 
       <main className="content">
@@ -116,39 +129,40 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
 
       <aside className="members" aria-label={t('members.heading')}>
         <header className="members__header">{t('members.heading')}</header>
+        <MemberList store={store} />
       </aside>
     </div>
   );
 }
 
-const graphemes = new Intl.Segmenter('tr', { granularity: 'grapheme' });
-
-/**
- * "ömer faruk" → "ÖF". Whole graphemes (an "Ö" may be two code points), Turkish upper case,
- * so "i" becomes "İ".
- */
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => graphemes.segment(word)[Symbol.iterator]().next().value?.segment ?? '')
-    .join('')
-    .toLocaleUpperCase('tr-TR');
+interface UserPanelProps {
+  user: User;
+  presence: PresenceStatus;
+  onSetPresence: (mode: PresenceMode) => void;
+  onSignOut: () => void;
 }
 
-function UserPanel({ user, onSignOut }: { user: User; onSignOut: () => void }) {
+function UserPanel({ user, presence, onSetPresence, onSignOut }: UserPanelProps) {
   const t = useT();
   return (
     <div className="user-panel">
-      <span className="avatar" style={{ background: avatarColor(user.avatarColor) }} aria-hidden>
-        {initials(user.displayName)}
-      </span>
+      <Avatar user={user} presence={presence} />
       <div className="user-panel__names">
         <div className="user-panel__display" data-testid="current-user">
           {user.displayName}
         </div>
-        <div className="user-panel__username">@{user.username}</div>
+        {/* Müsait or Meşgul (A21); Uzakta and Çevrimdışı follow from activity. */}
+        <select
+          className="user-panel__presence"
+          aria-label={t('presence.choose')}
+          value={presence === 'busy' ? 'busy' : 'available'}
+          onChange={(e) => {
+            onSetPresence(e.target.value === 'busy' ? 'busy' : 'available');
+          }}
+        >
+          <option value="available">{t(PRESENCE_LABEL.available)}</option>
+          <option value="busy">{t(PRESENCE_LABEL.busy)}</option>
+        </select>
       </div>
       <button type="button" className="link user-panel__sign-out" onClick={onSignOut}>
         {t('auth.signOut')}

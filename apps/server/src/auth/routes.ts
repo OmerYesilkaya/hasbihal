@@ -41,6 +41,8 @@ import {
   toUser,
 } from './sessions.ts';
 import { hashToken, randomToken, type SigningKeys } from './tokens.ts';
+import { appendEvent } from '../gateway/events.ts';
+import type { EventNotifier, SessionCloser } from '../gateway/hub.ts';
 
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const RECOVERY_LINK_TTL_MS = 24 * 60 * 60 * 1000;
@@ -53,6 +55,8 @@ export interface AuthDeps {
   keys: SigningKeys;
   /** Requests per IP per minute on the unauthenticated auth routes. */
   rateLimitPerMinute: number;
+  /** Ends live connections of ended sessions, and delivers the events auth writes. */
+  gateway: SessionCloser & EventNotifier;
 }
 
 const invalidInvite = () =>
@@ -94,10 +98,17 @@ function isUniqueViolation(error: unknown, constraint: string): boolean {
   );
 }
 
+/** Route guards for other modules: run as `preHandler`, then read `auth(request)`. */
+export interface AuthGuards {
+  requireAuth: preHandlerAsyncHookHandler;
+  requireAdmin: preHandlerAsyncHookHandler;
+  auth: (request: FastifyRequest) => AuthContext;
+}
+
 export async function registerAuth(
   app: FastifyInstance,
-  { db, keys, rateLimitPerMinute }: AuthDeps,
-): Promise<void> {
+  { db, keys, rateLimitPerMinute, gateway }: AuthDeps,
+): Promise<AuthGuards> {
   const signInFailures = new AttemptLimiter(SIGN_IN_FAILURES.max, SIGN_IN_FAILURES.windowMs);
   await app.register(rateLimit, { global: false });
 
@@ -190,16 +201,17 @@ export async function registerAuth(
         .set({ used_by: userId, used_at: new Date() })
         .where('id', '=', invite.id)
         .execute();
-      const user = await trx
-        .selectFrom('users')
-        .selectAll()
-        .where('id', '=', userId)
-        .executeTakeFirstOrThrow();
-      return {
-        user: toUser(user),
-        tokens: await createSession(trx, keys, userId, body.deviceName),
-      };
+      const user = toUser(
+        await trx
+          .selectFrom('users')
+          .selectAll()
+          .where('id', '=', userId)
+          .executeTakeFirstOrThrow(),
+      );
+      await appendEvent(trx, { type: 'member_joined', user });
+      return { user, tokens: await createSession(trx, keys, userId, body.deviceName) };
     });
+    gateway.eventsCommitted();
     void reply.code(201);
     return signedIn;
   });
@@ -244,11 +256,15 @@ export async function registerAuth(
 
   app.post('/auth/refresh', limited, async (request): Promise<AuthTokens> => {
     const { refreshToken } = parseRequest(RefreshRequest, request.body, 'body');
-    return refreshSession(db, keys, refreshToken);
+    return refreshSession(db, keys, refreshToken, (sessionId) => {
+      gateway.closeSession(sessionId);
+    });
   });
 
   app.post('/auth/sign-out', { preHandler: requireAuth }, async (request, reply) => {
-    await revokeSession(db, auth(request).sessionId);
+    const { sessionId } = auth(request);
+    await revokeSession(db, sessionId);
+    gateway.closeSession(sessionId);
     return reply.code(204).send();
   });
 
@@ -285,7 +301,7 @@ export async function registerAuth(
 
   app.post('/auth/recover', limited, async (request): Promise<SignedIn> => {
     const body = parseRequest(RecoverRequest, request.body, 'body');
-    return db.transaction().execute(async (trx) => {
+    const signedIn = await db.transaction().execute(async (trx) => {
       const link = await trx
         .selectFrom('recovery_links')
         .innerJoin('users', 'users.id', 'recovery_links.user_id')
@@ -328,6 +344,9 @@ export async function registerAuth(
         tokens: await createSession(trx, keys, link.userId, body.deviceName),
       };
     });
+    // Every old session was revoked: their open connections go too (the new one isn't connected yet).
+    gateway.closeUserSessions(signedIn.user.id);
+    return signedIn;
   });
 
   // --- The signed-in user --------------------------------------------------------------------
@@ -372,6 +391,9 @@ export async function registerAuth(
       .where('revoked_at', 'is', null)
       .executeTakeFirst();
     if (revoked.numUpdatedRows === 0n) throw new AppError(404, 'not_found', 'No such session.');
+    gateway.closeSession(id);
     return reply.code(204).send();
   });
+
+  return { requireAuth, requireAdmin, auth };
 }
