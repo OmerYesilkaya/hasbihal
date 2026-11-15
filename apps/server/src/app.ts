@@ -12,7 +12,9 @@ import { GatewayHub } from './gateway/hub.ts';
 import { registerGateway } from './gateway/routes.ts';
 import { registerMembers } from './members/routes.ts';
 import { registerChat } from './chat/routes.ts';
+import { collectOrphanFiles } from './files/gc.ts';
 import { registerFiles } from './files/routes.ts';
+import { FileUrlSigner } from './files/signing.ts';
 import { LocalFileStore, type FileStore } from './files/store.ts';
 import { registerProfile } from './profile/routes.ts';
 import { liveKitRooms, type LiveKitRooms } from './hangouts/livekit.ts';
@@ -86,7 +88,31 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
   registerMembers(app, deps.db, guards);
   registerChat(app, { db: deps.db, hub, guards });
   const files = deps.files ?? new LocalFileStore(config.filesDir);
-  registerFiles(app, deps.db, files, guards);
+  registerFiles(app, {
+    db: deps.db,
+    store: files,
+    signer: new FileUrlSigner(keys.privateKey),
+    guards,
+  });
+  const collect = () => {
+    collectOrphanFiles(deps.db, files).then(
+      (count) => {
+        if (count) app.log.info({ count }, 'removed unused files');
+      },
+      (error: unknown) => {
+        app.log.warn({ err: error }, 'file cleanup failed');
+      },
+    );
+  };
+  const cleanup = setInterval(collect, 60 * 60 * 1000);
+  cleanup.unref();
+  app.addHook('onReady', (done) => {
+    collect(); // in the background: startup doesn't wait for it
+    done();
+  });
+  app.addHook('onClose', () => {
+    clearInterval(cleanup);
+  });
   registerProfile(app, { db: deps.db, store: files, hub, guards });
   const tracker = new HangoutTracker({
     changed: (roomId, participants) => {

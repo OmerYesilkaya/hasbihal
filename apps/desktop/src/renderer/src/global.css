@@ -1732,3 +1732,337 @@ body {
 .member__status .live-badge {
   margin-left: 6px;
 }
+
+/* Attachments (A26) */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.room-view {
+  position: relative;
+}
+
+.room-view__drop {
+  position: absolute;
+  inset: 8px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--hb-accent);
+  border-radius: 14px;
+  background: rgb(251 246 238 / 0.85);
+  color: var(--hb-text);
+  font-size: 18px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.composer__attach {
+  position: absolute;
+  left: 6px;
+  bottom: 5px;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.composer__attach:hover {
+  background: var(--hb-chip);
+}
+
+/* Room for the 📎 button; both layers move together, so the caret stays aligned. */
+.composer__field:has(.composer__attach) .composer__mirror,
+.composer__field:has(.composer__attach) .composer__input {
+  padding-left: 42px;
+}
+
+.uploads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.upload {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  padding: 6px 30px 6px 6px;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  font-size: 12px;
+}
+
+.upload[data-status='failed'] {
+  border-color: var(--hb-primary);
+}
+
+.upload__preview {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.upload__preview--file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hb-chip);
+  font-size: 18px;
+}
+
+.upload__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.upload__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.upload__size {
+  color: var(--hb-text-secondary);
+}
+
+.upload[data-status='failed'] .upload__size {
+  color: var(--hb-primary);
+}
+
+.upload__progress {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 2px;
+  width: auto;
+  height: 3px;
+  accent-color: var(--hb-accent);
+}
+
+.upload__remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: none;
+  background: none;
+  color: var(--hb-text-secondary);
+  cursor: pointer;
+}
+
+.attachments {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.attachments__media {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, 178px);
+}
+
+.attachments__media[data-count='1'] {
+  grid-template-columns: auto;
+}
+
+.media-thumb {
+  position: relative;
+  display: block;
+  width: 178px;
+  height: 178px;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  border-radius: 10px;
+  background: var(--hb-tile);
+  cursor: zoom-in;
+}
+
+.attachments__media[data-count='1'] .media-thumb:not([style]) {
+  width: 300px;
+  height: 200px;
+}
+
+.media-thumb img,
+.media-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-thumb__placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.media-thumb__play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 28px;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.6);
+}
+
+.media-thumb__play span {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.6);
+  font-size: 11px;
+  text-shadow: none;
+}
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  max-width: 420px;
+  padding: 8px 10px;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+}
+
+.file-card--audio {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.file-card__icon {
+  font-size: 22px;
+}
+
+.file-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.file-card__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.file-card__size {
+  color: var(--hb-text-secondary);
+  font-size: 12px;
+}
+
+.file-card a.button {
+  text-decoration: none;
+}
+
+.viewer {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: rgb(20 14 12 / 0.94);
+  color: #fff;
+}
+
+.viewer::backdrop {
+  background: transparent;
+}
+
+.viewer[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.viewer__name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.viewer__action {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.viewer__media {
+  max-width: calc(100vw - 140px);
+  max-height: calc(100vh - 110px);
+  object-fit: contain;
+}
+
+.viewer__step {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.viewer__step--back {
+  left: 16px;
+}
+
+.viewer__step--next {
+  right: 16px;
+}

@@ -1,23 +1,34 @@
 import {
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type Ref,
 } from 'react';
 import { decorate, foldTurkish, newId, type Decoration, type MessageKey } from '@hasbihal/core';
 import { Message, MESSAGE_BODY_MAX, type User } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useT } from '../i18n.tsx';
+import { formatSize } from '../files.ts';
+import { locale } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
+import { useUploads } from './useUploads.ts';
 
 /** Typing notices go out at most this often while typing (the server throttles too). */
 const TYPING_EVERY_MS = 3_000;
 const MAX_SUGGESTIONS = 6;
 const MAX_HEIGHT_PX = 240;
 
+/** What the room view can ask of the composer: files dropped anywhere on it. */
+export interface ComposerHandle {
+  addFiles(files: File[]): void;
+}
+
 interface ComposerProps {
+  ref?: Ref<ComposerHandle>;
   roomId: string;
   roomName: string;
   replyTo: Message | null;
@@ -34,6 +45,7 @@ interface ComposerProps {
  * styled by the message parser. Styles keep character widths, so the caret stays aligned.
  */
 export function Composer({
+  ref,
   roomId,
   roomName,
   replyTo,
@@ -48,7 +60,8 @@ export function Composer({
   const mirror = useRef<HTMLDivElement>(null);
   const lastTyping = useRef(0);
   /** A failed send keeps its id, so trying again can't create a duplicate (ARCHITECTURE §3.4). */
-  const pending = useRef<{ id: string; body: string } | null>(null);
+  const pending = useRef<{ id: string; key: string } | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
   /** Where the caret goes once a programmatic text change has rendered. */
   const caretAfterRender = useRef<number | null>(null);
   const [text, setText] = useState('');
@@ -56,6 +69,14 @@ export function Composer({
   const [error, setError] = useState<MessageKey | null>(null);
   const [selected, setSelected] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
+
+  const { uploads, add, remove, retry, clear } = useUploads(info.serverUrl);
+  const addFiles = (files: File[]) => {
+    if (!files.length || editing) return;
+    setError(add(files));
+    input.current?.focus();
+  };
+  useImperativeHandle(ref, () => ({ addFiles }));
 
   // Entering edit mode loads the message; leaving it clears the field.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -115,7 +136,16 @@ export function Composer({
 
   const submit = async () => {
     const body = text.trim();
-    if (!body) return;
+    const files = editing ? [] : uploads;
+    if (!body && !files.length && !editing) return;
+    if (files.some((u) => u.status === 'uploading')) {
+      setError('composer.stillUploading');
+      return;
+    }
+    if (files.some((u) => u.status === 'failed')) {
+      setError('composer.uploadFailed');
+      return;
+    }
     if (body.length > MESSAGE_BODY_MAX) {
       setError('composer.tooLong');
       return;
@@ -146,16 +176,19 @@ export function Composer({
       return;
     }
 
-    const id = pending.current?.body === body ? pending.current.id : newId();
-    pending.current = { id, body };
+    const attachmentIds = files.flatMap((u) => (u.attachment ? [u.attachment.id] : []));
+    const key = `${body}\n${attachmentIds.join(',')}`;
+    const id = pending.current?.key === key ? pending.current.id : newId();
+    pending.current = { id, key };
     setText('');
     onCancel();
     const result = await api(info.serverUrl, 'POST', `/rooms/${roomId}/messages`, {
-      body: { id, body, ...(replyTo ? { replyToId: replyTo.id } : {}) },
+      body: { id, body, attachmentIds, ...(replyTo ? { replyToId: replyTo.id } : {}) },
       schema: Message,
     });
     if (result.ok && result.value) {
       pending.current = null;
+      clear();
       store.apply({ type: 'message_created', message: result.value });
       return;
     }
@@ -221,7 +254,76 @@ export function Composer({
           {t(error)}
         </p>
       )}
+      {!editing && uploads.length > 0 && (
+        <ul className="uploads" aria-label={t('composer.files')}>
+          {uploads.map((u) => (
+            <li key={u.key} className="upload" data-status={u.status} data-testid="upload">
+              {u.preview ? (
+                <img className="upload__preview" src={u.preview} alt="" />
+              ) : (
+                <span className="upload__preview upload__preview--file" aria-hidden>
+                  📄
+                </span>
+              )}
+              <span className="upload__text">
+                <span className="upload__name">{u.file.name}</span>
+                <span className="upload__size">
+                  {u.status === 'failed' && u.error ? t(u.error) : formatSize(u.file.size, locale)}
+                </span>
+              </span>
+              {u.status === 'uploading' && (
+                <progress className="upload__progress" value={u.progress} max={1} />
+              )}
+              {u.status === 'failed' && (
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    retry(u.key);
+                  }}
+                >
+                  {t('composer.retry')}
+                </button>
+              )}
+              <button
+                type="button"
+                className="upload__remove"
+                aria-label={t('composer.removeFile', { name: u.file.name })}
+                onClick={() => {
+                  remove(u.key);
+                }}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="composer__field">
+        {!editing && (
+          <>
+            <button
+              type="button"
+              className="composer__attach"
+              aria-label={t('composer.attach')}
+              title={t('composer.attach')}
+              onClick={() => picker.current?.click()}
+            >
+              📎
+            </button>
+            <input
+              ref={picker}
+              type="file"
+              multiple
+              hidden
+              data-testid="file-picker"
+              onChange={(e) => {
+                addFiles([...(e.target.files ?? [])]);
+                e.target.value = '';
+              }}
+            />
+          </>
+        )}
         <div className="composer__mirror" ref={mirror} aria-hidden>
           {renderDecorated(text)}
           {'​'}
@@ -252,6 +354,13 @@ export function Composer({
             if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop;
           }}
           onKeyDown={onKeyDown}
+          onPaste={(e) => {
+            // Pasted pictures and files (a screenshot, a copied photo) become attachments.
+            const files = [...e.clipboardData.files];
+            if (!files.length || editing) return;
+            e.preventDefault();
+            addFiles(files);
+          }}
         />
         {suggestions.length > 0 && (
           <ul className="suggestions" role="listbox" aria-label={t('composer.mentions')}>

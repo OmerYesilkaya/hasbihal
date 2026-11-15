@@ -2,6 +2,7 @@ import { sql, type Kysely, type Selectable } from 'kysely';
 import { extractMentions } from '@hasbihal/core';
 import type { Message, Room, RoomWithState } from '@hasbihal/protocol';
 import type { Database, MessagesTable, RoomsTable } from '../db/schema.ts';
+import { toAttachment } from '../files/routes.ts';
 
 /** How much of a replied-to message is quoted above the reply. */
 const REPLY_EXCERPT = 120;
@@ -31,7 +32,7 @@ export async function hydrateMessages(
   const ids = rows.map((r) => r.id);
   const replyIds = [...new Set(rows.flatMap((r) => (r.reply_to_id ? [r.reply_to_id] : [])))];
 
-  const [mentions, reactions, replies] = await Promise.all([
+  const [mentions, reactions, replies, attachments] = await Promise.all([
     db
       .selectFrom('message_mentions')
       .select(['message_id', 'user_id'])
@@ -50,6 +51,24 @@ export async function hydrateMessages(
           .where('id', 'in', replyIds)
           .execute()
       : Promise.resolve([]),
+    db
+      .selectFrom('attachments')
+      .innerJoin('files', 'files.id', 'attachments.file_id')
+      .select([
+        'attachments.message_id',
+        'files.id',
+        'files.kind',
+        'files.original_name',
+        'files.mime',
+        'files.size_bytes',
+        'files.width',
+        'files.height',
+        'files.duration_ms',
+        'files.thumbnail_key',
+      ])
+      .where('attachments.message_id', 'in', ids)
+      .orderBy('attachments.position')
+      .execute(),
   ]);
   const replyById = new Map(replies.map((r) => [r.id, r]));
 
@@ -78,6 +97,7 @@ export async function hydrateMessages(
       mentions: mentions.filter((m) => m.message_id === row.id).map((m) => m.user_id),
       mentionsEveryone: row.mentions_everyone,
       reactions: [...reactionsByEmoji].map(([emoji, userIds]) => ({ emoji, userIds })),
+      attachments: attachments.filter((a) => a.message_id === row.id).map(toAttachment),
       createdAt: row.created_at.toISOString(),
       editedAt: row.edited_at?.toISOString() ?? null,
       deletedAt: row.deleted_at?.toISOString() ?? null,

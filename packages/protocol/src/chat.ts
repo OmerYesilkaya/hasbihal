@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ATTACHMENTS_MAX, Attachment } from './files.ts';
 import { Id } from './id.ts';
 
 // Rooms and messages (ARCHITECTURE §3.3, DECISIONS A8, A11, A12, A22).
@@ -17,6 +18,11 @@ export const RoomName = text(ROOM_NAME_MAX);
 export const RoomTopic = text(ROOM_TOPIC_MAX);
 /** Markdown source (A47), at most 4000 characters after trimming. */
 export const MessageBody = text(MESSAGE_BODY_MAX);
+/** A body that may be empty: the caption of a message with files. */
+const OptionalBody = z
+  .string()
+  .transform((s) => s.normalize('NFC').trim())
+  .pipe(z.string().max(MESSAGE_BODY_MAX));
 
 /** A single emoji (one RGI emoji, which includes flags, skin tones, and families). */
 export const Emoji = z.string().regex(/^\p{RGI_Emoji}$/v, 'Use a single emoji.');
@@ -61,6 +67,8 @@ export const Message = z.object({
   mentions: z.array(Id),
   mentionsEveryone: z.boolean(),
   reactions: z.array(Reaction),
+  /** Files, in the order they were attached; none once deleted. */
+  attachments: z.array(Attachment),
   createdAt: z.iso.datetime(),
   /** Shown as "düzenlendi" (A22). */
   editedAt: z.iso.datetime().nullable(),
@@ -92,18 +100,31 @@ export const UpdateRoomRequest = z
   .refine((r) => r.name !== undefined || r.topic !== undefined, 'Nothing to change.');
 export type UpdateRoomRequest = z.input<typeof UpdateRoomRequest>;
 
-export const SendMessageRequest = z.object({
-  /**
-   * Made by the client (UUIDv7), so a retry after a network blip sends the same id and can't
-   * create a duplicate (ARCHITECTURE §3.4).
-   */
-  id: Id,
-  body: MessageBody,
-  replyToId: Id.optional(),
-});
+export const SendMessageRequest = z
+  .object({
+    /**
+     * Made by the client (UUIDv7), so a retry after a network blip sends the same id and can't
+     * create a duplicate (ARCHITECTURE §3.4).
+     */
+    id: Id,
+    /** May be empty when files are attached. */
+    body: OptionalBody,
+    replyToId: Id.optional(),
+    /** Files uploaded with `POST /files` by the sender and not attached anywhere yet. */
+    attachmentIds: z.array(Id).max(ATTACHMENTS_MAX).default([]),
+  })
+  .refine((r) => r.body.length > 0 || r.attachmentIds.length > 0, {
+    message: 'Write something or attach a file.',
+    path: ['body'],
+  })
+  .refine((r) => new Set(r.attachmentIds).size === r.attachmentIds.length, {
+    message: 'A file is attached twice.',
+    path: ['attachmentIds'],
+  });
 export type SendMessageRequest = z.input<typeof SendMessageRequest>;
 
-export const EditMessageRequest = z.object({ body: MessageBody });
+/** The body may become empty only on a message with files (the server checks). */
+export const EditMessageRequest = z.object({ body: OptionalBody });
 export type EditMessageRequest = z.input<typeof EditMessageRequest>;
 
 /** `GET /rooms/:id/messages?before=<id>&limit=<n>`: newest first is the last element. */

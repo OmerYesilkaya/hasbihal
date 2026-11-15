@@ -5,6 +5,7 @@ import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { formatDateTime, formatTime, useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
+import { Attachments } from './Attachments.tsx';
 import { MarkdownView } from './Markdown.tsx';
 
 /** A small, fixed set; no picker library and no emoji search (A23-style simplicity). */
@@ -106,6 +107,8 @@ export const MessageItem = memo(function MessageItem({
             </span>{' '}
             {message.replyTo.deleted ? (
               <em>{t('message.deleted')}</em>
+            ) : !message.replyTo.excerpt ? (
+              <em>{t('attachment.only')}</em>
             ) : (
               toPlainText(parseMarkdown(message.replyTo.excerpt))
             )}
@@ -114,14 +117,19 @@ export const MessageItem = memo(function MessageItem({
         {deleted ? (
           <p className="message__deleted">{t('message.deleted')}</p>
         ) : (
-          <div className="message__body" data-testid="message-body">
-            <MarkdownView source={message.body} />
-            {message.editedAt && (
-              <span className="message__edited" title={formatDateTime(message.editedAt)}>
-                ({t('message.edited')})
-              </span>
+          <>
+            {(message.body || message.editedAt) && (
+              <div className="message__body" data-testid="message-body">
+                <MarkdownView source={message.body} />
+                {message.editedAt && (
+                  <span className="message__edited" title={formatDateTime(message.editedAt)}>
+                    ({t('message.edited')})
+                  </span>
+                )}
+              </div>
             )}
-          </div>
+            {message.attachments.length > 0 && <Attachments attachments={message.attachments} />}
+          </>
         )}
         {message.reactions.length > 0 && (
           <div className="reactions">
