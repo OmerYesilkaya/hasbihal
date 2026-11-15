@@ -316,7 +316,7 @@ One VPS, located close to Turkey: **4 vCPU, 8 GB RAM, ≥160 GB disk, 1 Gbps** w
 | `postgres` | PostgreSQL 17 with a persistent volume.                                                       |
 | `livekit`  | Uses host networking for media. Ports: 7881/tcp, 50000–60000/udp, TURN 3478/udp and 5349/tls. |
 
-**Needed from the owner:** a **domain name** (e.g. `hasbihal.example`, with subdomains for the API and LiveKit/TURN) and a VPS account.
+**Needed from the owner:** a VPS account and a **hostname** for it. A free DuckDNS subdomain (e.g. `hasbihal.duckdns.org`) is enough. A bought domain is optional; it adds independence from a free service. The name is needed for TLS certificates (Let's Encrypt), so that the server can move to another machine without breaking the apps, and for LiveKit's TURN-over-TLS fallback.
 
 ### 10.2 Backups (A31)
 
@@ -355,4 +355,4 @@ GitHub Actions:
 ## 12. Open technical questions
 
 - 🟡 **Library choices** marked 🟡 above (Fastify, Kysely, electron-vite, and so on) need confirmation.
-- ❓ **Domain name and VPS provider.** Owner to choose (the provider should be close to Turkey).
+- ❓ **VPS provider and hostname.** Owner to choose when M1 step 9 comes (the provider should be close to Turkey; a free DuckDNS name is enough).
