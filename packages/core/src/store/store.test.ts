@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { User } from '@hasbihal/protocol';
-import { ChatStore, sortMembers } from './store.ts';
+import type { Message, User } from '@hasbihal/protocol';
+import { activeRooms, ChatStore, roomMessages, sortMembers } from './store.ts';
 
 const user = (id: string, displayName: string): User => ({
   id,
@@ -52,6 +52,130 @@ describe('ChatStore', () => {
       'İsmail',
       'Ayşe',
       'Cem',
+    ]);
+  });
+});
+
+describe('ChatStore rooms and messages', () => {
+  const me = user('0192f0c4-7b5e-7c8e-9a3b-0000000000aa', 'Ben');
+  const roomId = '0192f0c4-7b5e-7c8e-9a3b-0000000000b1';
+  const room = {
+    id: roomId,
+    name: 'Salon',
+    topic: null,
+    position: 1,
+    createdAt: '2026-11-15T10:00:00.000Z',
+    archivedAt: null,
+  };
+  let n = 0;
+  const message = (authorId: string, extra: Partial<Message> = {}): Message => ({
+    id: `0192f0c4-7b5e-7c8e-9a3b-${String(++n).padStart(12, '0')}`,
+    roomId,
+    authorId,
+    body: 'merhaba',
+    replyTo: null,
+    mentions: [],
+    mentionsEveryone: false,
+    reactions: [],
+    createdAt: `2026-11-15T10:00:${String(n).padStart(2, '0')}.000Z`,
+    editedAt: null,
+    deletedAt: null,
+    ...extra,
+  });
+
+  function setup() {
+    const store = new ChatStore();
+    store.setMe(me);
+    store.apply({ type: 'room_created', room });
+    return store;
+  }
+
+  it('counts unread messages by others once, even when an event repeats', () => {
+    const store = setup();
+    const fromAyse = message(ayse.id, { mentions: [me.id] });
+    store.apply({ type: 'message_created', message: fromAyse });
+    store.apply({ type: 'message_created', message: fromAyse }); // replayed around a reconnect
+    store.apply({ type: 'message_created', message: message(me.id) }); // my own
+    expect(store.getSnapshot().rooms.get(roomId)).toMatchObject({
+      unreadCount: 1,
+      unreadMentionCount: 1,
+    });
+  });
+
+  it('recounts unread from the read marker', () => {
+    const store = setup();
+    const first = message(ayse.id);
+    const second = message(cem.id, { mentionsEveryone: true });
+    store.apply({ type: 'message_created', message: first });
+    store.apply({ type: 'message_created', message: second });
+    store.setReadMarker(roomId, first.id);
+    expect(store.getSnapshot().rooms.get(roomId)).toMatchObject({
+      unreadCount: 1,
+      unreadMentionCount: 1,
+      lastReadMessageId: first.id,
+    });
+    store.setReadMarker(roomId, second.id);
+    expect(store.getSnapshot().rooms.get(roomId)).toMatchObject({
+      unreadCount: 0,
+      unreadMentionCount: 0,
+    });
+  });
+
+  it('applies reactions as set operations', () => {
+    const store = setup();
+    const m = message(ayse.id);
+    store.apply({ type: 'message_created', message: m });
+    const reaction = { roomId, messageId: m.id, userId: cem.id, emoji: '👍' };
+    store.apply({ type: 'reaction_added', ...reaction });
+    store.apply({ type: 'reaction_added', ...reaction });
+    expect(roomMessages(store.getSnapshot(), roomId)[0]?.reactions).toEqual([
+      { emoji: '👍', userIds: [cem.id] },
+    ]);
+    store.apply({ type: 'reaction_removed', ...reaction });
+    store.apply({ type: 'reaction_removed', ...reaction });
+    expect(roomMessages(store.getSnapshot(), roomId)[0]?.reactions).toEqual([]);
+  });
+
+  it('replaces edited and deleted messages, keeps room state on rename, and forgets deleted rooms', () => {
+    const store = setup();
+    const m = message(ayse.id);
+    store.apply({ type: 'message_created', message: m });
+    store.apply({
+      type: 'message_updated',
+      message: { ...m, body: '', deletedAt: '2026-11-15T11:00:00.000Z' },
+    });
+    expect(roomMessages(store.getSnapshot(), roomId)[0]?.body).toBe('');
+
+    store.apply({ type: 'room_updated', room: { ...room, name: 'Oturma odası' } });
+    expect(store.getSnapshot().rooms.get(roomId)).toMatchObject({
+      name: 'Oturma odası',
+      unreadCount: 1,
+    });
+
+    store.apply({ type: 'room_deleted', roomId });
+    expect(store.getSnapshot().rooms.has(roomId)).toBe(false);
+    expect(store.getSnapshot().messages.has(roomId)).toBe(false);
+  });
+
+  it('lists active rooms by position and messages in server order', () => {
+    const store = setup();
+    store.apply({
+      type: 'room_created',
+      room: {
+        ...room,
+        id: ayse.id,
+        name: 'Arşiv',
+        position: 0,
+        archivedAt: '2026-11-15T10:00:00.000Z',
+      },
+    });
+    expect(activeRooms(store.getSnapshot()).map((r) => r.name)).toEqual(['Salon']);
+    const later = message(ayse.id);
+    const earlier = message(ayse.id, { createdAt: '2026-11-15T09:00:00.000Z' });
+    store.addMessages(roomId, [later, earlier]);
+    expect(roomMessages(store.getSnapshot(), roomId).map((m) => m.id)).toEqual([
+      earlier.id,
+      later.id,
     ]);
   });
 });

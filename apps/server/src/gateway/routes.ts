@@ -168,6 +168,22 @@ export function registerGateway(
         case 'activity':
           hub.setIdle(connection, message.idle);
           return;
+        case 'typing': {
+          const { userId } = connection;
+          // Only for rooms that exist and accept messages; a bad id is dropped quietly.
+          db.selectFrom('rooms')
+            .select('id')
+            .where('id', '=', message.roomId)
+            .where('archived_at', 'is', null)
+            .executeTakeFirst()
+            .then((room) => {
+              if (room) hub.typing(userId, room.id);
+            })
+            .catch((error: unknown) => {
+              request.log.error({ err: error }, 'typing lookup failed');
+            });
+          return;
+        }
         case 'set_presence': {
           const { userId } = connection;
           hub.setMode(userId, message.mode);

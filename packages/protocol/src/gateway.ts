@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { User } from './auth.ts';
+import { Message, Room } from './chat.ts';
 import { Id } from './id.ts';
 
 /**
@@ -21,12 +22,46 @@ export type PresenceStatus = z.infer<typeof PresenceStatus>;
 
 /** A new member signed up through an invite. */
 export const MemberJoinedEvent = z.object({ type: z.literal('member_joined'), user: User });
+export const RoomCreatedEvent = z.object({ type: z.literal('room_created'), room: Room });
+/** Renamed, topic changed, archived, or unarchived: the room as it is now. */
+export const RoomUpdatedEvent = z.object({ type: z.literal('room_updated'), room: Room });
+/** The room and all its messages are gone. */
+export const RoomDeletedEvent = z.object({ type: z.literal('room_deleted'), roomId: Id });
+export const MessageCreatedEvent = z.object({
+  type: z.literal('message_created'),
+  message: Message,
+});
+/** Edited or deleted: the message as it is now (a deleted one has an empty body). */
+export const MessageUpdatedEvent = z.object({
+  type: z.literal('message_updated'),
+  message: Message,
+});
+export const ReactionAddedEvent = z.object({
+  type: z.literal('reaction_added'),
+  roomId: Id,
+  messageId: Id,
+  userId: Id,
+  emoji: z.string(),
+});
+export const ReactionRemovedEvent = ReactionAddedEvent.extend({
+  type: z.literal('reaction_removed'),
+});
 
 /**
  * Events stored in the event log and replayed after a reconnect. Apply them idempotently: a
- * client may see one twice around a reconnect. Rooms and messages add their events in M1 step 5.
+ * client may see one twice around a reconnect. Events carry whole objects where they can, so
+ * applying one never depends on having seen the one before.
  */
-export const DurableEvent = z.discriminatedUnion('type', [MemberJoinedEvent]);
+export const DurableEvent = z.discriminatedUnion('type', [
+  MemberJoinedEvent,
+  RoomCreatedEvent,
+  RoomUpdatedEvent,
+  RoomDeletedEvent,
+  MessageCreatedEvent,
+  MessageUpdatedEvent,
+  ReactionAddedEvent,
+  ReactionRemovedEvent,
+]);
 export type DurableEvent = z.infer<typeof DurableEvent>;
 
 // ---- client → server ------------------------------------------------------------------------
@@ -53,11 +88,16 @@ export type ClientSetPresence = z.infer<typeof ClientSetPresence>;
 export const ClientActivity = z.object({ type: z.literal('activity'), idle: z.boolean() });
 export type ClientActivity = z.infer<typeof ClientActivity>;
 
+/** The user is typing in a room. Send at most every few seconds while typing. */
+export const ClientTyping = z.object({ type: z.literal('typing'), roomId: Id });
+export type ClientTyping = z.infer<typeof ClientTyping>;
+
 export const ClientMessage = z.discriminatedUnion('type', [
   ClientHello,
   ClientPing,
   ClientSetPresence,
   ClientActivity,
+  ClientTyping,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
@@ -94,6 +134,19 @@ export const ServerPresence = z.object({
 });
 export type ServerPresence = z.infer<typeof ServerPresence>;
 
+/** Someone is typing (ephemeral): show it for `TYPING_TTL_MS` unless repeated. */
+export const ServerTyping = z.object({ type: z.literal('typing'), roomId: Id, userId: Id });
+export type ServerTyping = z.infer<typeof ServerTyping>;
+export const TYPING_TTL_MS = 6_000;
+
+/** This member read up to a message, on one of their devices: update badges on all of them. */
+export const ServerReadState = z.object({
+  type: z.literal('read_state'),
+  roomId: Id,
+  lastReadMessageId: Id,
+});
+export type ServerReadState = z.infer<typeof ServerReadState>;
+
 export const ServerUpgradeRequired = z.object({
   type: z.literal('upgrade_required'),
   minProtocolVersion: z.number().int(),
@@ -115,6 +168,8 @@ export const ServerMessage = z.discriminatedUnion('type', [
   ServerWelcome,
   ServerEvent,
   ServerPresence,
+  ServerTyping,
+  ServerReadState,
   ServerUpgradeRequired,
   ServerPong,
   ServerError,

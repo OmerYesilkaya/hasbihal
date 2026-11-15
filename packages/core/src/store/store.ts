@@ -1,4 +1,14 @@
-import type { DurableEvent, PresenceStatus, User } from '@hasbihal/protocol';
+import type {
+  DurableEvent,
+  Message,
+  PresenceStatus,
+  Room,
+  RoomWithState,
+  User,
+} from '@hasbihal/protocol';
+
+/** A room as this member sees it: unread state kept up to date by events (A28 badges). */
+export type RoomEntry = RoomWithState;
 
 /** The client's view of the shared state, fed by HTTP loads and the gateway (ARCHITECTURE §4.3). */
 export interface ChatState {
@@ -7,9 +17,42 @@ export interface ChatState {
   members: ReadonlyMap<string, User>;
   /** Everyone not listed is offline. */
   presence: ReadonlyMap<string, PresenceStatus>;
+  rooms: ReadonlyMap<string, RoomEntry>;
+  /** Loaded messages per room, by id. Use `roomMessages` for display order. */
+  messages: ReadonlyMap<string, ReadonlyMap<string, Message>>;
 }
 
-const EMPTY: ChatState = { me: null, members: new Map(), presence: new Map() };
+const EMPTY: ChatState = {
+  me: null,
+  members: new Map(),
+  presence: new Map(),
+  rooms: new Map(),
+  messages: new Map(),
+};
+
+/** Server order: creation time, then id (ARCHITECTURE §3.3). */
+export function compareMessages(a: Message, b: Message): number {
+  return a.createdAt < b.createdAt
+    ? -1
+    : a.createdAt > b.createdAt
+      ? 1
+      : a.id < b.id
+        ? -1
+        : a.id > b.id
+          ? 1
+          : 0;
+}
+
+/** Whether a message would count toward this member's unread badge, and as a mention. */
+function unreadWeight(
+  message: Message,
+  meId: string | undefined,
+): { unread: number; mention: number } {
+  if (message.authorId === meId || message.deletedAt) return { unread: 0, mention: 0 };
+  const mention =
+    message.mentionsEveryone || (meId !== undefined && message.mentions.includes(meId)) ? 1 : 0;
+  return { unread: 1, mention };
+}
 
 /**
  * A small external store: every change produces a new immutable snapshot, so React's
@@ -53,10 +96,51 @@ export class ChatStore {
     this.#update({ presence });
   }
 
+  /** The room list with unread counts, from `GET /rooms` (every welcome). Authoritative. */
+  setRooms(rooms: readonly RoomEntry[]): void {
+    this.#update({ rooms: new Map(rooms.map((r) => [r.id, r])) });
+  }
+
+  /** A page of history from `GET /rooms/:id/messages`. Doesn't touch unread counts. */
+  addMessages(roomId: string, messages: readonly Message[]): void {
+    const map = new Map(this.#state.messages.get(roomId));
+    for (const message of messages) map.set(message.id, message);
+    this.#update({ messages: new Map(this.#state.messages).set(roomId, map) });
+  }
+
+  /**
+   * This member's read marker moved (here or on another device). Unread is recounted from the
+   * loaded messages after it: precise for the open room; `setRooms` corrects the rest on reconnect.
+   */
+  setReadMarker(roomId: string, messageId: string): void {
+    const room = this.#state.rooms.get(roomId);
+    if (!room) return;
+    const loaded = this.#state.messages.get(roomId);
+    const marker = loaded?.get(messageId);
+    let unreadCount = 0;
+    let unreadMentionCount = 0;
+    if (loaded && marker) {
+      for (const message of loaded.values()) {
+        if (compareMessages(message, marker) <= 0) continue;
+        const weight = unreadWeight(message, this.#state.me?.id);
+        unreadCount += weight.unread;
+        unreadMentionCount += weight.mention;
+      }
+    }
+    this.#update({
+      rooms: new Map(this.#state.rooms).set(roomId, {
+        ...room,
+        lastReadMessageId: messageId,
+        unreadCount,
+        unreadMentionCount,
+      }),
+    });
+  }
+
   /** Applies a durable event. Idempotent: replaying one around a reconnect changes nothing. */
   apply(event: DurableEvent): void {
     // Typed per event: a new event type doesn't compile until it has a handler below.
-    this.#handlers[event.type](event);
+    (this.#handlers[event.type] as (e: DurableEvent) => void)(event);
   }
 
   readonly #handlers: {
@@ -65,10 +149,91 @@ export class ChatStore {
     member_joined: (event) => {
       this.#update({ members: new Map(this.#state.members).set(event.user.id, event.user) });
     },
+    room_created: (event) => {
+      if (this.#state.rooms.has(event.room.id)) return;
+      this.#putRoom(event.room, { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 });
+    },
+    room_updated: (event) => {
+      const current = this.#state.rooms.get(event.room.id);
+      this.#putRoom(
+        event.room,
+        current ?? { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
+      );
+    },
+    room_deleted: (event) => {
+      const rooms = new Map(this.#state.rooms);
+      const messages = new Map(this.#state.messages);
+      rooms.delete(event.roomId);
+      messages.delete(event.roomId);
+      this.#update({ rooms, messages });
+    },
+    message_created: (event) => {
+      const { message } = event;
+      const known = this.#state.messages.get(message.roomId)?.has(message.id) ?? false;
+      this.addMessages(message.roomId, [message]);
+      const room = this.#state.rooms.get(message.roomId);
+      if (known || !room) return; // counted already, or a room we don't list
+      const weight = unreadWeight(message, this.#state.me?.id);
+      if (!weight.unread) return;
+      this.#update({
+        rooms: new Map(this.#state.rooms).set(room.id, {
+          ...room,
+          unreadCount: room.unreadCount + weight.unread,
+          unreadMentionCount: room.unreadMentionCount + weight.mention,
+        }),
+      });
+    },
+    message_updated: (event) => {
+      this.addMessages(event.message.roomId, [event.message]);
+    },
+    reaction_added: (event) => {
+      this.#editReactions(event.roomId, event.messageId, event.emoji, (ids) =>
+        ids.includes(event.userId) ? ids : [...ids, event.userId],
+      );
+    },
+    reaction_removed: (event) => {
+      this.#editReactions(event.roomId, event.messageId, event.emoji, (ids) =>
+        ids.filter((id) => id !== event.userId),
+      );
+    },
   };
 
   reset(): void {
     this.#update(EMPTY);
+  }
+
+  #putRoom(
+    room: Room,
+    state: Pick<RoomEntry, 'lastReadMessageId' | 'unreadCount' | 'unreadMentionCount'>,
+  ): void {
+    const entry: RoomEntry = {
+      ...room,
+      lastReadMessageId: state.lastReadMessageId,
+      unreadCount: state.unreadCount,
+      unreadMentionCount: state.unreadMentionCount,
+    };
+    this.#update({ rooms: new Map(this.#state.rooms).set(room.id, entry) });
+  }
+
+  /** Changes who reacted with one emoji on a loaded message; unloaded messages arrive fresh later. */
+  #editReactions(
+    roomId: string,
+    messageId: string,
+    emoji: string,
+    change: (userIds: string[]) => string[],
+  ): void {
+    const message = this.#state.messages.get(roomId)?.get(messageId);
+    if (!message) return;
+    const existing = message.reactions.find((r) => r.emoji === emoji);
+    const userIds = change(existing?.userIds ?? []);
+    const reactions = existing
+      ? message.reactions
+          .map((r) => (r.emoji === emoji ? { emoji, userIds } : r))
+          .filter((r) => r.userIds.length > 0)
+      : userIds.length
+        ? [...message.reactions, { emoji, userIds }]
+        : message.reactions;
+    this.addMessages(roomId, [{ ...message, reactions }]);
   }
 
   #update(change: Partial<ChatState>): void {
@@ -84,4 +249,16 @@ export function sortMembers(state: ChatState): User[] {
   return [...state.members.values()].sort(
     (a, b) => present(a) - present(b) || collator.compare(a.displayName, b.displayName),
   );
+}
+
+/** The sidebar: active rooms by position, archived ones left out. */
+export function activeRooms(state: ChatState): RoomEntry[] {
+  return [...state.rooms.values()]
+    .filter((r) => !r.archivedAt)
+    .sort((a, b) => a.position - b.position);
+}
+
+/** A room's loaded messages in display order. */
+export function roomMessages(state: ChatState, roomId: string): Message[] {
+  return [...(state.messages.get(roomId)?.values() ?? [])].sort(compareMessages);
 }
