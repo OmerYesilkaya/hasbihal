@@ -8,7 +8,9 @@ import {
   Id,
   MarkReadRequest,
   MessagePageQuery,
+  SearchQuery,
   SendMessageRequest,
+  type SearchResults,
   UpdateRoomRequest,
   type Message,
   type MessagePage,
@@ -207,6 +209,49 @@ export function registerChat(
       return { messages: await hydrateMessages(db, rows.slice(0, limit).reverse()), hasMore };
     },
   );
+
+  // ---- search (A27) ---------------------------------------------------------------------------
+
+  /** Every word, as a prefix, folded like the index (migration 0007): all must match. */
+  const searchTerms = (q: string): string | null => {
+    const words = q
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter(Boolean)
+      .slice(0, 8);
+    return words.length ? words.map((w) => `${w}:*`).join(' & ') : null;
+  };
+
+  app.get('/search', { preHandler: requireAuth }, async (request): Promise<SearchResults> => {
+    const query = parseRequest(SearchQuery, request.query, 'query');
+    const terms = searchTerms(query.q);
+    if (!terms) return { messages: [], hasMore: false };
+    let search = db
+      .selectFrom('messages')
+      .selectAll()
+      .where(sql<boolean>`search_vector @@ to_tsquery('simple', hasbihal_fold(${terms}))`)
+      .where('deleted_at', 'is', null);
+    if (query.roomId) search = search.where('room_id', '=', query.roomId);
+    if (query.before) {
+      const cursor = await db
+        .selectFrom('messages')
+        .select(['created_at', 'id'])
+        .where('id', '=', query.before)
+        .executeTakeFirst();
+      if (cursor)
+        search = search.where(
+          sql<boolean>`(created_at, id) < (${cursor.created_at}, ${cursor.id})`,
+        );
+    }
+    const rows = await search
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
+      .limit(query.limit + 1)
+      .execute();
+    return {
+      messages: await hydrateMessages(db, rows.slice(0, query.limit)),
+      hasMore: rows.length > query.limit,
+    };
+  });
 
   app.post(
     '/rooms/:id/messages',

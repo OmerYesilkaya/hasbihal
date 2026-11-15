@@ -473,6 +473,23 @@ test.describe.serial('accounts in the desktop app', () => {
     // It arrives after the message; the conversation still ends with it in view.
     await expect(preview).toBeInViewport({ ratio: 1 });
     await snap(page, '15-link-preview');
+
+    // Search (A27): Turkish letters fold both ways, across rooms; a result opens its room.
+    const search = page.getByRole('searchbox', { name: 'Mesajlarda ara' });
+    await search.fill('KAHVALTI');
+    const result = page.getByTestId('search-result');
+    await expect(result).toHaveCount(1);
+    await expect(result).toContainText('Pazar kahvaltısından');
+    await expect(result.locator('mark')).toHaveText('kahvaltısından');
+    await expect(result).toContainText('2 dosya');
+    await search.fill('yemek hazir');
+    await expect(result).toHaveCount(1);
+    await expect(result).toContainText('# Mutfak');
+    await snap(page, '16-search');
+    await result.click();
+    await expect(page.getByRole('heading', { name: 'Mutfak', level: 1 })).toBeVisible();
+    await search.press('Escape');
+    await expect(page.getByTestId('member').first()).toBeVisible();
   });
 
   test('explains that a used invite no longer works', async () => {

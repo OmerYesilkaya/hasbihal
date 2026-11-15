@@ -145,10 +145,15 @@ Notes:
 
 ### 3.5 Search (A27)
 
-- `messages.search_vector` is a generated column: `to_tsvector('hasbihal_tr', body)`.
-- `hasbihal_tr` is a custom text-search configuration: the Turkish Snowball stemmer plus an **unaccent** dictionary with custom rules so that `ı↔i`, `ş↔s`, `ç↔c`, `ğ↔g`, `ö↔o`, and `ü↔u` all match.
-- Lower-casing uses an **ICU `tr-TR` collation**, so `I→ı` and `İ→i` are handled correctly. A naive lower-case breaks Turkish.
-- A GIN index on `search_vector`. Results are ranked by `ts_rank` and recency.
+- `messages.search_vector` is a generated column: `to_tsvector('simple', hasbihal_fold(body))`, with a GIN index.
+- `hasbihal_fold` is an immutable SQL function that folds text the same way as the app's `foldTurkish`:
+  - it lower-cases with the **ICU `tr` collation**, so `I→ı` and `İ→i` (a naive lower-case breaks Turkish);
+  - it then maps `ı→i`, `ş→s`, `ç→c`, `ğ→g`, `ö→o`, `ü→u`, and drops common accents (`â`, `é`, …).
+
+  It uses `translate()` rather than the `unaccent` extension, whose custom rules would need files on the database server.
+
+- Queries are folded the same way, and **every word matches as a prefix**, all words required. Turkish is suffix-heavy, so `çay` finding _çaylar_ and _çayı_ works better than a stemmer would on folded text.
+- Results come **newest first** and page backwards. In a family archive, recency is the best ranking.
 
 ### 3.6 Background work
 

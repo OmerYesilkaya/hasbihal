@@ -146,3 +146,23 @@ export type MessagePage = z.infer<typeof MessagePage>;
 
 export const MarkReadRequest = z.object({ messageId: Id });
 export type MarkReadRequest = z.infer<typeof MarkReadRequest>;
+
+// ---- search (A27) ------------------------------------------------------------------------------
+
+export const SEARCH_QUERY_MAX = 100;
+
+/** `GET /search?q=…&roomId=…&before=…`: newest first; `before` pages further back. */
+export const SearchQuery = z.object({
+  q: z.string().trim().min(1).max(SEARCH_QUERY_MAX),
+  roomId: Id.optional(),
+  before: Id.optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(30),
+});
+export type SearchQuery = z.input<typeof SearchQuery>;
+
+export const SearchResults = z.object({
+  /** Newest first. */
+  messages: z.array(Message),
+  hasMore: z.boolean(),
+});
+export type SearchResults = z.infer<typeof SearchResults>;
