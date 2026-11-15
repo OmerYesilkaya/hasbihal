@@ -70,7 +70,7 @@ export class HangoutTracker {
         next.length === current.length &&
         next.every((p) => {
           const c = this.#rooms.get(roomId)?.get(p.userId);
-          return c && c.camera === p.camera && c.screenShare === p.screenShare;
+          return c?.camera === p.camera && c.screenShare === p.screenShare;
         });
       if (same) continue;
       if (next.length) this.#rooms.set(roomId, new Map(next.map((p) => [p.userId, p])));
