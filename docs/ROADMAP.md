@@ -50,8 +50,10 @@ The app becomes useful as a text chat.
 5. **Rooms and messages (server):** rooms, messages with replies, edits, deletes, reactions, mentions, typing, unread state.
 6. **Chat UI:** the three-column layout, the virtualized message list, the composer, safe Markdown rendering (A47, A48), the member list with presence, unread badges.
 7. **Profiles and files:** file storage (A54), avatar upload with the initials fallback, the profile view and the sessions list.
+8. **Owner test:** the owner runs the server on their Mac and uses Hasbihal from two machines, including disconnects, sleep/wake, and both devices signed in at once. Nothing is paid for until this passes.
+9. **First deployment:** a VPS (the first paid item), TLS, and the server and LiveKit running there, so the family can connect. Backups and the remaining hardening stay in M6.
 
-**Exit criteria:** the test group uses Hasbihal for daily text chat for a week. Messages never get lost or duplicated across disconnects, sleep/wake cycles, or two devices per person.
+**Exit criteria:** the owner test (step 8) passes, then the test group uses Hasbihal for daily text chat for a week on the first deployment (step 9). Messages never get lost or duplicated across disconnects, sleep/wake cycles, or two devices per person.
 
 ---
 
@@ -112,7 +114,7 @@ The core experience.
 - The admin page: invites, members, admin rights, rooms (A44).
 - The visual identity pass: Ottoman decorative details, the logo, empty states (A45, §5 of DECISIONS).
 - Unsigned installers for macOS and Windows, built by CI, with install instructions for the "Open Anyway" and SmartScreen steps (A30).
-- Production deployment on the VPS: domain, TLS, firewall, LiveKit TURN (§10.1).
+- Production hardening on the VPS set up in M1: firewall, LiveKit TURN, monitoring (§10.1).
 - Nightly encrypted backups and a tested restore (A31).
 
 **Exit criteria:** a fresh family member can go from an invite link to talking in a hangout in under 10 minutes, with nothing but the written instructions. A restore drill brings the system back from backup. After that comes the **v1.0 release**.
