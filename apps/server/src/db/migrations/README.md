@@ -1,6 +1,6 @@
 # Migrations
 
-The server applies pending migrations on startup. In development, `pnpm --filter @hasbihal/server migrate <latest|down|status>` runs them by hand.
+The server applies pending migrations on startup. In development, `pnpm --filter @hasbihal/server migrate <latest|down|status>` runs them by hand (`src/cli/migrate.ts`).
 
 - **Name:** `0001_create_users.ts`, a 4-digit order then a snake_case description. Other files here are ignored.
 - **Content:** export `up(db: Kysely<unknown>)`. Export `down` as well when the change can be undone. Use Kysely's schema builder, or `sql` for what it can't express (generated columns, extensions).

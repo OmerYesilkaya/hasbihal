@@ -1,8 +1,8 @@
 // Development helper: `pnpm --filter @hasbihal/server migrate <latest|down|status>`.
 // The server itself migrates to latest on startup.
 import { loadConfig } from '../config.ts';
-import { createDatabase } from './database.ts';
-import { assertMigrated, createMigrator } from './migrate.ts';
+import { createDatabase } from '../db/database.ts';
+import { assertMigrated, createMigrator } from '../db/migrate.ts';
 
 const command = process.argv[2] ?? 'status';
 const db = createDatabase(loadConfig().databaseUrl);
