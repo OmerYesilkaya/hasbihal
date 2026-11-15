@@ -13,7 +13,7 @@ import { ConnectionBadge } from './components/ConnectionBadge.tsx';
 import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
 import { SearchPanel } from './components/SearchPanel.tsx';
 import { Tulip } from './components/Tulip.tsx';
-import { I18nProvider, useT } from './i18n.tsx';
+import { formatTime, I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
 import { useGateway } from './useGateway.ts';
 
@@ -115,6 +115,16 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
         () => {
           setChosenRoom(roomId);
           void hangout.join(roomId);
+        },
+      );
+    },
+    // A15: "Ders · 09:00, in 10 minutes".
+    eventReminder: ({ roomId, title, startsAt }) => {
+      notify(
+        t('events.reminderTitle', { title }),
+        t('events.reminderBody', { time: formatTime(startsAt), room: roomName(roomId) }),
+        () => {
+          setChosenRoom(roomId);
         },
       );
     },

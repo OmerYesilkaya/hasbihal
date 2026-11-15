@@ -50,6 +50,9 @@ export const ReactionRemovedEvent = ReactionAddedEvent.extend({
   type: z.literal('reaction_removed'),
 });
 
+/** A room's events changed (one created, edited, skipped, moved, RSVP'd): reload them. */
+export const EventsChangedEvent = z.object({ type: z.literal('events_changed'), roomId: Id });
+
 /**
  * Events stored in the event log and replayed after a reconnect. Apply them idempotently: a
  * client may see one twice around a reconnect. Events carry whole objects where they can, so
@@ -65,6 +68,7 @@ export const DurableEvent = z.discriminatedUnion('type', [
   MessageUpdatedEvent,
   ReactionAddedEvent,
   ReactionRemovedEvent,
+  EventsChangedEvent,
 ]);
 export type DurableEvent = z.infer<typeof DurableEvent>;
 
@@ -160,6 +164,16 @@ export type ServerHangoutStarted = z.infer<typeof ServerHangoutStarted>;
 export const ServerNudge = z.object({ type: z.literal('nudge'), fromUserId: Id, roomId: Id });
 export type ServerNudge = z.infer<typeof ServerNudge>;
 
+/** An event the member is invited to starts soon (A15): a reminder notification. */
+export const ServerEventReminder = z.object({
+  type: z.literal('event_reminder'),
+  eventId: Id,
+  roomId: Id,
+  title: z.string(),
+  startsAt: z.iso.datetime(),
+});
+export type ServerEventReminder = z.infer<typeof ServerEventReminder>;
+
 /** Someone is typing (ephemeral): show it for `TYPING_TTL_MS` unless repeated. */
 export const ServerTyping = z.object({ type: z.literal('typing'), roomId: Id, userId: Id });
 export type ServerTyping = z.infer<typeof ServerTyping>;
@@ -199,6 +213,7 @@ export const ServerMessage = z.discriminatedUnion('type', [
   ServerHangout,
   ServerHangoutStarted,
   ServerNudge,
+  ServerEventReminder,
   ServerUpgradeRequired,
   ServerPong,
   ServerError,

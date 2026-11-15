@@ -15,6 +15,8 @@ import { registerChat } from './chat/routes.ts';
 import { collectOrphanFiles } from './files/gc.ts';
 import { registerFiles } from './files/routes.ts';
 import { FileUrlSigner } from './files/signing.ts';
+import { registerEvents } from './events/routes.ts';
+import { EVENT_REMINDER_JOB, eventReminderJob } from './events/service.ts';
 import { JobQueue } from './jobs/queue.ts';
 import { SafeFetcher, type Fetcher } from './previews/fetcher.ts';
 import { LINK_PREVIEW_JOB, linkPreviewJob } from './previews/service.ts';
@@ -103,6 +105,7 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
         hub.eventsCommitted();
       },
     }),
+    [EVENT_REMINDER_JOB]: eventReminderJob({ db: deps.db, hub }),
   });
   app.decorate('jobs', jobs);
   if (deps.runJobs !== false) {
@@ -112,14 +115,11 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     });
   }
   app.addHook('onClose', () => jobs.stop());
-  registerChat(app, {
-    db: deps.db,
-    hub,
-    guards,
-    jobsQueued: () => {
-      jobs.wake();
-    },
-  });
+  const jobsQueued = () => {
+    jobs.wake();
+  };
+  registerChat(app, { db: deps.db, hub, guards, jobsQueued });
+  registerEvents(app, { db: deps.db, hub, guards, jobsQueued });
   registerFiles(app, {
     db: deps.db,
     store: files,

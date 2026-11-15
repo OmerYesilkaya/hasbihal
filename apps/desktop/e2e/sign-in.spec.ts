@@ -492,6 +492,43 @@ test.describe.serial('accounts in the desktop app', () => {
     await expect(page.getByTestId('member').first()).toBeVisible();
   });
 
+  test('plans a weekly event: create, RSVP, skip one (A15, A16)', async () => {
+    const page = await launch();
+    await page.getByTestId('room').filter({ hasText: 'Salon' }).click();
+    await page.getByTestId('event-chip').click();
+    const dialog = page.getByTestId('events-dialog');
+    await expect(dialog).toContainText('Önümüzdeki dört haftada etkinlik yok.');
+
+    await dialog.getByRole('button', { name: 'Etkinlik ekle' }).click();
+    await dialog.getByLabel('Başlık').fill('Ders');
+    await dialog.getByLabel('Açıklama').fill('Matematik, 5. ünite');
+    await dialog.getByLabel('Tekrar').selectOption({ label: 'Her hafta' });
+    await dialog.getByLabel('Ayşe Test').check();
+    await dialog.getByRole('button', { name: 'Kaydet' }).click();
+
+    // Four weeks ahead: four or five Mondays-or-whatever-day, the first one coming up.
+    const occurrences = dialog.getByTestId('occurrence');
+    await expect(occurrences.first()).toContainText('Ders');
+    expect(await occurrences.count()).toBeGreaterThanOrEqual(4);
+
+    await occurrences.first().getByRole('button', { name: 'Geliyorum' }).click();
+    await expect(occurrences.first().getByRole('button', { name: 'Geliyorum' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(occurrences.first()).toContainText('✓ Ömer Faruk');
+
+    const second = occurrences.nth(1);
+    await second.getByLabel('Etkinliği yönet').click();
+    await second.getByRole('button', { name: 'Bu seferlik atla' }).click();
+    await expect(second).toHaveAttribute('data-skipped', 'true');
+    await expect(second).toContainText('yapılmayacak');
+    await snap(page, '17-events');
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('event-chip')).toContainText(/Ders · (Bugün|Yarın) \d\d:00/);
+  });
+
   test('explains that a used invite no longer works', async () => {
     const page = await launch();
     await page.getByRole('button', { name: 'Çıkış yap' }).click();

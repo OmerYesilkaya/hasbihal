@@ -18,6 +18,7 @@ function toWebSocketUrl(serverUrl: string): string {
 export interface GatewayNotices {
   hangoutStarted: (roomId: string, userId: string) => void;
   nudge: (fromUserId: string, roomId: string) => void;
+  eventReminder: (reminder: { roomId: string; title: string; startsAt: string }) => void;
 }
 
 export function useGateway(info: AppInfo, store: ChatStore, notices: GatewayNotices) {
@@ -57,6 +58,7 @@ export function useGateway(info: AppInfo, store: ChatStore, notices: GatewayNoti
         store.setMe(welcome.me);
         store.setPresenceSnapshot(welcome.presence);
         store.setHangouts(welcome.hangouts);
+        store.eventsChanged(); // they may have changed while this client was away
         if (welcome.resync) store.forgetMessages();
         if (!loaded || welcome.resync) {
           loaded = true;
@@ -84,6 +86,9 @@ export function useGateway(info: AppInfo, store: ChatStore, notices: GatewayNoti
       },
       onNudge: (fromUserId, roomId) => {
         latestNotices.current.nudge(fromUserId, roomId);
+      },
+      onEventReminder: (reminder) => {
+        latestNotices.current.eventReminder(reminder);
       },
     });
     client.current = gateway;

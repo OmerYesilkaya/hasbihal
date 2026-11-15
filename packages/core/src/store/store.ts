@@ -26,6 +26,11 @@ export interface ChatState {
   typing: ReadonlyMap<string, ReadonlyMap<string, number>>;
   /** Per room: who is in its hangout (rooms nobody is in are absent). */
   hangouts: ReadonlyMap<string, readonly HangoutParticipant[]>;
+  /**
+   * Goes up whenever any room's events change (A15): event views reload then. Events are
+   * fetched for a time window rather than kept here, since recurring ones never end.
+   */
+  eventsRevision: number;
 }
 
 const EMPTY: ChatState = {
@@ -36,6 +41,7 @@ const EMPTY: ChatState = {
   messages: new Map(),
   typing: new Map(),
   hangouts: new Map(),
+  eventsRevision: 0,
 };
 
 /** Server order: creation time, then id (ARCHITECTURE §3.3). */
@@ -248,7 +254,15 @@ export class ChatStore {
         ids.filter((id) => id !== event.userId),
       );
     },
+    events_changed: () => {
+      this.eventsChanged();
+    },
   };
+
+  /** Event views should reload: after `events_changed`, or after a reconnect missed some. */
+  eventsChanged(): void {
+    this.#update({ eventsRevision: this.#state.eventsRevision + 1 });
+  }
 
   reset(): void {
     this.#update(EMPTY);
