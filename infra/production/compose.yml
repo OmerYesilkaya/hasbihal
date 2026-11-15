@@ -30,6 +30,7 @@ services:
       DATABASE_URL: postgres://hasbihal:${POSTGRES_PASSWORD}@postgres:5432/hasbihal
       AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:?set AUTH_SIGNING_KEY in .env}
       LIVEKIT_URL: wss://${HASBIHAL_HOST}/livekit
+      LIVEKIT_API_URL: http://host.docker.internal:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}
       # Behind Caddy: rate limits must see the client's address, not Caddy's.
@@ -39,6 +40,11 @@ services:
       LOG_LEVEL: info
     volumes:
       - files:/data/files
+    # Loopback only: for LiveKit's webhooks (it uses host networking). The public way in is Caddy.
+    ports:
+      - '127.0.0.1:8080:8080'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   # Media goes straight to LiveKit (UDP); only its signaling WebSocket goes through Caddy.
   livekit:

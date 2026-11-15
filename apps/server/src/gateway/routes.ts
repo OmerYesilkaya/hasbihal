@@ -9,6 +9,7 @@ import {
   isProtocolSupported,
   parseFrame,
   type ClientHello,
+  type HangoutParticipant,
 } from '@hasbihal/protocol';
 import { authenticateToken, toUser } from '../auth/sessions.ts';
 import type { SigningKeys } from '../auth/tokens.ts';
@@ -29,6 +30,8 @@ export interface GatewayDeps {
   db: Kysely<Database>;
   keys: SigningKeys;
   hub: GatewayHub;
+  /** Who is in which hangout, for the welcome. */
+  hangouts: () => Record<string, HangoutParticipant[]>;
 }
 
 /**
@@ -38,7 +41,7 @@ export interface GatewayDeps {
 export function registerGateway(
   app: FastifyInstance,
   config: Config,
-  { db, keys, hub }: GatewayDeps,
+  { db, keys, hub, hangouts }: GatewayDeps,
 ): void {
   app.get('/ws', { websocket: true }, (socket, request) => {
     let connection: Connection | undefined;
@@ -118,6 +121,7 @@ export function registerGateway(
         resync: lastSeq !== undefined && !canReplay,
         me: toUser(user),
         presence: hub.presenceSnapshot(),
+        hangouts: hangouts(),
       });
       joined.welcomed = true;
 

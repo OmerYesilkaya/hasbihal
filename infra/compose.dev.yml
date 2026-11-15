@@ -24,6 +24,9 @@ services:
     command: --dev --config /etc/livekit.yaml --bind 0.0.0.0 --node-ip 127.0.0.1
     volumes:
       - ./livekit.dev.yaml:/etc/livekit.yaml:ro
+    extra_hosts:
+      # Docker Desktop provides this name; on Linux it has to be added.
+      - 'host.docker.internal:host-gateway'
     ports:
       - '127.0.0.1:7880:7880'
       - '127.0.0.1:7881:7881'

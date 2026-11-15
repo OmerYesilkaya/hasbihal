@@ -63,7 +63,13 @@ export async function startHarness(): Promise<Harness> {
   const filesDir = await mkdtemp(path.join(tmpdir(), 'hasbihal-files-'));
   const app = await buildApp(
     loadConfig({ LOG_LEVEL: 'silent', AUTH_RATE_LIMIT_PER_MINUTE: '10000' }),
-    { db: testDb.db, hub, files: new LocalFileStore(filesDir) },
+    // No real LiveKit in tests: its room listing is empty.
+    {
+      db: testDb.db,
+      hub,
+      files: new LocalFileStore(filesDir),
+      livekitRooms: { list: () => Promise.resolve(new Map()) },
+    },
   );
   await app.ready();
 
