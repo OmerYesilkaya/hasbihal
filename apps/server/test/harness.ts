@@ -14,7 +14,7 @@ import {
   type ClientMessage,
   type Role,
 } from '@hasbihal/protocol';
-import { buildApp } from '../src/app.ts';
+import { buildApp, type AppDeps } from '../src/app.ts';
 import { createInvite } from '../src/auth/routes.ts';
 import { loadConfig } from '../src/config.ts';
 import { LocalFileStore } from '../src/files/store.ts';
@@ -57,7 +57,8 @@ export interface Harness {
 
 let counter = 0;
 
-export async function startHarness(): Promise<Harness> {
+/** `deps` overrides parts of the app, e.g. a fetcher that may reach a local test site. */
+export async function startHarness(deps: Partial<AppDeps> = {}): Promise<Harness> {
   const testDb = await createTestDatabase();
   const hub = new GatewayHub(testDb.db);
   const filesDir = await mkdtemp(path.join(tmpdir(), 'hasbihal-files-'));
@@ -69,6 +70,9 @@ export async function startHarness(): Promise<Harness> {
       hub,
       files: new LocalFileStore(filesDir),
       livekitRooms: { list: () => Promise.resolve(new Map()) },
+      // Tests run jobs when they choose (app.jobs.runDue()), so nothing races them.
+      runJobs: false,
+      ...deps,
     },
   );
   await app.ready();

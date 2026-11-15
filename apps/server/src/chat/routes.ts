@@ -21,12 +21,15 @@ import type { Database } from '../db/schema.ts';
 import { AppError, parseRequest } from '../errors.ts';
 import { appendEvent } from '../gateway/events.ts';
 import type { GatewayHub } from '../gateway/hub.ts';
+import { linkMessage } from '../previews/service.ts';
 import { hydrateMessages, loadMessage, resolveMentions, roomsWithState, toRoom } from './model.ts';
 
 export interface ChatDeps {
   db: Kysely<Database>;
   hub: GatewayHub;
   guards: AuthGuards;
+  /** Wakes the job queue after a commit that queued work (link previews). */
+  jobsQueued: () => void;
 }
 
 const IdParam = z.object({ id: Id });
@@ -59,13 +62,17 @@ async function advanceReadMarker(
  * Rooms (A8, A12) and messages (A22). Every change appends a durable event in its own
  * transaction, then wakes the gateway hub, which sends it out in order (ARCHITECTURE §5).
  */
-export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps): void {
+export function registerChat(
+  app: FastifyInstance,
+  { db, hub, guards, jobsQueued }: ChatDeps,
+): void {
   const { requireAuth, requireAdmin, auth } = guards;
 
   /** Runs a change and the event describing it in one transaction, then delivers the event. */
   const commit = async <T>(change: (trx: Transaction<Database>) => Promise<T>): Promise<T> => {
     const result = await db.transaction().execute(change);
     hub.eventsCommitted();
+    jobsQueued();
     return result;
   };
 
@@ -305,6 +312,7 @@ export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps
             .values(mentions.userIds.map((user_id) => ({ message_id: inserted.id, user_id })))
             .execute();
         }
+        await linkMessage(trx, inserted.id, inserted.body);
         const [created] = await hydrateMessages(trx, [inserted]);
         if (!created) throw new Error('message vanished');
         await appendEvent(trx, { type: 'message_created', message: created });
@@ -366,6 +374,7 @@ export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps
           .values(mentions.userIds.map((user_id) => ({ message_id: id, user_id })))
           .execute();
       }
+      await linkMessage(trx, id, updated.body);
       const [message] = await hydrateMessages(trx, [updated]);
       if (!message) throw new Error('message vanished');
       await appendEvent(trx, { type: 'message_updated', message });
@@ -390,6 +399,7 @@ export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps
       await trx.deleteFrom('reactions').where('message_id', '=', id).execute();
       // Its files are collected later (files/gc.ts).
       await trx.deleteFrom('attachments').where('message_id', '=', id).execute();
+      await trx.deleteFrom('message_links').where('message_id', '=', id).execute();
       const [message] = await hydrateMessages(trx, [deleted]);
       if (!message) throw new Error('message vanished');
       await appendEvent(trx, { type: 'message_updated', message });

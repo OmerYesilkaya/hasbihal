@@ -128,10 +128,11 @@ class FileAddressCache {
 
 const addresses = new FileAddressCache();
 
-/** A file's signed addresses, once known (null meanwhile, or when it's gone). */
-export function useFileAddresses(serverUrl: string, fileId: string): FileAddresses | null {
-  const [value, setValue] = useState(() => addresses.get(serverUrl, fileId));
+/** A file's signed addresses, once known (null meanwhile, when it's gone, or with no file). */
+export function useFileAddresses(serverUrl: string, fileId: string | null): FileAddresses | null {
+  const [value, setValue] = useState(() => (fileId ? addresses.get(serverUrl, fileId) : null));
   useEffect(() => {
+    if (!fileId) return;
     let current = true;
     void addresses.load(serverUrl, fileId).then((a) => {
       if (current) setValue(a);
@@ -140,7 +141,7 @@ export function useFileAddresses(serverUrl: string, fileId: string): FileAddress
       current = false;
     };
   }, [serverUrl, fileId]);
-  return value;
+  return fileId ? value : null;
 }
 
 /** "2,4 MB", in the app's language. */
