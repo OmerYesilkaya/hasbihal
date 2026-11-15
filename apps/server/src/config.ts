@@ -15,6 +15,8 @@ const Env = z.object({
         .filter(Boolean),
     ),
   HELLO_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  // Matches infra/compose.dev.yml. Production sets its own.
+  DATABASE_URL: z.string().default('postgres://hasbihal:hasbihal-dev@127.0.0.1:5432/hasbihal'),
 });
 
 export interface Config {
@@ -23,6 +25,7 @@ export interface Config {
   logLevel: z.infer<typeof Env>['LOG_LEVEL'];
   allowedOrigins: string[];
   helloTimeoutMs: number;
+  databaseUrl: string;
   serverVersion: string;
 }
 
@@ -34,6 +37,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     logLevel: parsed.LOG_LEVEL,
     allowedOrigins: parsed.ALLOWED_ORIGINS,
     helloTimeoutMs: parsed.HELLO_TIMEOUT_MS,
+    databaseUrl: parsed.DATABASE_URL,
     serverVersion: pkg.version,
   };
 }
