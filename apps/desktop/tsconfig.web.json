@@ -1,0 +1,9 @@
+{
+  "extends": "@hasbihal/config/tsconfig.dom.json",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "composite": true,
+    "noEmit": true
+  },
+  "include": ["src/renderer/src", "src/shared", "src/preload/api.d.ts"]
+}

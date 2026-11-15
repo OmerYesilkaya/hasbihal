@@ -1,0 +1,33 @@
+# Local development services. Production deployment lives elsewhere (ROADMAP M6).
+name: hasbihal-dev
+
+services:
+  postgres:
+    image: postgres:17.12
+    environment:
+      POSTGRES_USER: hasbihal
+      POSTGRES_PASSWORD: hasbihal-dev
+      POSTGRES_DB: hasbihal
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hasbihal -d hasbihal']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Dev mode: API key "devkey", secret "secret". Media on UDP 7882, TCP fallback on 7881.
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    command: --dev --config /etc/livekit.yaml --bind 0.0.0.0 --node-ip 127.0.0.1
+    volumes:
+      - ./livekit.dev.yaml:/etc/livekit.yaml:ro
+    ports:
+      - '127.0.0.1:7880:7880'
+      - '127.0.0.1:7881:7881'
+      - '127.0.0.1:7882:7882/udp'
+
+volumes:
+  postgres-data:

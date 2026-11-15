@@ -1,0 +1,43 @@
+# Unsigned installers, no auto-update (DECISIONS A30). Minimum OS versions per A49.
+appId: com.hasbihal.desktop
+productName: Hasbihal
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+asar: true
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+mac:
+  target:
+    - target: dmg
+      arch: [universal]
+  category: public.app-category.social-networking
+  minimumSystemVersion: '14.2'
+  # Self-signed certificate from the build machine's Keychain (DECISIONS A50). It gives the
+  # app a stable identity, so macOS keeps privacy permissions across updates. Not notarized.
+  identity: Hasbihal Self-Signed
+  hardenedRuntime: false
+  extendInfo:
+    NSMicrophoneUsageDescription: Hasbihal uses the microphone so you can talk in rooms.
+    NSCameraUsageDescription: Hasbihal uses the camera so others can see you in rooms.
+    # Without this key, macOS 14.2+ silently delivers an empty system-audio track (ARCHITECTURE §6.2).
+    NSAudioCaptureUsageDescription: Hasbihal captures your computer's audio when you share your screen with sound.
+dmg:
+  title: Hasbihal ${version}
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

@@ -1,0 +1,21 @@
+# LiveKit settings shared by development and (later) production. Keys come from `--dev` locally.
+room:
+  # H.264 hardware encoding (DECISIONS T8). By default LiveKit offers H.264 as Constrained Baseline
+  # (42e01f), which Chromium always encodes in software (OpenH264). Baseline (42001f) and Main
+  # (4d001f) get the hardware encoder on macOS (VideoToolbox) and Windows (Media Foundation), but
+  # LiveKit only enables them with an exact fmtp_line. Chrome offers 42001f first, so it wins.
+  enabled_codecs:
+    - mime: audio/opus
+    - mime: audio/red
+    - mime: video/vp8
+    - mime: video/vp9
+    - mime: video/av1
+    - mime: video/h265
+    # The plain entry must stay: without it the server swaps h264 for VP8 when a track is published.
+    - mime: video/h264
+    - mime: video/h264
+      fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
+    - mime: video/h264
+      fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f
+    - mime: video/h264
+      fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032
