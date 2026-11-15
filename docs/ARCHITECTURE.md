@@ -288,16 +288,16 @@ LiveKit **webhooks** (`participant_joined`, `participant_left`, `track_published
 
 ## 9. Authentication and sessions (A20, A25)
 
-| Item           | Design                                                                                                                                                                                         |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invite         | An admin creates a single-use, expiring invite link carrying a random 256-bit token. Only its hash is stored.                                                                                  |
-| Sign-up        | Through the invite: choose username, display name, avatar, and password. Minimum length 10 characters, no composition rules. The password is checked against a local list of common passwords. |
-| Passwords      | Argon2id (OWASP-recommended parameters). Sign-in is rate-limited per IP and per account.                                                                                                       |
-| Access token   | Short-lived (15 min) **JWT signed with Ed25519**. Sent on HTTP requests and in the WebSocket `hello`.                                                                                          |
-| Refresh token  | Opaque random token, **rotated on every use**, stored as a hash. Reusing an old token revokes the whole session family (theft detection). It expires after 180 days unused.                    |
-| Client storage | Encrypted with Electron `safeStorage`, which uses Keychain on macOS and DPAPI on Windows.                                                                                                      |
-| Recovery       | An admin creates a single-use recovery link (A25) that lets the user set a new password. All existing sessions are revoked.                                                                    |
-| Sessions page  | Users can see and revoke their own sessions in the profile view (A41).                                                                                                                         |
+| Item           | Design                                                                                                                                                                                                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invite         | An admin creates a single-use, expiring invite link (`hasbihal://invite/<token>`, A51) carrying a random 256-bit token. Only its hash is stored. The very first admin's invite comes from a server command (A52).                |
+| Sign-up        | Through the invite: choose username (lowercase `a-z0-9._`, 3–20, A53), display name, avatar, and password. Minimum length 10 characters, no composition rules. The password is checked against a local list of common passwords. |
+| Passwords      | Argon2id (OWASP-recommended parameters). Sign-in is rate-limited per IP and per account.                                                                                                                                         |
+| Access token   | Short-lived (15 min) **JWT signed with Ed25519**. Sent on HTTP requests and in the WebSocket `hello`.                                                                                                                            |
+| Refresh token  | Opaque random token, **rotated on every use**, stored as a hash. Reusing an old token revokes the whole session family (theft detection). It expires after 180 days unused.                                                      |
+| Client storage | Encrypted with Electron `safeStorage`, which uses Keychain on macOS and DPAPI on Windows.                                                                                                                                        |
+| Recovery       | An admin creates a single-use recovery link (A25) that lets the user set a new password. All existing sessions are revoked.                                                                                                      |
+| Sessions page  | Users can see and revoke their own sessions in the profile view (A41).                                                                                                                                                           |
 
 ---
 
@@ -356,5 +356,3 @@ GitHub Actions:
 
 - 🟡 **Library choices** marked 🟡 above (Fastify, Kysely, electron-vite, and so on) need confirmation.
 - ❓ **Domain name and VPS provider.** Owner to choose (the provider should be close to Turkey).
-- ❓ **macOS system audio in screen share.** Research says it's supported natively on macOS 14.2+ in current Electron (no virtual audio driver needed); spike S1 confirms it end to end. This implies a **minimum macOS version of 14.2 (Sonoma)** for share-with-audio. Owner to confirm the family's Macs meet it.
-- ❓ **DeepFilterNet CPU cost on older laptops.** Resolved by spike S2. This decides when the app falls back to DTLN.
