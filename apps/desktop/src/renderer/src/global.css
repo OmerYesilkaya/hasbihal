@@ -1148,3 +1148,135 @@ body {
 .suggestions [aria-selected='true'] button {
   background: var(--hb-selected);
 }
+
+/* ---- Profile (A40, A41) ---- */
+
+.avatar {
+  overflow: visible;
+}
+
+.avatar__photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar--large {
+  width: 72px;
+  height: 72px;
+  font-size: 24px;
+}
+
+.user-panel__profile,
+.user-panel__display {
+  font: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-panel__display {
+  display: block;
+  max-width: 100%;
+  font-weight: 600;
+}
+
+.profile {
+  width: 440px;
+  max-height: 85vh;
+  padding: 0;
+  border: 1px solid var(--hb-border);
+  border-top: 3px solid var(--hb-accent);
+  border-radius: 14px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.2);
+}
+
+.profile::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+
+.profile__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 4px;
+}
+
+.profile__header h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.profile__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.profile__section:last-child {
+  border-bottom: none;
+}
+
+.profile__photo {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile__photo > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.profile__remove {
+  font-size: 13px;
+}
+
+.profile__subtitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hb-text-secondary);
+}
+
+.profile__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profile__row .field__input {
+  flex: 1;
+}
+
+.profile__row p {
+  margin: 0;
+}
+
+.sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sessions__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.sessions__name {
+  font-weight: 500;
+}

@@ -13,6 +13,7 @@ const ME: User = {
   username: 'omer',
   displayName: 'Ömer',
   avatarColor: 1,
+  avatarFileId: null,
   role: 'admin',
   createdAt: '2026-11-15T10:00:00.000Z',
 };

@@ -22,6 +22,8 @@ export type PresenceStatus = z.infer<typeof PresenceStatus>;
 
 /** A new member signed up through an invite. */
 export const MemberJoinedEvent = z.object({ type: z.literal('member_joined'), user: User });
+/** Display name or photo changed: the member as they are now. */
+export const MemberUpdatedEvent = z.object({ type: z.literal('member_updated'), user: User });
 export const RoomCreatedEvent = z.object({ type: z.literal('room_created'), room: Room });
 /** Renamed, topic changed, archived, or unarchived: the room as it is now. */
 export const RoomUpdatedEvent = z.object({ type: z.literal('room_updated'), room: Room });
@@ -54,6 +56,7 @@ export const ReactionRemovedEvent = ReactionAddedEvent.extend({
  */
 export const DurableEvent = z.discriminatedUnion('type', [
   MemberJoinedEvent,
+  MemberUpdatedEvent,
   RoomCreatedEvent,
   RoomUpdatedEvent,
   RoomDeletedEvent,

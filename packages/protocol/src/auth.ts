@@ -43,8 +43,10 @@ export const User = z.object({
   id: Id,
   username: z.string(),
   displayName: z.string(),
-  /** Index into the 8 avatar colors (A40). */
+  /** Index into the 8 avatar colors (A40): the initials' background when there's no photo. */
   avatarColor: z.number().int().min(0).max(7),
+  /** The profile photo (`GET /files/:id`), or null for initials. */
+  avatarFileId: Id.nullable(),
   role: Role,
   createdAt: z.iso.datetime(),
 });
@@ -123,3 +125,18 @@ export type SessionList = z.infer<typeof SessionList>;
 export const APP_URL_SCHEME = 'hasbihal';
 export const inviteUrl = (token: string) => `${APP_URL_SCHEME}://invite/${token}`;
 export const recoveryUrl = (token: string) => `${APP_URL_SCHEME}://recover/${token}`;
+
+// ---- profile (A40, A41) ----------------------------------------------------------------------
+
+export const UpdateProfileRequest = z.object({ displayName: DisplayName });
+export type UpdateProfileRequest = z.input<typeof UpdateProfileRequest>;
+
+/** Changing the password signs out every other device. */
+export const ChangePasswordRequest = z.object({
+  currentPassword: z.string().min(1).max(256),
+  newPassword: Password,
+});
+export type ChangePasswordRequest = z.input<typeof ChangePasswordRequest>;
+
+/** Profile photos up to this size are accepted; they're stored as a 256 px WebP. */
+export const AVATAR_MAX_BYTES = 8 * 1024 * 1024;

@@ -5,6 +5,7 @@ import type { AppInfo } from '../../shared/app-info.ts';
 import { AuthScreen } from './auth/AuthScreen.tsx';
 import { useDeepLink, useSession } from './auth/useSession.ts';
 import { ChatProvider, type Chat } from './chat/context.tsx';
+import { ProfileDialog } from './chat/ProfileDialog.tsx';
 import { RoomList } from './chat/RoomList.tsx';
 import { RoomView } from './chat/RoomView.tsx';
 import { Avatar } from './components/Avatar.tsx';
@@ -86,6 +87,7 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const me = state.me ?? user;
   // The chosen room, or the first one; a deleted or archived choice falls back the same way.
   const [chosenRoom, setChosenRoom] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const rooms = activeRooms(state);
   const roomId = rooms.some((r) => r.id === chosenRoom) ? chosenRoom : (rooms[0]?.id ?? null);
 
@@ -116,6 +118,9 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
             presence={state.presence.get(me.id) ?? 'offline'}
             onSetPresence={setPresence}
             onSignOut={onSignOut}
+            onOpenProfile={() => {
+              setProfileOpen(true);
+            }}
           />
         </aside>
 
@@ -145,6 +150,13 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
           <MemberList store={store} />
         </aside>
       </div>
+      {profileOpen && (
+        <ProfileDialog
+          onClose={() => {
+            setProfileOpen(false);
+          }}
+        />
+      )}
     </ChatProvider>
   );
 }
@@ -154,17 +166,30 @@ interface UserPanelProps {
   presence: PresenceStatus;
   onSetPresence: (mode: PresenceMode) => void;
   onSignOut: () => void;
+  onOpenProfile: () => void;
 }
 
-function UserPanel({ user, presence, onSetPresence, onSignOut }: UserPanelProps) {
+function UserPanel({ user, presence, onSetPresence, onSignOut, onOpenProfile }: UserPanelProps) {
   const t = useT();
   return (
     <div className="user-panel">
-      <Avatar user={user} presence={presence} />
+      <button
+        type="button"
+        className="user-panel__profile"
+        title={t('profile.open')}
+        onClick={onOpenProfile}
+      >
+        <Avatar user={user} presence={presence} />
+      </button>
       <div className="user-panel__names">
-        <div className="user-panel__display" data-testid="current-user">
+        <button
+          type="button"
+          className="user-panel__display"
+          data-testid="current-user"
+          onClick={onOpenProfile}
+        >
           {user.displayName}
-        </div>
+        </button>
         {/* Müsait or Meşgul (A21); Uzakta and Çevrimdışı follow from activity. */}
         <select
           className="user-panel__presence"

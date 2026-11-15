@@ -18,15 +18,19 @@ export async function api<S extends z.ZodType>(
 ): Promise<ApiResult<z.infer<S> | null>> {
   const token = await window.hasbihal.auth.accessToken();
   if (!token.ok) return token;
+  const { body } = options;
+  // FormData (uploads) is sent as is, with its own multipart content type; anything else as JSON.
+  const payload =
+    body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body);
   let response: Response;
   try {
     response = await fetch(new URL(path, serverUrl), {
       method,
       headers: {
         authorization: `Bearer ${token.value}`,
-        ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(typeof payload === 'string' ? { 'content-type': 'application/json' } : {}),
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: payload,
     });
   } catch {
     return { ok: false, error: unreachable };
@@ -51,4 +55,31 @@ export async function apiGet<S extends z.ZodType>(
 ): Promise<z.infer<S> | undefined> {
   const result = await api(serverUrl, 'GET', path, { schema });
   return result.ok ? (result.value ?? undefined) : undefined;
+}
+
+const fileUrls = new Map<string, Promise<string | null>>();
+
+/**
+ * A local URL for a stored file (`GET /files/:id` needs the session token, which an <img> can't
+ * send). Fetched once per file id and kept: a file id always means the same bytes.
+ */
+export function fileUrl(serverUrl: string, fileId: string): Promise<string | null> {
+  let url = fileUrls.get(fileId);
+  if (!url) {
+    url = (async () => {
+      const token = await window.hasbihal.auth.accessToken();
+      if (!token.ok) return null;
+      const response = await fetch(new URL(`/files/${fileId}`, serverUrl), {
+        headers: { authorization: `Bearer ${token.value}` },
+      }).catch(() => null);
+      return response?.ok ? URL.createObjectURL(await response.blob()) : null;
+    })();
+    const pending = url;
+    // A failure isn't cached, so the next render tries again.
+    void pending.then((result) => {
+      if (result === null && fileUrls.get(fileId) === pending) fileUrls.delete(fileId);
+    });
+    fileUrls.set(fileId, url);
+  }
+  return url;
 }

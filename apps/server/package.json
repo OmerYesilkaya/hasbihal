@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fastify/cors": "11.4.3",
+    "@fastify/multipart": "10.1.8",
     "@fastify/rate-limit": "11.2.2",
     "@fastify/websocket": "11.3.7",
     "@hasbihal/core": "workspace:*",
@@ -23,6 +24,7 @@
     "jose": "6.2.17",
     "kysely": "0.29.9",
     "pg": "8.23.1",
+    "sharp": "0.35.5",
     "zod": "4.6.7"
   },
   "devDependencies": {

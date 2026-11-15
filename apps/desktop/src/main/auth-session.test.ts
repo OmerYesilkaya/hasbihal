@@ -7,6 +7,7 @@ const USER: User = {
   username: 'omer',
   displayName: 'Ömer',
   avatarColor: 3,
+  avatarFileId: null,
   role: 'admin',
   createdAt: '2026-11-15T10:00:00.000Z',
 };

@@ -7,6 +7,7 @@ const user = (id: string, displayName: string): User => ({
   username: displayName.toLowerCase(),
   displayName,
   avatarColor: 0,
+  avatarFileId: null,
   role: 'member',
   createdAt: '2026-11-15T10:00:00.000Z',
 });
