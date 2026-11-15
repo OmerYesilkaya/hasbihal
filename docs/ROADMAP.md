@@ -41,6 +41,16 @@ The app becomes useful as a text chat.
 - The three-column layout (A36). The member list shows presence (Available/Away/Busy/Offline) (A21).
 - The version-compatibility screen (A33).
 
+**Build order** (one PR each, every one usable or testable on its own):
+
+1. **Database foundations:** Kysely, migrations, UUIDv7, Testcontainers for integration tests, the error format.
+2. **Accounts:** the first-admin command (A52), invites, sign-up with the username rules (A53), sign-in, rotating refresh tokens, sessions, recovery links, rate limiting.
+3. **Desktop sign-in:** sign-up and sign-in screens, the `hasbihal://` handler (A51), tokens in `safeStorage`.
+4. **Authenticated gateway:** `hello` with the access token, `event_log` with `seq`, replay and `resync_required`, presence (§5).
+5. **Rooms and messages (server):** rooms, messages with replies, edits, deletes, reactions, mentions, typing, unread state.
+6. **Chat UI:** the three-column layout, the virtualized message list, the composer, safe Markdown rendering (A47, A48), the member list with presence, unread badges.
+7. **Profiles and files:** file storage (A54), avatar upload with the initials fallback, the profile view and the sessions list.
+
 **Exit criteria:** the test group uses Hasbihal for daily text chat for a week. Messages never get lost or duplicated across disconnects, sleep/wake cycles, or two devices per person.
 
 ---
