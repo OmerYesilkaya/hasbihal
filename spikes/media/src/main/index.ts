@@ -1,5 +1,5 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, session } from 'electron';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { AccessToken } from 'livekit-server-sdk';
 
@@ -12,6 +12,8 @@ const ROOM = 'spike';
 const autoOut = process.argv.find((a) => a.startsWith('--auto='))?.slice('--auto='.length);
 // `--only=probe` limits the automatic run to the encoder probe (no LiveKit needed).
 const autoOnly = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length) ?? '';
+// S2 inputs: `--speech=<wav>` and `--tv=<wav>` (any format Chromium decodes).
+const argValue = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 
 function createWindow(role: 'publisher' | 'viewer' | 'auto', x: number, width = 760, height = 900, only = ''): BrowserWindow {
   const win = new BrowserWindow({
@@ -70,11 +72,25 @@ void app.whenReady().then(() => {
     videoEncode: app.getGPUFeatureStatus().video_encode,
   }));
 
+  // A bare file name goes to the Desktop, so it is easy to find on a family member's PC.
+  const outFile = autoOut && (path.isAbsolute(autoOut) ? autoOut : path.join(app.getPath('desktop'), autoOut));
+
+  ipcMain.handle('readInput', (_event, name: 'speech' | 'tv') => {
+    const file = argValue(name);
+    if (!file) return undefined;
+    const bytes = readFileSync(file);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  });
+
+  // Writes an output (a WAV) next to the result file, as <result>-<name>.
+  ipcMain.handle('saveOutput', (_event, name: string, data: Uint8Array) => {
+    if (!outFile || !/^[\w.-]+$/.test(name)) return;
+    writeFileSync(outFile.replace(/\.json$/, '') + `-${name}`, data);
+  });
+
   ipcMain.handle('autoResult', (_event, result: unknown) => {
-    if (!autoOut) return;
-    // A bare file name goes to the Desktop, so it is easy to find on a family member's PC.
-    const file = path.isAbsolute(autoOut) ? autoOut : path.join(app.getPath('desktop'), autoOut);
-    writeFileSync(file, JSON.stringify(result, null, 2));
+    if (!outFile) return;
+    writeFileSync(outFile, JSON.stringify(result, null, 2));
     app.quit();
   });
 

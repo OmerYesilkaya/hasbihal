@@ -1,6 +1,7 @@
 // Throwaway spike UI for S1 (screen share + system audio) and S2 (DeepFilterNet).
 // Deliberately plain DOM code: none of this is product code.
-import { createDeepFilterNetAudioWorklet, DEEPFILTERNET_SAMPLE_RATE } from '@workadventure/noise-suppression/deepfilternet';
+import { createNoiseSuppressionAudioWorklet } from '@workadventure/noise-suppression/audio-worklet';
+import { createDeepFilterNetAudioWorklet, DEEPFILTERNET_SAMPLE_RATE, type LoadReport } from '@workadventure/noise-suppression/deepfilternet';
 import {
   AudioPresets,
   LocalTrackPublication,
@@ -18,6 +19,8 @@ declare global {
       metrics(): Promise<{ type: string; pid: number; cpu: number }[]>;
       info(): Promise<Record<string, unknown>>;
       autoResult(result: unknown): Promise<void>;
+      readInput(name: 'speech' | 'tv'): Promise<ArrayBuffer | undefined>;
+      saveOutput(name: string, data: Uint8Array): Promise<void>;
     };
   }
 }
@@ -666,8 +669,252 @@ async function probeEncoders(): Promise<Record<string, unknown>> {
   return { webrtc, webcodecsHardware: webcodecs };
 }
 
+// ---------------------------------------------------------------- S2 auto
+
+/** Decodes audio bytes and resamples them to `rate`, mono. */
+async function decodeAt(bytes: ArrayBuffer, rate: number): Promise<Float32Array> {
+  const ctx = new OfflineAudioContext({ numberOfChannels: 1, length: 1, sampleRate: rate });
+  return (await ctx.decodeAudioData(bytes.slice(0))).getChannelData(0);
+}
+
+/** Resamples a mono signal with the browser's resampler. */
+async function resample(signal: Float32Array, from: number, to: number): Promise<Float32Array> {
+  if (from === to) return signal;
+  const length = Math.ceil((signal.length * to) / from);
+  const ctx = new OfflineAudioContext({ numberOfChannels: 1, length, sampleRate: to });
+  const buffer = ctx.createBuffer(1, signal.length, from);
+  buffer.copyToChannel(signal as Float32Array<ArrayBuffer>, 0);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(ctx.destination);
+  src.start();
+  return (await ctx.startRendering()).getChannelData(0);
+}
+
+const rms = (x: Float32Array, from = 0, to = x.length) => {
+  let sum = 0;
+  for (let i = from; i < to; i++) sum += x[i]! * x[i]!;
+  return Math.sqrt(sum / Math.max(1, to - from));
+};
+const db = (v: number) => (v > 0 ? 20 * Math.log10(v) : -120);
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/** Background noise for S2: a fan (pink noise) plus keyboard clicks, and/or a quieter TV voice. */
+function makeNoise(length: number, rate: number, kinds: { fanAndKeys: boolean; tv?: Float32Array }): Float32Array {
+  const n = new Float32Array(length);
+  if (kinds.fanAndKeys) {
+  // Pink noise (Paul Kellet's filter) at about -38 dBFS: a fan or air conditioner.
+  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+  for (let i = 0; i < length; i++) {
+    const w = Math.random() * 2 - 1;
+    b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+    b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+    n[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.0035;
+    b6 = w * 0.115926;
+  }
+  // Keyboard clicks: short decaying bursts, irregular, ~7 per second.
+  for (let t = 0.2 * rate; t < length; t += rate * (0.08 + Math.random() * 0.22)) {
+    const amp = 0.08 + Math.random() * 0.12;
+    for (let k = 0; k < rate * 0.006 && t + k < length; k++) n[Math.floor(t + k)]! += amp * (Math.random() * 2 - 1) * Math.exp(-k / (rate * 0.0012));
+  }
+  }
+  // TV in the background, looped, about 14 dB below the speaker.
+  const tv = kinds.tv;
+  if (tv) for (let i = 0; i < length; i++) n[i]! += tv[i % tv.length]! * 0.2;
+  return n;
+}
+
+/** Plays `input` (48 kHz) through `makeNode` in a real-time AudioContext at `rate`, and records the output. */
+async function runThrough(
+  input: Float32Array,
+  rate: number,
+  makeNode: (ctx: AudioContext) => Promise<{ node: AudioNode; ready: Promise<unknown>; dispose(): void }>,
+): Promise<{ output: Float32Array; readyMs: number; cpu: number[] }> {
+  const ctx = new AudioContext({ sampleRate: rate, latencyHint: 'interactive' });
+  await ctx.resume();
+  const t0 = performance.now();
+  const handle = await makeNode(ctx);
+  await handle.ready;
+  const readyMs = performance.now() - t0;
+  const buffer = ctx.createBuffer(1, input.length, 48000);
+  buffer.copyToChannel(input as Float32Array<ArrayBuffer>, 0);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const chunks: Float32Array[] = [];
+  const recorder = ctx.createScriptProcessor(4096, 1, 1);
+  recorder.onaudioprocess = (e) => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  const mute = ctx.createGain();
+  mute.gain.value = 0;
+  src.connect(handle.node).connect(recorder).connect(mute).connect(ctx.destination);
+  const cpu: number[] = [];
+  const cpuTimer = setInterval(() => void window.spike.metrics().then((m) => cpu.push(m.reduce((a, x) => a + x.cpu, 0))), 1000);
+  src.start();
+  await sleep((input.length / 48000) * 1000 + 1500);
+  clearInterval(cpuTimer);
+  handle.dispose();
+  await ctx.close();
+  const output = new Float32Array(chunks.reduce((a, c) => a + c.length, 0));
+  let o = 0;
+  for (const c of chunks) {
+    output.set(c, o);
+    o += c.length;
+  }
+  return { output, readyMs, cpu };
+}
+
+/** Delay (samples) of `y` behind `ref`, by cross-correlation: coarse on every 8th sample, then refined. */
+function findDelay(y: Float32Array, ref: Float32Array, maxLag: number): number {
+  const corr = (lag: number, step: number) => {
+    let sum = 0;
+    for (let i = 0; i + lag < y.length && i < ref.length; i += step) sum += y[i + lag]! * ref[i]!;
+    return sum;
+  };
+  let best = 0, bestVal = -Infinity;
+  for (let lag = 0; lag <= maxLag; lag += 8) {
+    const v = corr(lag, 8);
+    if (v > bestVal) [best, bestVal] = [lag, v];
+  }
+  let fine = best;
+  bestVal = -Infinity;
+  for (let lag = Math.max(0, best - 16); lag <= best + 16; lag++) {
+    const v = corr(lag, 2);
+    if (v > bestVal) [fine, bestVal] = [lag, v];
+  }
+  return fine;
+}
+
+/** Scale-invariant signal-to-distortion ratio of `est` against `ref`, in dB. Higher is better. */
+function siSdr(est: Float32Array, ref: Float32Array): number {
+  let dot = 0, refE = 0;
+  const n = Math.min(est.length, ref.length);
+  for (let i = 0; i < n; i++) {
+    dot += est[i]! * ref[i]!;
+    refE += ref[i]! * ref[i]!;
+  }
+  const a = dot / refE;
+  let target = 0, err = 0;
+  for (let i = 0; i < n; i++) {
+    const t = a * ref[i]!;
+    target += t * t;
+    err += (est[i]! - t) ** 2;
+  }
+  return 10 * Math.log10(target / err);
+}
+
+/** 16-bit mono WAV. */
+function wav(signal: Float32Array, rate: number): Uint8Array {
+  const out = new DataView(new ArrayBuffer(44 + signal.length * 2));
+  const str = (o: number, s: string) => [...s].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); out.setUint32(4, 36 + signal.length * 2, true); str(8, 'WAVEfmt ');
+  out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+  out.setUint32(24, rate, true); out.setUint32(28, rate * 2, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true);
+  str(36, 'data'); out.setUint32(40, signal.length * 2, true);
+  for (let i = 0; i < signal.length; i++) out.setInt16(44 + i * 2, Math.max(-1, Math.min(1, signal[i]!)) * 0x7fff, true);
+  return new Uint8Array(out.buffer);
+}
+
+async function s2Auto(): Promise<void> {
+  const status = el('pre', 'Automatic S2 run (noise suppression). Takes about 2 minutes.');
+  const result: Record<string, unknown> = { info: await window.spike.info(), startedAt: new Date().toISOString() };
+  try {
+    const speechBytes = await window.spike.readInput('speech');
+    if (!speechBytes) throw new Error('pass --speech=<wav>');
+    const tvBytes = await window.spike.readInput('tv');
+    if (!tvBytes) throw new Error('pass --tv=<wav>');
+    const speech = await decodeAt(speechBytes, 48000);
+    const tv = await decodeAt(tvBytes, 48000);
+    // Two scenarios: noise that must go (fan + keyboard), and a background voice, which a noise
+    // suppressor is expected to keep (it removes noise, not other people).
+    const fanNoise = makeNoise(speech.length, 48000, { fanAndKeys: true });
+    const tvNoise = makeNoise(speech.length, 48000, { fanAndKeys: false, tv });
+    const fanMix = speech.map((v, i) => v + fanNoise[i]!);
+    const tvMix = speech.map((v, i) => v + tvNoise[i]!);
+
+    // Speech activity from the clean speech, in 20 ms frames.
+    const frame = 960;
+    const frameRms = Array.from({ length: Math.floor(speech.length / frame) }, (_, f) => rms(speech, f * frame, (f + 1) * frame));
+    const threshold = Math.max(...frameRms) * 0.05;
+    const active = frameRms.map((r) => r > threshold);
+    // True pauses: no speech at all (0.1 % of peak) within 300 ms, so quiet word endings don't count as noise.
+    const quiet = frameRms.map((r) => r <= Math.max(...frameRms) * 0.001);
+    const pause = quiet.map((_, f) => quiet.slice(Math.max(0, f - 15), f + 16).every(Boolean));
+    result.input = {
+      seconds: round1(speech.length / 48000),
+      speechActivePercent: round1((100 * active.filter(Boolean).length) / active.length),
+      speechDbfs: round1(db(rms(speech))),
+      fanAndKeysDbfs: round1(db(rms(fanNoise))),
+      tvDbfs: round1(db(rms(tvNoise))),
+      fanMixSiSdr: round1(siSdr(fanMix, speech)),
+      tvMixSiSdr: round1(siSdr(tvMix, speech)),
+    };
+    await window.spike.saveOutput('input-fan-keyboard.wav', wav(fanMix, 48000));
+    await window.spike.saveOutput('input-tv.wav', wav(tvMix, 48000));
+
+    /** Quality of `output` (at `rate`) against the clean speech. */
+    const evaluate = async (output: Float32Array, rate: number, input: Float32Array) => {
+      const ref = await resample(speech, 48000, rate);
+      const inp = await resample(input, 48000, rate);
+      const delay = findDelay(output, ref, Math.round(rate * 0.25));
+      const aligned = output.subarray(delay, delay + ref.length);
+      const per = Math.round((frame * rate) / 48000);
+      const sum = { pauseIn: 0, pauseOut: 0, speechRef: 0, speechOut: 0, nPause: 0, nSpeech: 0 };
+      active.forEach((isSpeech, f) => {
+        const a = f * per, b = Math.min(aligned.length, (f + 1) * per);
+        if (b <= a) return;
+        if (isSpeech) {
+          sum.speechRef += rms(ref, a, b) ** 2; sum.speechOut += rms(aligned, a, b) ** 2; sum.nSpeech++;
+        } else if (pause[f]) {
+          sum.pauseIn += rms(inp, a, b) ** 2; sum.pauseOut += rms(aligned, a, b) ** 2; sum.nPause++;
+        }
+      });
+      return {
+        latencyMs: round1((delay / rate) * 1000),
+        siSdr: round1(siSdr(aligned, ref)),
+        // How much quieter the gaps between sentences get (noise removed).
+        pauseNoiseReductionDb: round1(db(Math.sqrt(sum.pauseIn / sum.nPause)) - db(Math.sqrt(sum.pauseOut / sum.nPause))),
+        // How the voice level changes while speaking (0 is ideal; very negative means the voice is eaten).
+        speechLevelChangeDb: round1(db(Math.sqrt(sum.speechOut / sum.nSpeech)) - db(Math.sqrt(sum.speechRef / sum.nSpeech))),
+        aligned,
+      };
+    };
+
+    const runs: Record<string, unknown> = {};
+    const dfn = async (name: string, input: Float32Array, options: Parameters<typeof createDeepFilterNetAudioWorklet>[1] = {}) => {
+      status.textContent = `S2: ${name}`;
+      let report: LoadReport | undefined;
+      let overload: number | undefined;
+      const r = await runThrough(input, DEEPFILTERNET_SAMPLE_RATE, (ctx) =>
+        createDeepFilterNetAudioWorklet(ctx, { loadReportAfterMs: 20_000, onLoadReport: (x) => (report = x), onOverload: (l) => (overload = l), ...options }),
+      );
+      const q = await evaluate(r.output, DEEPFILTERNET_SAMPLE_RATE, input);
+      await window.spike.saveOutput(`${name}.wav`, wav(q.aligned, DEEPFILTERNET_SAMPLE_RATE));
+      runs[name] = { readyMs: Math.round(r.readyMs), loadReport: report, overload, cpuMedian: summarize(r.cpu.map((c) => ({ c }))).c, ...q, aligned: undefined };
+    };
+    const dtln = async (name: string, input: Float32Array) => {
+      status.textContent = `S2: ${name}`;
+      const d = await runThrough(input, 16000, (ctx) => createNoiseSuppressionAudioWorklet(ctx));
+      const dq = await evaluate(d.output, 16000, input);
+      await window.spike.saveOutput(`${name}.wav`, wav(dq.aligned, 16000));
+      runs[name] = { readyMs: Math.round(d.readyMs), cpuMedian: summarize(d.cpu.map((c) => ({ c }))).c, ...dq, aligned: undefined };
+    };
+    await dfn('deepfilternet-fan-keyboard', fanMix);
+    // The library suggests 2–3 so single keystrokes don't open the pause gate.
+    await dfn('deepfilternet-fan-keyboard-min3', fanMix, { minSpeechFrames: 3, pauseGateLookaheadFrames: 4 });
+    await dfn('deepfilternet-tv', tvMix);
+    await dfn('deepfilternet-clean-speech', speech); // must not damage a clean voice (pause numbers are meaningless here)
+    await dtln('dtln-fan-keyboard', fanMix);
+    await dtln('dtln-tv', tvMix);
+    result.runs = runs;
+  } catch (e) {
+    result.error = String(e);
+  }
+  result.finishedAt = new Date().toISOString();
+  await window.spike.autoResult(result);
+}
+
 async function auto(): Promise<void> {
   const only = new URLSearchParams(location.search).get('only') ?? '';
+  if (only === 's2') return s2Auto();
   document.body.style.margin = '0';
   const status = el('pre', 'Automatic S1 run. Please do not touch this window.');
   const canvas = el('canvas') as HTMLCanvasElement;
