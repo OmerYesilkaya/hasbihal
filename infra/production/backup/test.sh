@@ -11,6 +11,9 @@ image=hasbihal-backup:test
 cleanup() {
   docker rm -f "$net-pg" "$net-fresh" >/dev/null 2>&1 || true
   docker network rm "$net" >/dev/null 2>&1 || true
+  # The containers write as root; on Linux only root may remove what they made.
+  docker run --rm -v "$work:/w" --entrypoint rm "$image" -rf /w/repo /w/state /w/restored \
+    >/dev/null 2>&1 || true
   rm -rf "$work"
 }
 trap cleanup EXIT
