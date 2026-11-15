@@ -93,6 +93,26 @@ async function startPostgres(): Promise<{ url: string; stop: () => Promise<void>
  */
 const LIVEKIT_PORTS = { http: 7980, tcp: 7981, udp: 7982 };
 
+/**
+ * How LiveKit's container reaches the test server, which listens on 127.0.0.1. Linux: host
+ * networking, as in production, so loopback is the host's. Docker Desktop (macOS) has its own
+ * name for the host's loopback instead, and needs the ports published.
+ */
+const HOST_NETWORK = process.platform === 'linux';
+const HOST_FROM_LIVEKIT = HOST_NETWORK ? '127.0.0.1' : 'host.docker.internal';
+const LIVEKIT_NETWORK = HOST_NETWORK
+  ? ['--network', 'host']
+  : [
+      '--add-host',
+      'host.docker.internal:host-gateway',
+      '--publish',
+      `127.0.0.1:${String(LIVEKIT_PORTS.http)}:${String(LIVEKIT_PORTS.http)}`,
+      '--publish',
+      `127.0.0.1:${String(LIVEKIT_PORTS.tcp)}:${String(LIVEKIT_PORTS.tcp)}`,
+      '--publish',
+      `127.0.0.1:${String(LIVEKIT_PORTS.udp)}:${String(LIVEKIT_PORTS.udp)}/udp`,
+    ];
+
 async function startLiveKit(
   serverPort: number,
 ): Promise<{ url: string; stop: () => Promise<void> }> {
@@ -117,21 +137,14 @@ audio:
 webhook:
   api_key: devkey
   urls:
-    - http://host.docker.internal:${String(serverPort)}/hooks/livekit
+    - http://${HOST_FROM_LIVEKIT}:${String(serverPort)}/hooks/livekit
 `,
   );
   const { stdout } = await run('docker', [
     'run',
     '--detach',
     '--rm',
-    '--add-host',
-    'host.docker.internal:host-gateway',
-    '--publish',
-    `127.0.0.1:${String(LIVEKIT_PORTS.http)}:${String(LIVEKIT_PORTS.http)}`,
-    '--publish',
-    `127.0.0.1:${String(LIVEKIT_PORTS.tcp)}:${String(LIVEKIT_PORTS.tcp)}`,
-    '--publish',
-    `127.0.0.1:${String(LIVEKIT_PORTS.udp)}:${String(LIVEKIT_PORTS.udp)}/udp`,
+    ...LIVEKIT_NETWORK,
     '--volume',
     `${config}:/etc/livekit.yaml:ro`,
     LIVEKIT_IMAGE,
