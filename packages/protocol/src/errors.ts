@@ -27,6 +27,11 @@ export const ValidationIssue = z.object({
   /** Where the issue is, e.g. `['body', 'username']`. */
   path: z.array(z.union([z.string(), z.number()])),
   message: z.string(),
+  /**
+   * For checks only the server can make, a code the UI translates (e.g. `password_too_common`).
+   * Format problems have no code: the client checks those itself with the same schemas.
+   */
+  code: z.string().optional(),
 });
 export type ValidationIssue = z.infer<typeof ValidationIssue>;
 

@@ -148,8 +148,8 @@ export async function registerAuth(
     const body = parseRequest(SignUpRequest, request.body, 'body');
     const problem = passwordProblem(body.password, body.username);
     if (problem)
-      throw new AppError(400, 'validation_failed', problem, [
-        { path: ['body', 'password'], message: problem },
+      throw new AppError(400, 'validation_failed', problem.message, [
+        { path: ['body', 'password'], ...problem },
       ]);
     const passwordHash = await hashPassword(body.password);
 
@@ -299,8 +299,8 @@ export async function registerAuth(
       if (!link) throw invalidRecovery();
       const problem = passwordProblem(body.newPassword, link.username);
       if (problem)
-        throw new AppError(400, 'validation_failed', problem, [
-          { path: ['body', 'newPassword'], message: problem },
+        throw new AppError(400, 'validation_failed', problem.message, [
+          { path: ['body', 'newPassword'], ...problem },
         ]);
 
       await trx

@@ -1,5 +1,6 @@
 import argon2 from 'argon2';
 import { dictionary } from '@zxcvbn-ts/language-common';
+import { passwordContainsUsername, type PasswordProblem } from '@hasbihal/protocol';
 
 /** OWASP's recommended Argon2id parameters (19 MiB, 2 iterations, 1 lane). */
 const OPTIONS = { type: argon2.argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
@@ -43,9 +44,18 @@ export async function verifyAgainstDummy(password: string): Promise<false> {
  * Why a new password is unacceptable, or undefined. Length is already checked by the schema;
  * this rejects passwords from the common-password list and ones that contain the username.
  */
-export function passwordProblem(password: string, username: string): string | undefined {
-  const lower = password.toLowerCase();
-  if (COMMON_PASSWORDS.has(lower)) return 'This password is too common.';
-  if (lower.includes(username.toLowerCase())) return 'The password must not contain the username.';
+export function passwordProblem(
+  password: string,
+  username: string,
+): { code: PasswordProblem; message: string } | undefined {
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+    return { code: 'password_too_common', message: 'This password is too common.' };
+  }
+  if (passwordContainsUsername(password, username)) {
+    return {
+      code: 'password_contains_username',
+      message: 'The password must not contain the username.',
+    };
+  }
   return undefined;
 }

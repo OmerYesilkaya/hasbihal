@@ -21,6 +21,15 @@ export const DisplayName = z
 export const PASSWORD_MIN_LENGTH = 10;
 export const Password = z.string().min(PASSWORD_MIN_LENGTH).max(256);
 
+/** Server-side password checks, sent as `ValidationIssue.code`. */
+export const PasswordProblem = z.enum(['password_too_common', 'password_contains_username']);
+export type PasswordProblem = z.infer<typeof PasswordProblem>;
+
+/** Shared so the sign-up form can warn before submitting. */
+export function passwordContainsUsername(password: string, username: string): boolean {
+  return username.length > 0 && password.toLowerCase().includes(username.toLowerCase());
+}
+
 /** Shown in the sessions list, e.g. "Ömer's MacBook". */
 export const DeviceName = z
   .string()

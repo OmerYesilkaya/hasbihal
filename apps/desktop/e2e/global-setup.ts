@@ -1,0 +1,112 @@
+// Starts what the app talks to: PostgreSQL in Docker and the real server as a child process, on
+// free ports. Their addresses reach the tests through process.env. PostgreSQL is started with the
+// docker CLI rather than Testcontainers, which trips a module-loading bug in Node 24.2 when loaded
+// through Playwright.
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { createServer } from 'node:net';
+import path from 'node:path';
+import { promisify } from 'node:util';
+
+const run = promisify(execFile);
+const POSTGRES_IMAGE = 'postgres:17.12'; // same as infra/compose.dev.yml
+
+export const SERVER_DIR = path.resolve(import.meta.dirname, '../../server');
+
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      probe.close(() => {
+        if (address && typeof address === 'object') resolve(address.port);
+        else reject(new Error('no port'));
+      });
+    });
+  });
+}
+
+async function waitForHealth(url: string, server: ChildProcess): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    if (server.exitCode !== null) throw new Error(`server exited with ${String(server.exitCode)}`);
+    try {
+      if ((await fetch(`${url}/health`)).ok) return;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error('server did not become healthy');
+}
+
+/** A throwaway PostgreSQL container; resolves with its URL and a function that removes it. */
+async function startPostgres(): Promise<{ url: string; stop: () => Promise<void> }> {
+  const port = await freePort();
+  const { stdout } = await run('docker', [
+    'run',
+    '--detach',
+    '--rm',
+    '--publish',
+    `127.0.0.1:${String(port)}:5432`,
+    '--env',
+    'POSTGRES_USER=hasbihal',
+    '--env',
+    'POSTGRES_PASSWORD=e2e',
+    '--env',
+    'POSTGRES_DB=hasbihal',
+    POSTGRES_IMAGE,
+  ]);
+  const id = stdout.trim();
+  const stop = async () => {
+    await run('docker', ['rm', '--force', id]).catch(() => undefined);
+  };
+  for (let i = 0; i < 150; i++) {
+    // pg_isready over TCP: the image's first, socket-only start doesn't count.
+    const ready = await run('docker', [
+      'exec',
+      id,
+      'pg_isready',
+      '-h',
+      '127.0.0.1',
+      '-U',
+      'hasbihal',
+      '-d',
+      'hasbihal',
+    ]).then(
+      () => true,
+      () => false,
+    );
+    if (ready) return { url: `postgres://hasbihal:e2e@127.0.0.1:${String(port)}/hasbihal`, stop };
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  await stop();
+  throw new Error('PostgreSQL did not start');
+}
+
+export default async function globalSetup(): Promise<() => Promise<void>> {
+  const database = await startPostgres();
+  const port = await freePort();
+  const serverUrl = `http://127.0.0.1:${String(port)}`;
+  const env = {
+    ...process.env,
+    DATABASE_URL: database.url,
+    PORT: String(port),
+    HOST: '127.0.0.1',
+    LOG_LEVEL: 'warn',
+    NODE_ENV: 'test',
+  };
+  const server = spawn(process.execPath, ['src/main.ts'], {
+    cwd: SERVER_DIR,
+    env,
+    stdio: ['ignore', 'inherit', 'inherit'],
+  });
+  await waitForHealth(serverUrl, server);
+
+  process.env.E2E_SERVER_URL = serverUrl;
+  process.env.E2E_DATABASE_URL = database.url;
+
+  return async () => {
+    server.kill('SIGTERM');
+    await database.stop();
+  };
+}

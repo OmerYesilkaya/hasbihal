@@ -147,7 +147,12 @@ describe('invites and sign-up', () => {
   it('refuses short, common, and username-containing passwords', async () => {
     const invite = await createInvite(testDb.db, 'member', null);
     const username = uniqueName('kerem');
-    for (const password of ['short', 'qwertyuiop', `${username}2026!`]) {
+    const cases = [
+      ['short', undefined],
+      ['qwertyuiop', 'password_too_common'],
+      [`${username}2026!`, 'password_contains_username'],
+    ] as const;
+    for (const [password, code] of cases) {
       const res = await post('/auth/sign-up', {
         inviteToken: invite.token,
         username,
@@ -156,6 +161,7 @@ describe('invites and sign-up', () => {
         deviceName: 'D',
       });
       expect(res.statusCode, password).toBe(400);
+      expect(ApiError.parse(res.json()).error.issues?.[0]?.code, password).toBe(code);
     }
   });
 });

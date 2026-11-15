@@ -1,7 +1,9 @@
-import type { AppInfo } from '../shared/app-info.ts';
+import type { AppInfo, AuthBridge, DeepLinkBridge } from '../shared/app-info.ts';
 
 export interface HasbihalBridge {
   getAppInfo(): Promise<AppInfo>;
+  auth: AuthBridge;
+  deepLinks: DeepLinkBridge;
 }
 
 declare global {

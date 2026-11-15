@@ -8,6 +8,11 @@ files:
   - out/**
   - package.json
 asar: true
+# hasbihal:// invite and recovery links (DECISIONS A51). macOS registers through Info.plist;
+# Windows registers at first launch (DeepLinkRouter.register).
+protocols:
+  - name: Hasbihal
+    schemes: [hasbihal]
 electronFuses:
   runAsNode: false
   enableCookieEncryption: true
