@@ -4,6 +4,22 @@ How we get from nothing to v1.0. Every milestone ends with something the test gr
 
 Each milestone lists its **scope** and its **exit criteria**: what must be true before moving on. Milestones are ordered by dependency and risk, with no dates attached.
 
+## Status (2026-11-16)
+
+Everything below is built and covered by tests. The **exit criteria need real people on real machines**, which code and CI can't stand in for.
+
+| Milestone | Built in    | Still needs                                                                                                                   |
+| --------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| M0        | PRs #1–#4   | — (done)                                                                                                                      |
+| M1        | PRs #5–#12  | The first deployment (a VPS and a hostname), then the owner's test                                                            |
+| M2        | PRs #13–#14 | A call between two computers; DTLN fallback if old PCs need it (T7)                                                           |
+| M3        | PR #15      | Film and game sharing with sound on macOS and Windows; T8 codec policy after the old-PC test                                  |
+| M4        | PRs #16–#19 | A real photo dump; HEIC photos from iPhones show as files                                                                     |
+| M5        | PR #20      | A real reminder at a real time                                                                                                |
+| M6        | PRs #21–#27 | The VPS deployment and B2 storage, the release secrets, and the "10 minutes from invite to hangout" test with a family member |
+
+M6's pieces: the admin page (#21), independent e2e tests (#22), notifications, tray, and startup (#23), backups and restore drills (#24), CI-built installers and the install guide (#25), e2e in CI (#26), and the app icon, empty states, and sidebar texture (#27). The remaining decoration ideas in DECISIONS §5 (tile-border dividers, star-shaped badges) wait for the owner's eye.
+
 ---
 
 ## M0: Foundations and risk spikes

@@ -2719,3 +2719,31 @@ body {
   gap: 6px;
   margin-left: auto;
 }
+
+/* Identity (DECISIONS A45, §5): the eight-pointed star as a faint texture in the sidebar, and
+   the tulip in empty states. Decoration stays geometric and floral, and never in the way. */
+
+.sidebar {
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='56' height='56'><g fill='none' stroke='%23C8A04A' stroke-opacity='0.13' stroke-width='1'><polygon points='37.2,37.2 18.8,37.2 18.8,18.8 37.2,18.8'/><polygon points='41.0,28.0 28.0,41.0 15.0,28.0 28.0,15.0'/></g></svg>");
+  background-size: 56px 56px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 340px;
+  margin: auto;
+  padding: 24px;
+  color: var(--hb-text-muted);
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.empty-state svg {
+  opacity: 0.8;
+}

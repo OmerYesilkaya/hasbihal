@@ -4,6 +4,7 @@ import { compareMessages, roomMessages } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
 import { dayKey, formatDay, useT } from '../i18n.tsx';
 import { useChatState } from './context.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
 import { MessageItem } from './MessageItem.tsx';
 import { useRoomHistory } from './useRoomHistory.ts';
 
@@ -118,7 +119,11 @@ export function MessageList({
 
   if (!loaded) return <div className="message-list message-list--empty">{t('room.loading')}</div>;
   if (!items.length)
-    return <div className="message-list message-list--empty">{t('room.empty')}</div>;
+    return (
+      <div className="message-list message-list--empty">
+        <EmptyState>{t('room.empty')}</EmptyState>
+      </div>
+    );
 
   return (
     <Virtuoso
