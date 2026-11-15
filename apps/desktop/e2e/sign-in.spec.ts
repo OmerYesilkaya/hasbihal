@@ -529,6 +529,33 @@ test.describe.serial('accounts in the desktop app', () => {
     await expect(page.getByTestId('event-chip')).toContainText(/Ders · (Bugün|Yarın) \d\d:00/);
   });
 
+  test('runs the admin page: invite, admin rights, rooms (A44)', async () => {
+    const page = await launch();
+    await page.getByRole('button', { name: /Yönetim/ }).click();
+    const admin = page.getByTestId('admin');
+
+    await admin.getByRole('button', { name: 'Davet bağlantısı oluştur' }).click();
+    await expect(admin.getByTestId('one-time-link')).toContainText('hasbihal://invite/');
+    await expect(admin.getByText('Kullanılmamış davetler')).toBeVisible();
+
+    await admin.getByRole('tab', { name: 'Üyeler' }).click();
+    const kerem = admin.getByTestId('admin-member').filter({ hasText: 'Kerem Test' });
+    // Everyone here was invited as an admin: take Kerem's rights away, then give them back.
+    await kerem.getByRole('button', { name: 'Yöneticilikten çıkar' }).click();
+    await expect(kerem.locator('.admin__badge')).toHaveCount(0);
+    await kerem.getByRole('button', { name: 'Yönetici yap' }).click();
+    await expect(kerem.locator('.admin__badge')).toHaveText('Yönetici');
+    await snap(page, '18-admin');
+
+    await admin.getByRole('tab', { name: 'Odalar' }).click();
+    const mutfak = admin.getByTestId('admin-room').filter({ hasText: 'Mutfak' });
+    await mutfak.getByRole('button', { name: 'Arşivle' }).click();
+    await expect(mutfak).toContainText('Arşivde');
+    await expect(page.getByTestId('room').filter({ hasText: 'Mutfak' })).toHaveCount(0);
+    await mutfak.getByRole('button', { name: 'Arşivden çıkar' }).click();
+    await expect(page.getByTestId('room').filter({ hasText: 'Mutfak' })).toHaveCount(1);
+  });
+
   test('explains that a used invite no longer works', async () => {
     const page = await launch();
     await page.getByRole('button', { name: 'Çıkış yap' }).click();

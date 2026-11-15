@@ -11,6 +11,7 @@ import { registerErrorHandling } from './errors.ts';
 import { GatewayHub } from './gateway/hub.ts';
 import { registerGateway } from './gateway/routes.ts';
 import { registerMembers } from './members/routes.ts';
+import { registerAdmin } from './admin/routes.ts';
 import { registerChat } from './chat/routes.ts';
 import { collectOrphanFiles } from './files/gc.ts';
 import { registerFiles } from './files/routes.ts';
@@ -95,6 +96,7 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     gateway: hub,
   });
   registerMembers(app, deps.db, guards);
+  registerAdmin(app, { db: deps.db, hub, guards });
   const files = deps.files ?? new LocalFileStore(config.filesDir);
   const jobs = new JobQueue(deps.db, app.log, {
     [LINK_PREVIEW_JOB]: linkPreviewJob({

@@ -312,9 +312,10 @@ export class ChatStore {
 export function sortMembers(state: ChatState): User[] {
   const collator = new Intl.Collator('tr', { sensitivity: 'base' });
   const present = (u: User) => (state.presence.has(u.id) ? 0 : 1);
-  return [...state.members.values()].sort(
-    (a, b) => present(a) - present(b) || collator.compare(a.displayName, b.displayName),
-  );
+  // Removed members are kept for their messages (A42), not listed.
+  return [...state.members.values()]
+    .filter((u) => !u.removedAt)
+    .sort((a, b) => present(a) - present(b) || collator.compare(a.displayName, b.displayName));
 }
 
 /** The sidebar: active rooms by position, archived ones left out. */

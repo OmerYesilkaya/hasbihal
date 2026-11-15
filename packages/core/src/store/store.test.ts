@@ -10,6 +10,7 @@ const user = (id: string, displayName: string): User => ({
   avatarFileId: null,
   role: 'member',
   createdAt: '2026-11-15T10:00:00.000Z',
+  removedAt: null,
 });
 const ayse = user('0192f0c4-7b5e-7c8e-9a3b-000000000001', 'Ayşe');
 const cem = user('0192f0c4-7b5e-7c8e-9a3b-000000000002', 'Cem');

@@ -38,6 +38,7 @@ export function toUser(row: Selectable<UsersTable>): User {
     avatarFileId: row.avatar_file_id,
     role: row.role,
     createdAt: row.created_at.toISOString(),
+    removedAt: row.removed_at?.toISOString() ?? null,
   };
 }
 

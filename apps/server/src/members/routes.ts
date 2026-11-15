@@ -5,19 +5,17 @@ import type { AuthGuards } from '../auth/routes.ts';
 import { toUser } from '../auth/sessions.ts';
 import type { Database } from '../db/schema.ts';
 
-/** The member list (A36): everyone who hasn't been removed, by display name. */
+/**
+ * Everyone who has ever been a member, by display name: removed members included, marked, so
+ * their messages still show their names (A42). The member list shows only current ones.
+ */
 export function registerMembers(
   app: FastifyInstance,
   db: Kysely<Database>,
   { requireAuth }: AuthGuards,
 ): void {
   app.get('/members', { preHandler: requireAuth }, async (): Promise<MemberList> => {
-    const rows = await db
-      .selectFrom('users')
-      .selectAll()
-      .where('removed_at', 'is', null)
-      .orderBy('display_name')
-      .execute();
+    const rows = await db.selectFrom('users').selectAll().orderBy('display_name').execute();
     return { members: rows.map(toUser) };
   });
 }
