@@ -26,12 +26,12 @@ Status legend: ✅ follows directly from an agreed decision · 🟡 proposed her
 
 There are four runtime pieces, all on one VPS (A4) except the client:
 
-| Piece | Role |
-|-------|------|
-| **Desktop app** | UI, local state, media capture, and noise suppression. It talks to our server for everything except media, which goes to LiveKit. |
+| Piece               | Role                                                                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Desktop app**     | UI, local state, media capture, and noise suppression. It talks to our server for everything except media, which goes to LiveKit.                                   |
 | **Hasbihal server** | The single source of truth: accounts, rooms, messages, files, events, presence, and notification preferences. It issues LiveKit tokens and pushes real-time events. |
-| **LiveKit server** | Relays voice, video, and screen-share media (T5). It holds no persistent data. |
-| **PostgreSQL** | All persistent data except file bytes (T4). |
+| **LiveKit server**  | Relays voice, video, and screen-share media (T5). It holds no persistent data.                                                                                      |
+| **PostgreSQL**      | All persistent data except file bytes (T4).                                                                                                                         |
 
 ---
 
@@ -49,7 +49,7 @@ hasbihal/
 │  ├─ protocol/       Wire contract: zod schemas, event types, error codes, PROTOCOL_VERSION
 │  ├─ core/           Client logic shared by desktop + mobile: API client, sync engine,
 │  │                  stores, Markdown parser, i18n catalogs, formatting helpers
-│  └─ config/         Shared tsconfig, ESLint, Prettier
+│  └─ config/         Shared tsconfig bases (ESLint and Prettier config live at the repo root)
 ├─ infra/             docker-compose.yml, Caddyfile, livekit.yaml, backup scripts
 └─ docs/
 ```
@@ -62,32 +62,32 @@ Rule: `protocol` depends on nothing internal. `core` depends only on `protocol`.
 
 ### 3.1 Stack (🟡)
 
-| Concern | Choice | Why |
-|---------|--------|-----|
-| HTTP framework | **Fastify** | Fast and mature, with first-class schema validation and a good plugin model. |
-| WebSocket | **@fastify/websocket** (`ws`) | Same process and auth path as the HTTP API. |
-| Validation | **zod** schemas from `@hasbihal/protocol` | One definition is used on both sides of the wire. |
-| Database access | **Kysely** (typed SQL query builder) with its migrator | Typed queries without hiding SQL. Full-text search and recursive queries stay natural. |
-| Password hashing | **argon2** (Argon2id) | A25. |
-| Images / video thumbnails | **sharp**; **ffmpeg** for video posters | A26. |
-| Logging | **pino** (structured JSON) | Fastify's native logger. |
-| Tests | **Vitest** + a real PostgreSQL via Testcontainers | Integration tests hit a real database, not mocks. |
+| Concern                   | Choice                                                 | Why                                                                                    |
+| ------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| HTTP framework            | **Fastify**                                            | Fast and mature, with first-class schema validation and a good plugin model.           |
+| WebSocket                 | **@fastify/websocket** (`ws`)                          | Same process and auth path as the HTTP API.                                            |
+| Validation                | **zod** schemas from `@hasbihal/protocol`              | One definition is used on both sides of the wire.                                      |
+| Database access           | **Kysely** (typed SQL query builder) with its migrator | Typed queries without hiding SQL. Full-text search and recursive queries stay natural. |
+| Password hashing          | **argon2** (Argon2id)                                  | A25.                                                                                   |
+| Images / video thumbnails | **sharp**; **ffmpeg** for video posters                | A26.                                                                                   |
+| Logging                   | **pino** (structured JSON)                             | Fastify's native logger.                                                               |
+| Tests                     | **Vitest** + a real PostgreSQL via Testcontainers      | Integration tests hit a real database, not mocks.                                      |
 
 ### 3.2 Modules
 
 The server is one process (a modular monolith). Each module owns its tables and exposes a service interface. Modules never touch each other's tables directly.
 
-| Module | Owns | Notes |
-|--------|------|-------|
-| `auth` | users' credentials, sessions, invites, recovery links | A20, A25 |
-| `users` | profiles, avatars, presence mode, notification prefs | A21, A28, A40, A41 |
-| `rooms` | rooms, room settings, per-user room prefs | A11, A12 |
-| `messages` | messages, reactions, mentions, read state, search | A22, A27, A47 |
-| `files` | uploads, thumbnails, link previews | A23, A24, A26 |
-| `hangouts` | LiveKit tokens, webhook intake, live room membership, nudges | A6, A13, A14 |
-| `events` | events, recurrence, exceptions, RSVPs, reminder scheduling | A15, A16 |
-| `gateway` | WebSocket connections, fan-out, presence tracking, replay | §5 |
-| `admin` | admin-only operations | A44 |
+| Module     | Owns                                                         | Notes              |
+| ---------- | ------------------------------------------------------------ | ------------------ |
+| `auth`     | users' credentials, sessions, invites, recovery links        | A20, A25           |
+| `users`    | profiles, avatars, presence mode, notification prefs         | A21, A28, A40, A41 |
+| `rooms`    | rooms, room settings, per-user room prefs                    | A11, A12           |
+| `messages` | messages, reactions, mentions, read state, search            | A22, A27, A47      |
+| `files`    | uploads, thumbnails, link previews                           | A23, A24, A26      |
+| `hangouts` | LiveKit tokens, webhook intake, live room membership, nudges | A6, A13, A14       |
+| `events`   | events, recurrence, exceptions, RSVPs, reminder scheduling   | A15, A16           |
+| `gateway`  | WebSocket connections, fan-out, presence tracking, replay    | §5                 |
+| `admin`    | admin-only operations                                        | A44                |
 
 ### 3.3 Data model (🟡 first cut)
 
@@ -131,6 +131,7 @@ jobs             (scheduler queue, §3.6)
 ```
 
 Notes:
+
 - **Deleting a message** sets `deleted_at` and clears `body`, mentions, and attachment links. The row remains, so the UI can show "Bu mesaj silindi." (A22). Files of deleted messages are garbage-collected.
 - **Removing a member** sets `users.removed_at` and revokes all sessions. Their messages stay (A42).
 - `last_read_message_id` drives unread badges only. It is never shown to others (A22: no read receipts).
@@ -160,11 +161,11 @@ Jobs: thumbnail generation, link-preview fetching, event-reminder dispatch, expi
 
 ### 4.1 Process model (Electron)
 
-| Process | Responsibilities |
-|---------|------------------|
-| **Main** | Window and tray/menu-bar lifecycle (A38), launch at startup (A39), global shortcuts for mute/deafen/push-to-talk (A37), native notifications, idle detection (`powerMonitor`, A21), secure token storage (`safeStorage`), screen-capture source picking, and the app version reported to the server (A33). |
-| **Preload** | A small typed bridge (`contextBridge`) that exposes only the main-process capabilities above. |
-| **Renderer** | The React UI, `@hasbihal/core`, the LiveKit client, and audio processing. |
+| Process      | Responsibilities                                                                                                                                                                                                                                                                                           |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Main**     | Window and tray/menu-bar lifecycle (A38), launch at startup (A39), global shortcuts for mute/deafen/push-to-talk (A37), native notifications, idle detection (`powerMonitor`, A21), secure token storage (`safeStorage`), screen-capture source picking, and the app version reported to the server (A33). |
+| **Preload**  | A small typed bridge (`contextBridge`) that exposes only the main-process capabilities above.                                                                                                                                                                                                              |
+| **Renderer** | The React UI, `@hasbihal/core`, the LiveKit client, and audio processing.                                                                                                                                                                                                                                  |
 
 ### 4.2 Security hardening (A30, A47)
 
@@ -187,7 +188,7 @@ The embedded Chromium will age (A30), so the renderer is locked down from day on
 
 ### 4.4 Packaging (A30)
 
-- **electron-builder** produces an unsigned `.dmg` (universal: Apple Silicon and Intel, ad-hoc signed) and an NSIS `.exe` installer.
+- **electron-builder** produces an unsigned `.dmg` (universal: Apple Silicon and Intel, signed with the self-signed certificate of DECISIONS A50, not notarized) and an NSIS `.exe` installer.
 - There is no auto-updater. The update screen (A33) links to the download page.
 - Builds run in CI on macOS and Windows runners (§9).
 
@@ -204,13 +205,13 @@ The embedded Chromium will age (A30), so the renderer is locked down from day on
 
 ### 5.2 Event types
 
-| Durable (stored in `event_log`, replayable) | Ephemeral (live only) |
-|---|---|
-| message created / edited / deleted | typing started (expires after 6 s) |
-| reaction added / removed | presence changed (online, away, busy, offline) |
-| room created / renamed / archived | hangout participants changed |
-| member joined / removed / role changed / profile updated | nudge received |
-| event created / changed / cancelled; RSVP changed | event reminder due |
+| Durable (stored in `event_log`, replayable)              | Ephemeral (live only)                          |
+| -------------------------------------------------------- | ---------------------------------------------- |
+| message created / edited / deleted                       | typing started (expires after 6 s)             |
+| reaction added / removed                                 | presence changed (online, away, busy, offline) |
+| room created / renamed / archived                        | hangout participants changed                   |
+| member joined / removed / role changed / profile updated | nudge received                                 |
+| event created / changed / cancelled; RSVP changed        | event reminder due                             |
 
 ### 5.3 Catch-up after a disconnect
 
@@ -237,19 +238,20 @@ The embedded Chromium will age (A30), so the renderer is locked down from day on
 
 ### 6.2 Media settings (A29, A14)
 
-| Track | Settings |
-|-------|----------|
-| **Microphone** | Opus mono at **64 kbps** by default (up to 128 kbps), **RED** (redundant audio) on, in-band FEC on, DTX off (avoids clipped word starts). Echo cancellation (AEC3) on. Chromium's built-in noise suppression is **off** while DeepFilterNet is on. |
-| **Noise suppression** | **DeepFilterNet** compiled to WASM, running in an `AudioWorklet` as a LiveKit track processor. It can be toggled per user. RNNoise is the fallback on weak CPUs (T7). |
-| **Camera** | Up to 720p30, **simulcast** in 3 layers. LiveKit's adaptive stream and dynacast send each viewer only the layer they need. |
-| **Screen share** | Up to **1080p60**, ~6–8 Mbps, `contentHint` set per use (motion for games and video, detail for text). Several simultaneous shares; each viewer picks what to watch (A14). |
-| **Screen-share audio** | Stereo Opus at ~128 kbps, with no echo cancellation, noise suppression, or gain control. Both OSes use Electron's `setDisplayMediaRequestHandler` with `audio: 'loopback'`. Windows uses Chromium's WASAPI loopback. **macOS 14.2+ uses Apple's Core Audio Tap API**, which Chromium uses by default as of Electron 39; the app's `Info.plist` must include `NSAudioCaptureUsageDescription`, or the audio track is silently dead. To be confirmed end to end by spike S1 (ROADMAP M0). |
-| **Per-person volume** | Client-side gain per remote participant (A29). |
-| **Voice activation / push-to-talk** | Voice activity detection with adjustable sensitivity; push-to-talk uses a global shortcut (A37). |
+| Track                               | Settings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Microphone**                      | Opus mono at **64 kbps** by default (up to 128 kbps), **RED** (redundant audio) on, in-band FEC on, DTX off (avoids clipped word starts). Echo cancellation (AEC3) on. Chromium's built-in noise suppression is **off** while DeepFilterNet is on.                                                                                                                                                                                                                                                                                                                                                                      |
+| **Noise suppression**               | **DeepFilterNet** compiled to WASM, running in an `AudioWorklet` as a LiveKit track processor. It can be toggled per user. DTLN (from the same package) is the fallback on weak CPUs (T7).                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Camera**                          | Up to 720p30, **simulcast** in 3 layers. LiveKit's adaptive stream and dynacast send each viewer only the layer they need.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Screen share**                    | Up to **1080p60**, ~6–8 Mbps, `contentHint` set per use (motion for games and video, detail for text). Several simultaneous shares; each viewer picks what to watch (A14). The encoding is set explicitly through `screenShareEncoding`; LiveKit's default is 15 fps. **H.264 Baseline** is negotiated so the hardware encoder is used where there is one (T8).                                                                                                                                                                                                                                                         |
+| **Screen-share audio**              | Stereo Opus at ~128 kbps, with no echo cancellation, noise suppression, or gain control. Both OSes use Electron's `setDisplayMediaRequestHandler` with `audio: 'loopback'`. Windows uses Chromium's WASAPI loopback. **macOS 14.2+ uses Apple's Core Audio Tap API**, which Chromium uses by default as of Electron 39; the app's `Info.plist` must include `NSAudioCaptureUsageDescription`, or the audio track is silently dead. The capture requests **`restrictOwnAudio`**, so the app's own playback (other participants' voices) isn't captured and echoed back. Both confirmed in spike S1 on macOS and Windows. |
+| **Per-person volume**               | Client-side gain per remote participant (A29).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Voice activation / push-to-talk** | Voice activity detection with adjustable sensitivity; push-to-talk uses a global shortcut (A37).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### 6.3 Server-side awareness
 
 LiveKit **webhooks** (`participant_joined`, `participant_left`, `track_published`, …) go to the `hangouts` module. The module:
+
 - keeps the live "who is in which room" state that the sidebar and member list show (A21, A36);
 - sends **"hangout started"** notifications when a room goes from empty to occupied (A28);
 - marks screen shares as live, which drives the "CANLI" badges.
@@ -257,6 +259,7 @@ LiveKit **webhooks** (`participant_joined`, `participant_left`, `track_published
 ### 6.4 Nudges (A13, A19)
 
 `POST /nudges { toUserId, roomId }`:
+
 - the recipient must not be in Busy mode;
 - there is a cooldown of 60 s per (sender, recipient) pair;
 - delivery is an ephemeral WebSocket event. The client shows a prominent notification that joins the room when clicked.
@@ -285,16 +288,16 @@ LiveKit **webhooks** (`participant_joined`, `participant_left`, `track_published
 
 ## 9. Authentication and sessions (A20, A25)
 
-| Item | Design |
-|------|--------|
-| Invite | An admin creates a single-use, expiring invite link carrying a random 256-bit token. Only its hash is stored. |
-| Sign-up | Through the invite: choose username, display name, avatar, and password. Minimum length 10 characters, no composition rules. The password is checked against a local list of common passwords. |
-| Passwords | Argon2id (OWASP-recommended parameters). Sign-in is rate-limited per IP and per account. |
-| Access token | Short-lived (15 min) **JWT signed with Ed25519**. Sent on HTTP requests and in the WebSocket `hello`. |
-| Refresh token | Opaque random token, **rotated on every use**, stored as a hash. Reusing an old token revokes the whole session family (theft detection). It expires after 180 days unused. |
-| Client storage | Encrypted with Electron `safeStorage`, which uses Keychain on macOS and DPAPI on Windows. |
-| Recovery | An admin creates a single-use recovery link (A25) that lets the user set a new password. All existing sessions are revoked. |
-| Sessions page | Users can see and revoke their own sessions in the profile view (A41). |
+| Item           | Design                                                                                                                                                                                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invite         | An admin creates a single-use, expiring invite link carrying a random 256-bit token. Only its hash is stored.                                                                                  |
+| Sign-up        | Through the invite: choose username, display name, avatar, and password. Minimum length 10 characters, no composition rules. The password is checked against a local list of common passwords. |
+| Passwords      | Argon2id (OWASP-recommended parameters). Sign-in is rate-limited per IP and per account.                                                                                                       |
+| Access token   | Short-lived (15 min) **JWT signed with Ed25519**. Sent on HTTP requests and in the WebSocket `hello`.                                                                                          |
+| Refresh token  | Opaque random token, **rotated on every use**, stored as a hash. Reusing an old token revokes the whole session family (theft detection). It expires after 180 days unused.                    |
+| Client storage | Encrypted with Electron `safeStorage`, which uses Keychain on macOS and DPAPI on Windows.                                                                                                      |
+| Recovery       | An admin creates a single-use recovery link (A25) that lets the user set a new password. All existing sessions are revoked.                                                                    |
+| Sessions page  | Users can see and revoke their own sessions in the profile view (A41).                                                                                                                         |
 
 ---
 
@@ -306,12 +309,12 @@ One VPS, located close to Turkey: **4 vCPU, 8 GB RAM, ≥160 GB disk, 1 Gbps** w
 
 `infra/docker-compose.yml` services:
 
-| Service | Notes |
-|---------|-------|
-| `caddy` | TLS via Let's Encrypt; reverse proxy for the API and WebSocket on 443. |
-| `server` | The Hasbihal server. |
-| `postgres` | PostgreSQL 17 with a persistent volume. |
-| `livekit` | Uses host networking for media. Ports: 7881/tcp, 50000–60000/udp, TURN 3478/udp and 5349/tls. |
+| Service    | Notes                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------- |
+| `caddy`    | TLS via Let's Encrypt; reverse proxy for the API and WebSocket on 443.                        |
+| `server`   | The Hasbihal server.                                                                          |
+| `postgres` | PostgreSQL 17 with a persistent volume.                                                       |
+| `livekit`  | Uses host networking for media. Ports: 7881/tcp, 50000–60000/udp, TURN 3478/udp and 5349/tls. |
 
 **Needed from the owner:** a **domain name** (e.g. `hasbihal.example`, with subdomains for the API and LiveKit/TURN) and a VPS account.
 
@@ -330,6 +333,7 @@ One VPS, located close to Turkey: **4 vCPU, 8 GB RAM, ≥160 GB disk, 1 Gbps** w
 ### 10.4 CI (🟡)
 
 GitHub Actions:
+
 - On every push: lint, type-check, and unit plus integration tests.
 - On a tag: build the `.dmg` (macOS runner) and `.exe` (Windows runner) and attach them to a GitHub Release, which is the download page linked by A33.
 - The server image is built and pushed to the GitHub Container Registry. Deployment is `docker compose pull && up -d` on the VPS.
@@ -338,13 +342,13 @@ GitHub Actions:
 
 ## 11. Testing strategy
 
-| Layer | How |
-|-------|-----|
-| `protocol`, `core` (parsers, sync, formatting, recurrence) | Vitest unit tests, test-first for the sync engine and Markdown parser. |
-| Server modules | Vitest integration tests against real PostgreSQL (Testcontainers) and a real LiveKit dev server where needed. |
-| Desktop app | Playwright's Electron support for end-to-end flows: invite → sign up → chat → join hangout. |
-| Media quality | A manual checklist for each release: noise suppression, echo, 1080p60 share with audio on both OSes, packet-loss behaviour (using a network link conditioner). |
-| Internal test period | Technical family members use pre-release builds until the app is stable, then v1.0 ships (A30). |
+| Layer                                                      | How                                                                                                                                                            |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `protocol`, `core` (parsers, sync, formatting, recurrence) | Vitest unit tests, test-first for the sync engine and Markdown parser.                                                                                         |
+| Server modules                                             | Vitest integration tests against real PostgreSQL (Testcontainers) and a real LiveKit dev server where needed.                                                  |
+| Desktop app                                                | Playwright's Electron support for end-to-end flows: invite → sign up → chat → join hangout.                                                                    |
+| Media quality                                              | A manual checklist for each release: noise suppression, echo, 1080p60 share with audio on both OSes, packet-loss behaviour (using a network link conditioner). |
+| Internal test period                                       | Technical family members use pre-release builds until the app is stable, then v1.0 ships (A30).                                                                |
 
 ---
 
@@ -353,4 +357,4 @@ GitHub Actions:
 - 🟡 **Library choices** marked 🟡 above (Fastify, Kysely, electron-vite, and so on) need confirmation.
 - ❓ **Domain name and VPS provider.** Owner to choose (the provider should be close to Turkey).
 - ❓ **macOS system audio in screen share.** Research says it's supported natively on macOS 14.2+ in current Electron (no virtual audio driver needed); spike S1 confirms it end to end. This implies a **minimum macOS version of 14.2 (Sonoma)** for share-with-audio. Owner to confirm the family's Macs meet it.
-- ❓ **DeepFilterNet CPU cost on older laptops.** Resolved by spike S2. This decides when the app falls back to RNNoise.
+- ❓ **DeepFilterNet CPU cost on older laptops.** Resolved by spike S2. This decides when the app falls back to DTLN.
