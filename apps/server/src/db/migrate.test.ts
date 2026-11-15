@@ -16,7 +16,7 @@ export async function down(db) { await sql\`drop table ${table}\`.execute(db); }
 `;
 
 beforeAll(async () => {
-  testDb = await createTestDatabase();
+  testDb = await createTestDatabase({ empty: true });
   folder = await mkdtemp(path.join(tmpdir(), 'hasbihal-migrations-'));
   // Written out of order on purpose; the 4-digit prefix decides the order.
   await writeFile(path.join(folder, '0002_create_b.ts'), migration('b'));

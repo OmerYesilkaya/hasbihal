@@ -55,8 +55,11 @@ export async function migrateToLatest<DB>(
 
 export function assertMigrated(result: MigrationResultSet): MigrationResultSet {
   if (result.error) {
-    const failed = result.results?.find((r) => r.status === 'Error')?.migrationName ?? 'unknown';
-    throw new Error(`Migration ${failed} failed`, { cause: result.error });
+    const failed = result.results?.find((r) => r.status === 'Error')?.migrationName;
+    // No failed migration means the migrator itself refused, e.g. an applied migration is missing.
+    throw new Error(failed ? `Migration ${failed} failed` : 'Migrations could not run', {
+      cause: result.error,
+    });
   }
   return result;
 }

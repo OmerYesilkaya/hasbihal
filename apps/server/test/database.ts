@@ -25,9 +25,11 @@ async function admin<T>(run: (client: pg.Client) => Promise<T>): Promise<T> {
  * A fresh, fully migrated database for one test file (copied from the template made in
  * global-setup.ts). Call it in `beforeAll` and `drop()` it in `afterAll`.
  */
-export async function createTestDatabase(): Promise<TestDatabase> {
+export async function createTestDatabase(options: { empty?: boolean } = {}): Promise<TestDatabase> {
   const name = `test_${randomUUID().replaceAll('-', '')}`;
-  await admin((c) => c.query(`CREATE DATABASE ${name} TEMPLATE ${TEMPLATE_DATABASE}`));
+  // `empty`: no migrations applied, for testing the migrator itself.
+  const template = options.empty ? 'template0' : TEMPLATE_DATABASE;
+  await admin((c) => c.query(`CREATE DATABASE ${name} TEMPLATE ${template}`));
   const url = withDatabase(inject('postgresUrl'), name);
   const db = createDatabase(url);
   return {

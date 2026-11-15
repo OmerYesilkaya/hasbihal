@@ -17,6 +17,17 @@ const Env = z.object({
   HELLO_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
   // Matches infra/compose.dev.yml. Production sets its own.
   DATABASE_URL: z.string().default('postgres://hasbihal:hasbihal-dev@127.0.0.1:5432/hasbihal'),
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // Ed25519 private key (PKCS#8 PEM) that signs access tokens. Required in production; make one
+  // with `pnpm --filter @hasbihal/server generate-signing-key`. `\n` escapes are accepted.
+  AUTH_SIGNING_KEY: z
+    .string()
+    .optional()
+    .transform((pem) => pem?.replaceAll('\\n', '\n')),
+  // Behind a reverse proxy (production), trust its X-Forwarded-For so rate limits see real client IPs.
+  TRUST_PROXY: z.stringbool().default(false),
+  // Requests per IP per minute on the unauthenticated auth routes (sign-in, sign-up, …).
+  AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
 });
 
 export interface Config {
@@ -26,6 +37,10 @@ export interface Config {
   allowedOrigins: string[];
   helloTimeoutMs: number;
   databaseUrl: string;
+  production: boolean;
+  signingKeyPem: string | undefined;
+  trustProxy: boolean;
+  authRateLimitPerMinute: number;
   serverVersion: string;
 }
 
@@ -38,6 +53,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     allowedOrigins: parsed.ALLOWED_ORIGINS,
     helloTimeoutMs: parsed.HELLO_TIMEOUT_MS,
     databaseUrl: parsed.DATABASE_URL,
+    production: parsed.NODE_ENV === 'production',
+    signingKeyPem: parsed.AUTH_SIGNING_KEY,
+    trustProxy: parsed.TRUST_PROXY,
+    authRateLimitPerMinute: parsed.AUTH_RATE_LIMIT_PER_MINUTE,
     serverVersion: pkg.version,
   };
 }

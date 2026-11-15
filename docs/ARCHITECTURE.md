@@ -98,9 +98,9 @@ users            id, username (unique, login), display_name, avatar_file_id?, av
                  role ('admin'|'member'), presence_mode ('available'|'busy'),
                  created_at, removed_at?
 credentials      user_id, password_hash, password_changed_at
-sessions         id, user_id, refresh_token_hash, family_id, device_name, created_at,
+sessions         id, user_id, refresh_token_hash, device_name, created_at,
                  last_used_at, expires_at, revoked_at?
-invites          id, token_hash, created_by, expires_at, used_by?, used_at?
+invites          id, token_hash, role, created_by?, expires_at, used_by?, used_at?
 recovery_links   id, user_id, token_hash, created_by, expires_at, used_at?
 
 rooms            id, name, topic?, position, created_by, archived_at?
@@ -288,16 +288,16 @@ LiveKit **webhooks** (`participant_joined`, `participant_left`, `track_published
 
 ## 9. Authentication and sessions (A20, A25)
 
-| Item           | Design                                                                                                                                                                                         |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invite         | An admin creates a single-use, expiring invite link carrying a random 256-bit token. Only its hash is stored.                                                                                  |
-| Sign-up        | Through the invite: choose username, display name, avatar, and password. Minimum length 10 characters, no composition rules. The password is checked against a local list of common passwords. |
-| Passwords      | Argon2id (OWASP-recommended parameters). Sign-in is rate-limited per IP and per account.                                                                                                       |
-| Access token   | Short-lived (15 min) **JWT signed with Ed25519**. Sent on HTTP requests and in the WebSocket `hello`.                                                                                          |
-| Refresh token  | Opaque random token, **rotated on every use**, stored as a hash. Reusing an old token revokes the whole session family (theft detection). It expires after 180 days unused.                    |
-| Client storage | Encrypted with Electron `safeStorage`, which uses Keychain on macOS and DPAPI on Windows.                                                                                                      |
-| Recovery       | An admin creates a single-use recovery link (A25) that lets the user set a new password. All existing sessions are revoked.                                                                    |
-| Sessions page  | Users can see and revoke their own sessions in the profile view (A41).                                                                                                                         |
+| Item           | Design                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invite         | An admin creates a single-use, expiring invite link carrying a random 256-bit token. Only its hash is stored.                                                                                                                                                                                                                                                                                         |
+| Sign-up        | Through the invite: choose username, display name, avatar, and password. Minimum length 10 characters, no composition rules. The password is checked against a local list of common passwords.                                                                                                                                                                                                        |
+| Passwords      | Argon2id (OWASP-recommended parameters). Sign-in is rate-limited per IP and per account.                                                                                                                                                                                                                                                                                                              |
+| Access token   | Short-lived (15 min) **JWT signed with Ed25519**. Sent on HTTP requests and in the WebSocket `hello`.                                                                                                                                                                                                                                                                                                 |
+| Refresh token  | `<sessionId>.<random secret>`, **rotated on every use**; only the secret's hash is stored. Presenting an old secret for a live session means it was copied, so the session is revoked (theft detection). Clients refresh one request at a time. It expires after 180 days unused. Every authenticated request also checks the session row, so sign-out, revocation, and member removal apply at once. |
+| Client storage | Encrypted with Electron `safeStorage`, which uses Keychain on macOS and DPAPI on Windows.                                                                                                                                                                                                                                                                                                             |
+| Recovery       | An admin creates a single-use recovery link (A25) that lets the user set a new password. All existing sessions are revoked.                                                                                                                                                                                                                                                                           |
+| Sessions page  | Users can see and revoke their own sessions in the profile view (A41).                                                                                                                                                                                                                                                                                                                                |
 
 ---
 
