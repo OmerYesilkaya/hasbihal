@@ -121,7 +121,7 @@ export function RoomList({
                       <li key={p.userId}>
                         <Avatar user={member} />
                         <span>{member.displayName}</span>
-                        {p.screenShare && <span className="live-badge">CANLI</span>}
+                        {p.screenShare && <span className="live-badge">{t('share.live')}</span>}
                       </li>
                     ) : null;
                   })}

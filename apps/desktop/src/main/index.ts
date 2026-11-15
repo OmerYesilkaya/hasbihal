@@ -8,8 +8,14 @@ import { registerAppSchemePrivileges, serveRendererFromAppScheme } from './app-p
 import { AuthSession } from './auth-session.ts';
 import { DeepLinkRouter } from './deep-links.ts';
 import { IdleWatcher } from './idle.ts';
+import { ScreenSources } from './screen-share.ts';
 import { HangoutShortcuts } from './shortcuts.ts';
-import { APP_ORIGIN, applyAppWideSecurity, contentSecurityPolicy } from './security.ts';
+import {
+  APP_ORIGIN,
+  applyAppWideSecurity,
+  contentSecurityPolicy,
+  isTrustedOrigin,
+} from './security.ts';
 import { SafeStorageTokenStore } from './token-store.ts';
 
 const devServerUrl = process.env.ELECTRON_RENDERER_URL;
@@ -163,6 +169,16 @@ void app.whenReady().then(() => {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
+  });
+  // End-to-end tests share the app's own page instead of a real screen (no OS permission).
+  const screens = new ScreenSources({
+    fake: devOverride('HASBIHAL_FAKE_SCREEN') === '1',
+    isTrusted: (url) => isTrustedOrigin(url, isDev ? devServerUrl : undefined),
+  });
+  screens.install(session.defaultSession);
+  ipcMain.handle(IPC.screenSources, () => screens.list());
+  ipcMain.handle(IPC.screenChoose, (_event, id: unknown, audio: unknown) => {
+    if (typeof id === 'string' && id.length < 200) screens.choose(id, audio === true);
   });
   idleWatcher.start();
 

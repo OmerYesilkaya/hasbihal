@@ -5,6 +5,8 @@ import {
   type AppInfo,
   type AuthBridge,
   type DeepLinkBridge,
+  type ScreenBridge,
+  type ScreenSource,
   type SystemBridge,
 } from '../shared/app-info.ts';
 import type { HasbihalBridge } from './api';
@@ -66,12 +68,20 @@ const system: SystemBridge = {
   },
 };
 
+const screen: ScreenBridge = {
+  sources: () => ipcRenderer.invoke(IPC.screenSources) as Promise<ScreenSource[]>,
+  choose: async (id, audio) => {
+    await ipcRenderer.invoke(IPC.screenChoose, id, audio);
+  },
+};
+
 /** The only main-process capabilities the renderer can reach (ARCHITECTURE §4.1). */
 const bridge: HasbihalBridge = {
   getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo) as Promise<AppInfo>,
   auth,
   deepLinks,
   system,
+  screen,
 };
 
 contextBridge.exposeInMainWorld('hasbihal', bridge);
