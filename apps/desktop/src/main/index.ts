@@ -7,6 +7,7 @@ import { IPC, type AppInfo, type AuthResult } from '../shared/app-info.ts';
 import { registerAppSchemePrivileges, serveRendererFromAppScheme } from './app-protocol.ts';
 import { AuthSession } from './auth-session.ts';
 import { DeepLinkRouter } from './deep-links.ts';
+import { IdleWatcher } from './idle.ts';
 import { APP_ORIGIN, applyAppWideSecurity, contentSecurityPolicy } from './security.ts';
 import { SafeStorageTokenStore } from './token-store.ts';
 
@@ -27,6 +28,7 @@ app.enableSandbox();
 registerAppSchemePrivileges();
 
 const deepLinks = new DeepLinkRouter();
+const idleWatcher = new IdleWatcher();
 deepLinks.listen();
 
 if (!app.requestSingleInstanceLock()) {
@@ -58,6 +60,7 @@ function createMainWindow(): BrowserWindow {
     window.show();
   });
   deepLinks.setTarget(window.webContents);
+  idleWatcher.setTarget(window.webContents);
 
   if (isDev) {
     void window.loadURL(devServerUrl);
@@ -129,9 +132,11 @@ void app.whenReady().then(() => {
   handle(IPC.authSignUp, SignUpRequest.omit({ deviceName: true }), (r) => auth.signUp(r));
   handle(IPC.authSignIn, SignInRequest.omit({ deviceName: true }), (r) => auth.signIn(r));
   handle(IPC.authRecover, RecoverRequest.omit({ deviceName: true }), (r) => auth.recover(r));
-  handle(IPC.authAccessToken, z.undefined(), () => auth.accessToken());
+  handle(IPC.authAccessToken, z.boolean(), (refresh) => auth.accessToken(refresh));
   ipcMain.handle(IPC.authSignOut, () => auth.signOut());
   ipcMain.handle(IPC.deepLinkTakePending, () => deepLinks.takePending());
+  ipcMain.handle(IPC.systemIsIdle, () => idleWatcher.idle);
+  idleWatcher.start();
 
   mainWindow = createMainWindow();
 

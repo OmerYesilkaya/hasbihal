@@ -91,11 +91,15 @@ export class AuthSession {
     return this.#signIn('/auth/recover', { ...request, deviceName: this.#options.deviceName });
   }
 
-  /** A valid access token, refreshing first when it is missing or about to expire. */
-  async accessToken(): Promise<AuthResult<string>> {
+  /**
+   * A valid access token, refreshing first when it is missing or about to expire, or when
+   * `refresh` is set because the server rejected the current one.
+   */
+  async accessToken(refresh = false): Promise<AuthResult<string>> {
     await this.#loaded;
-    if (this.#access && this.#access.expiresAt - this.#options.now() > REFRESH_MARGIN_MS) {
-      return ok(this.#access.token);
+    const access = this.#access;
+    if (!refresh && access && access.expiresAt - this.#options.now() > REFRESH_MARGIN_MS) {
+      return ok(access.token);
     }
     this.#refreshing ??= this.#refresh().finally(() => {
       this.#refreshing = null;

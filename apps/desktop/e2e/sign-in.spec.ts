@@ -16,7 +16,8 @@ const APP_DIR = path.resolve(import.meta.dirname, '..');
 const PASSWORD = 'çay ve simit her sabah';
 
 let userData: string;
-let app: ElectronApplication | undefined;
+/** Every app started by a test; closed after it. */
+const apps: ElectronApplication[] = [];
 
 /** The first-admin command (A52), exactly as the owner runs it on the server. */
 async function adminInviteUrl(): Promise<string> {
@@ -33,15 +34,17 @@ async function adminInviteUrl(): Promise<string> {
   return url;
 }
 
-async function launch(): Promise<Page> {
-  app = await electron.launch({
+/** Starts the app; another `dataDir` is another computer (its own session and window). */
+async function launch(dataDir = userData): Promise<Page> {
+  const app = await electron.launch({
     args: [APP_DIR, '--lang=tr'],
     env: {
       ...process.env,
       HASBIHAL_SERVER_URL: process.env.E2E_SERVER_URL ?? '',
-      HASBIHAL_USER_DATA_DIR: userData,
+      HASBIHAL_USER_DATA_DIR: dataDir,
     },
   });
+  apps.push(app);
   return app.firstWindow();
 }
 
@@ -51,12 +54,16 @@ async function snap(page: Page, name: string): Promise<void> {
   if (dir) await page.screenshot({ path: path.join(dir, `${name}.png`) });
 }
 
-/** Delivers a link the way macOS does when one is clicked in another app. */
+/** Delivers a link the way macOS does when one is clicked in another app (the latest app). */
 async function openLink(url: string): Promise<void> {
-  await app?.evaluate(({ app: electronApp }, link) => {
+  await apps.at(-1)?.evaluate(({ app: electronApp }, link) => {
     electronApp.emit('open-url', { preventDefault: () => undefined }, link);
   }, url);
 }
+
+/** The member list row for a display name. */
+const memberRow = (page: Page, name: string) =>
+  page.getByTestId('member').filter({ hasText: name });
 
 test.describe.serial('accounts in the desktop app', () => {
   let inviteUrl: string;
@@ -67,8 +74,7 @@ test.describe.serial('accounts in the desktop app', () => {
   });
 
   test.afterEach(async () => {
-    await app?.close();
-    app = undefined;
+    await Promise.all(apps.splice(0).map((app) => app.close()));
   });
 
   test.afterAll(async () => {
@@ -120,6 +126,34 @@ test.describe.serial('accounts in the desktop app', () => {
     await page.getByLabel('Parola').fill(PASSWORD);
     await page.getByRole('button', { name: 'Giriş yap' }).click();
     await expect(page.getByTestId('current-user')).toHaveText('Ömer Test');
+  });
+
+  test('shows another member joining and their status, live', async () => {
+    const page = await launch();
+    await expect(page.getByTestId('current-user')).toHaveText('Ömer Test');
+    await expect(memberRow(page, 'Ömer Test')).toContainText('Müsait');
+
+    // A second computer: its own data folder, so its own session.
+    const otherData = await mkdtemp(path.join(tmpdir(), 'hasbihal-e2e-other-'));
+    try {
+      const other = await launch(otherData);
+      await openLink(await adminInviteUrl());
+      await other.getByLabel('Görünen ad').fill('Ayşe Test');
+      await other.getByLabel('Kullanıcı adı').fill('ayse');
+      await other.getByLabel('Parola').fill('ikinci uzun parola cümlesi');
+      await other.getByRole('button', { name: 'Hesabı oluştur' }).click();
+      await expect(other.getByTestId('current-user')).toHaveText('Ayşe Test');
+
+      await expect(memberRow(page, 'Ayşe Test')).toContainText('Müsait');
+      await other.getByLabel('Durum').selectOption('busy');
+      await expect(memberRow(page, 'Ayşe Test')).toContainText('Meşgul');
+      await snap(page, '6-members-live');
+
+      await apps.pop()?.close();
+      await expect(memberRow(page, 'Ayşe Test')).toContainText('Çevrimdışı');
+    } finally {
+      await rm(otherData, { recursive: true, force: true });
+    }
   });
 
   test('explains that a used invite no longer works', async () => {

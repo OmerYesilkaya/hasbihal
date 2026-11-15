@@ -32,8 +32,11 @@ export interface AuthBridge {
   signUp(request: Omit<SignUpRequest, 'deviceName'>): Promise<AuthResult<User>>;
   signIn(request: Omit<SignInRequest, 'deviceName'>): Promise<AuthResult<User>>;
   recover(request: Omit<RecoverRequest, 'deviceName'>): Promise<AuthResult<User>>;
-  /** A valid access token, refreshed when needed. `unauthorized` means the session has ended. */
-  accessToken(): Promise<AuthResult<string>>;
+  /**
+   * A valid access token, refreshed when needed (or when `refresh` is set, after the server
+   * rejected the current one). `unauthorized` means the session has ended.
+   */
+  accessToken(refresh?: boolean): Promise<AuthResult<string>>;
   signOut(): Promise<void>;
   /** Called when the session ends without the user signing out (revoked elsewhere, expired). */
   onSessionEnded(listener: () => void): () => void;
@@ -43,6 +46,13 @@ export interface DeepLinkBridge {
   /** A link that arrived before the UI was ready (e.g. the one that launched the app). */
   takePending(): Promise<DeepLink | null>;
   onLink(listener: (link: DeepLink) => void): () => void;
+}
+
+/** System facts the renderer needs. */
+export interface SystemBridge {
+  /** Whether the computer is idle now (10 minutes without input, or a locked screen). */
+  isIdle(): Promise<boolean>;
+  onIdleChanged(listener: (idle: boolean) => void): () => void;
 }
 
 export const IPC = {
@@ -57,4 +67,6 @@ export const IPC = {
   authSessionEnded: 'auth:session-ended',
   deepLinkTakePending: 'deep-link:take-pending',
   deepLinkReceived: 'deep-link:received',
+  systemIsIdle: 'system:is-idle',
+  systemIdleChanged: 'system:idle-changed',
 } as const;

@@ -12,6 +12,7 @@ export interface Database {
   sessions: SessionsTable;
   invites: InvitesTable;
   recovery_links: RecoveryLinksTable;
+  event_log: EventLogTable;
 }
 
 /** A timestamp with a database default: optional on insert, never updated by hand. */
@@ -66,4 +67,12 @@ export interface RecoveryLinksTable {
   created_at: CreatedAt;
   expires_at: Date;
   used_at: NullableTime;
+}
+
+export interface EventLogTable {
+  /** bigserial: pg returns int8 as a string; convert with Number() (safe far beyond our volume). */
+  seq: Generated<string>;
+  type: string;
+  payload: unknown;
+  created_at: CreatedAt;
 }

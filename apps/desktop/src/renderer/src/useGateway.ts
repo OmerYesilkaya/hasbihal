@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react';
-import { GatewayClient, type GatewayStatus } from '@hasbihal/core';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { GatewayClient, type ChatStore, type GatewayStatus } from '@hasbihal/core';
+import { MemberList, type PresenceMode } from '@hasbihal/protocol';
+import type { AppInfo } from '../../shared/app-info.ts';
+import { apiGet } from './api.ts';
 
 function toWebSocketUrl(serverUrl: string): string {
   const url = new URL('/ws', serverUrl);
@@ -7,21 +10,69 @@ function toWebSocketUrl(serverUrl: string): string {
   return url.toString();
 }
 
-export function useGateway(serverUrl: string, clientVersion: string): GatewayStatus {
+/**
+ * Connects the signed-in app to the gateway and keeps `store` up to date: a full load on the first
+ * welcome and after a resync, then durable events and presence (ARCHITECTURE §5).
+ */
+export function useGateway(info: AppInfo, store: ChatStore) {
   const [status, setStatus] = useState<GatewayStatus>({ kind: 'connecting', attempt: 0 });
+  const client = useRef<GatewayClient | null>(null);
 
   useEffect(() => {
-    const client = new GatewayClient({
-      url: toWebSocketUrl(serverUrl),
-      clientVersion,
-      createSocket: (url) => new WebSocket(url),
-      onStatus: setStatus,
-    });
-    client.start();
-    return () => {
-      client.stop();
+    let loaded = false;
+    const loadMembers = async () => {
+      const list = await apiGet(info.serverUrl, '/members', MemberList);
+      if (list) store.setMembers(list.members);
     };
-  }, [serverUrl, clientVersion]);
 
-  return status;
+    const gateway = new GatewayClient({
+      url: toWebSocketUrl(info.serverUrl),
+      clientVersion: info.appVersion,
+      createSocket: (url) => new WebSocket(url),
+      getAccessToken: async ({ refresh }) => {
+        const result = await window.hasbihal.auth.accessToken(refresh);
+        if (result.ok) return result.value;
+        // Ended: the main process tells the UI, which signs out. Anything else: retry later.
+        if (result.error.code === 'unauthorized') return null;
+        throw new Error(result.error.code);
+      },
+      onStatus: setStatus,
+      onWelcome: (welcome) => {
+        store.setMe(welcome.me);
+        store.setPresenceSnapshot(welcome.presence);
+        if (!loaded || welcome.resync) {
+          loaded = true;
+          void loadMembers();
+        }
+      },
+      onEvent: (event) => {
+        store.apply(event);
+      },
+      onPresence: (userId, presence) => {
+        store.setPresence(userId, presence);
+      },
+    });
+    client.current = gateway;
+    gateway.start();
+
+    void window.hasbihal.system.isIdle().then((idle) => {
+      gateway.setIdle(idle);
+    });
+    const stopIdle = window.hasbihal.system.onIdleChanged((idle) => {
+      gateway.setIdle(idle);
+    });
+
+    return () => {
+      stopIdle();
+      gateway.stop();
+      client.current = null;
+      store.reset();
+    };
+  }, [info.serverUrl, info.appVersion, store]);
+
+  const setPresence = useCallback((mode: PresenceMode) => {
+    client.current?.setPresence(mode);
+  }, []);
+
+  return { status, setPresence };
 }
