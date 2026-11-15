@@ -159,6 +159,108 @@ test.describe.serial('accounts in the desktop app', () => {
     }
   });
 
+  test('chats in a room: formatting, mentions, replies, reactions, edits, deletes', async () => {
+    const omer = await launch();
+    await expect(omer.getByTestId('current-user')).toHaveText('Ömer Test');
+    omer.on('dialog', (dialog) => void dialog.accept()); // "Bu mesaj silinsin mi?"
+
+    // A second computer: Kerem signs up from an invite link.
+    const otherData = await mkdtemp(path.join(tmpdir(), 'hasbihal-e2e-kerem-'));
+    try {
+      const kerem = await launch(otherData);
+      await openLink(await adminInviteUrl());
+      await kerem.getByLabel('Görünen ad').fill('Kerem Test');
+      await kerem.getByLabel('Kullanıcı adı').fill('kerem');
+      await kerem.getByLabel('Parola').fill('üçüncü uzun parola cümlesi');
+      await kerem.getByRole('button', { name: 'Hesabı oluştur' }).click();
+      await expect(kerem.getByTestId('current-user')).toHaveText('Kerem Test');
+
+      // Ömer (admin) opens the first room.
+      await omer.getByRole('button', { name: 'Oda ekle' }).click();
+      await omer.getByLabel('Oda adı').fill('Salon');
+      await omer.getByLabel('Oda adı').press('Enter');
+      await expect(omer.getByRole('heading', { name: 'Salon', level: 1 })).toBeVisible();
+      await expect(kerem.getByRole('heading', { name: 'Salon', level: 1 })).toBeVisible();
+
+      // Formatting shows while typing; @ker suggests Kerem by name.
+      const composer = omer.getByLabel('Mesaj', { exact: true });
+      await composer.pressSequentially('**Merhaba** @ker');
+      await expect(omer.getByRole('option', { name: /Kerem Test/ })).toBeVisible();
+      await composer.press('Enter');
+      await composer.pressSequentially('akşam _çay_ var mı?');
+      await expect(composer).toHaveValue('**Merhaba** @kerem akşam _çay_ var mı?');
+      await snap(omer, '7-composer-live-formatting');
+      await composer.press('Enter');
+      await expect(composer).toHaveValue('');
+
+      // Kerem sees it formatted, with his own name highlighted.
+      const firstMatch = kerem.getByTestId('message').filter({ hasText: 'Merhaba' });
+      await expect(firstMatch).toHaveCount(1);
+      // Pinned by id: later, Kerem's reply quotes "Merhaba" too.
+      const messageId = await firstMatch.getAttribute('data-message-id');
+      const fromOmer = kerem.locator(`[data-message-id="${messageId ?? ''}"]`);
+      const omersOwn = omer.locator(`[data-message-id="${messageId ?? ''}"]`);
+      await expect(fromOmer.locator('strong')).toHaveText('Merhaba');
+      await expect(fromOmer.locator('em')).toHaveText('çay');
+      await expect(fromOmer.locator('.mention[data-me]')).toHaveText('@Kerem Test');
+
+      // Kerem types: Ömer sees it. Then Kerem replies.
+      const keremComposer = kerem.getByLabel('Mesaj', { exact: true });
+      await keremComposer.pressSequentially('Var tabii');
+      await expect(omer.getByTestId('typing')).toHaveText('Kerem Test yazıyor…');
+      await keremComposer.fill('');
+      await fromOmer.hover();
+      await fromOmer.getByRole('button', { name: 'Yanıtla' }).click();
+      await expect(kerem.getByText('Yanıtlanan: Ömer Test')).toBeVisible();
+      await keremComposer.pressSequentially('Var tabii, geliyorum');
+      await keremComposer.press('Enter');
+      const reply = omer.getByTestId('message').filter({ hasText: 'geliyorum' });
+      await expect(reply.locator('.message__reply')).toContainText('Ömer Test');
+
+      // Kerem reacts; Ömer sees it live.
+      await fromOmer.hover();
+      await fromOmer.getByRole('button', { name: 'Tepki ver' }).click();
+      await kerem.getByRole('menuitem', { name: '🌷' }).click();
+      await expect(fromOmer.getByRole('button', { name: /🌷 1/ })).toBeVisible();
+      await expect(omersOwn.getByRole('button', { name: /🌷 1/ })).toBeVisible();
+
+      // Ömer edits his last message with ↑, then deletes it.
+      await composer.press('ArrowUp');
+      await expect(omer.getByText('Mesajı düzenliyorsun')).toBeVisible();
+      await composer.fill('**Merhaba** herkese');
+      await composer.press('Enter');
+      const edited = kerem.getByTestId('message').filter({ hasText: 'herkese' });
+      await expect(edited).toContainText('(düzenlendi)');
+      await snap(kerem, '8-room-conversation');
+      await omer.getByTestId('message').filter({ hasText: 'herkese' }).hover();
+      await omer
+        .getByTestId('message')
+        .filter({ hasText: 'herkese' })
+        .getByRole('button', { name: 'Sil' })
+        .click();
+      await expect(kerem.getByText('Bu mesaj silindi.').first()).toBeVisible();
+
+      // A message in another room shows up as an unread badge.
+      await omer.getByRole('button', { name: 'Oda ekle' }).click();
+      await omer.getByLabel('Oda adı').fill('Mutfak');
+      await omer.getByLabel('Oda adı').press('Enter');
+      await expect(omer.getByRole('heading', { name: 'Mutfak', level: 1 })).toBeVisible();
+      await composer.pressSequentially('@kerem yemek hazır!');
+      await composer.press('Enter');
+      const mutfak = kerem.getByTestId('room').filter({ hasText: 'Mutfak' });
+      await expect(mutfak.getByTestId('unread')).toHaveText('1');
+      await expect(mutfak.getByTestId('unread')).toHaveAttribute('data-mention', 'true');
+      await mutfak.click();
+      await expect(
+        kerem.getByTestId('room').filter({ hasText: 'Mutfak' }).getByTestId('unread'),
+      ).toHaveCount(0);
+
+      await apps.pop()?.close();
+    } finally {
+      await rm(otherData, { recursive: true, force: true });
+    }
+  });
+
   test('explains that a used invite no longer works', async () => {
     const page = await launch();
     await page.getByRole('button', { name: 'Çıkış yap' }).click();

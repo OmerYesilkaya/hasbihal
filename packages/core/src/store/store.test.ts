@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Message, User } from '@hasbihal/protocol';
-import { activeRooms, ChatStore, roomMessages, sortMembers } from './store.ts';
+import { activeRooms, ChatStore, roomMessages, sortMembers, typingIn } from './store.ts';
 
 const user = (id: string, displayName: string): User => ({
   id,
@@ -177,5 +177,35 @@ describe('ChatStore rooms and messages', () => {
       earlier.id,
       later.id,
     ]);
+  });
+});
+
+describe('ChatStore typing', () => {
+  const roomId = '0192f0c4-7b5e-7c8e-9a3b-0000000000b1';
+
+  it('shows typing for a while, and ends it when their message arrives', () => {
+    const store = new ChatStore();
+    store.setTyping(roomId, ayse.id, 1_000);
+    expect(typingIn(store.getSnapshot(), roomId, 2_000)).toEqual([ayse.id]);
+    expect(typingIn(store.getSnapshot(), roomId, 1_000 + 7_000)).toEqual([]);
+
+    store.setTyping(roomId, ayse.id);
+    store.apply({
+      type: 'message_created',
+      message: {
+        id: '0192f0c4-7b5e-7c8e-9a3b-0000000000c1',
+        roomId,
+        authorId: ayse.id,
+        body: 'tamam',
+        replyTo: null,
+        mentions: [],
+        mentionsEveryone: false,
+        reactions: [],
+        createdAt: '2026-11-15T10:00:00.000Z',
+        editedAt: null,
+        deletedAt: null,
+      },
+    });
+    expect(typingIn(store.getSnapshot(), roomId)).toEqual([]);
   });
 });

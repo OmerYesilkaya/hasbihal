@@ -20,3 +20,23 @@ export type Block =
   | { type: 'code_block'; language: string | null; text: string }
   | { type: 'quote'; children: Block[] }
   | { type: 'list'; ordered: boolean; start: number; items: Inline[][] };
+
+/** What a source range is, for the composer's live formatting. `marker` is syntax to dim. */
+export type DecorationKind =
+  | 'marker'
+  | 'bold'
+  | 'italic'
+  | 'strike'
+  | 'spoiler'
+  | 'code'
+  | 'code_block'
+  | 'link'
+  | 'mention'
+  | 'everyone';
+
+export interface Decoration {
+  kind: DecorationKind;
+  /** Source offsets, `to` exclusive. */
+  from: number;
+  to: number;
+}

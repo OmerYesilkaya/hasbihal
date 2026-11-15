@@ -1,9 +1,12 @@
-import { useState, useSyncExternalStore } from 'react';
-import { ChatStore } from '@hasbihal/core';
+import { useMemo, useState, useSyncExternalStore } from 'react';
+import { activeRooms, ChatStore } from '@hasbihal/core';
 import type { PresenceMode, PresenceStatus, User } from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
 import { AuthScreen } from './auth/AuthScreen.tsx';
 import { useDeepLink, useSession } from './auth/useSession.ts';
+import { ChatProvider, type Chat } from './chat/context.tsx';
+import { RoomList } from './chat/RoomList.tsx';
+import { RoomView } from './chat/RoomView.tsx';
 import { Avatar } from './components/Avatar.tsx';
 import { ConnectionBadge } from './components/ConnectionBadge.tsx';
 import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
@@ -76,10 +79,15 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const t = useT();
   // One store per signed-in session: signing out unmounts the shell and drops it.
   const [store] = useState(() => new ChatStore());
-  const { status, setPresence } = useGateway(info, store);
+  const { status, setPresence, typing } = useGateway(info, store);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const chat = useMemo((): Chat => ({ info, store, typing }), [info, store, typing]);
   // The gateway's copy of me is the freshest; the sign-in answer covers the moment before it.
   const me = state.me ?? user;
+  // The chosen room, or the first one; a deleted or archived choice falls back the same way.
+  const [chosenRoom, setChosenRoom] = useState<string | null>(null);
+  const rooms = activeRooms(state);
+  const roomId = rooms.some((r) => r.id === chosenRoom) ? chosenRoom : (rooms[0]?.id ?? null);
 
   if (status.kind === 'upgrade_required') {
     return (
@@ -91,47 +99,53 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   }
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <Tulip />
-          <div>
-            <div className="brand__name">{t('app.name')}</div>
-            <div className="brand__tagline">{t('app.tagline')}</div>
+    <ChatProvider chat={chat}>
+      <div className="shell">
+        <aside className="sidebar">
+          <div className="brand">
+            <Tulip />
+            <div>
+              <div className="brand__name">{t('app.name')}</div>
+              <div className="brand__tagline">{t('app.tagline')}</div>
+            </div>
           </div>
-        </div>
-        <hr className="divider" />
-        <h2 className="section-label">{t('rooms.heading')}</h2>
-        <div className="sidebar__spacer" />
-        <UserPanel
-          user={me}
-          presence={state.presence.get(me.id) ?? 'offline'}
-          onSetPresence={setPresence}
-          onSignOut={onSignOut}
-        />
-      </aside>
+          <hr className="divider" />
+          <RoomList selectedId={roomId} onSelect={setChosenRoom} />
+          <UserPanel
+            user={me}
+            presence={state.presence.get(me.id) ?? 'offline'}
+            onSetPresence={setPresence}
+            onSignOut={onSignOut}
+          />
+        </aside>
 
-      <main className="content">
-        <header className="content__header">
-          <span className="content__spacer" />
-          <ConnectionBadge status={status} />
-        </header>
-        {linkWhileSignedIn && (
-          <div className="banner" role="status">
-            <span>{t('auth.linkWhileSignedIn')}</span>
-            <button type="button" className="link" onClick={onDismissLink} aria-label="×">
-              ×
-            </button>
+        <main className="content">
+          <div className="content__status">
+            <ConnectionBadge status={status} />
           </div>
-        )}
-        <p className="content__placeholder">{t('placeholder.welcome')}</p>
-      </main>
+          {linkWhileSignedIn && (
+            <div className="banner" role="status">
+              <span>{t('auth.linkWhileSignedIn')}</span>
+              <button type="button" className="link" onClick={onDismissLink} aria-label="×">
+                ×
+              </button>
+            </div>
+          )}
+          {roomId ? (
+            <RoomView key={roomId} roomId={roomId} />
+          ) : (
+            <p className="content__placeholder">
+              {t(me.role === 'admin' ? 'rooms.noneAdmin' : 'rooms.none')}
+            </p>
+          )}
+        </main>
 
-      <aside className="members" aria-label={t('members.heading')}>
-        <header className="members__header">{t('members.heading')}</header>
-        <MemberList store={store} />
-      </aside>
-    </div>
+        <aside className="members" aria-label={t('members.heading')}>
+          <header className="members__header">{t('members.heading')}</header>
+          <MemberList store={store} />
+        </aside>
+      </div>
+    </ChatProvider>
   );
 }
 

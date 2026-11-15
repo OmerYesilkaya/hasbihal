@@ -1,10 +1,11 @@
-import type {
-  DurableEvent,
-  Message,
-  PresenceStatus,
-  Room,
-  RoomWithState,
-  User,
+import {
+  TYPING_TTL_MS,
+  type DurableEvent,
+  type Message,
+  type PresenceStatus,
+  type Room,
+  type RoomWithState,
+  type User,
 } from '@hasbihal/protocol';
 
 /** A room as this member sees it: unread state kept up to date by events (A28 badges). */
@@ -20,6 +21,8 @@ export interface ChatState {
   rooms: ReadonlyMap<string, RoomEntry>;
   /** Loaded messages per room, by id. Use `roomMessages` for display order. */
   messages: ReadonlyMap<string, ReadonlyMap<string, Message>>;
+  /** Per room: who is typing, until when (ms since epoch). See `typingIn`. */
+  typing: ReadonlyMap<string, ReadonlyMap<string, number>>;
 }
 
 const EMPTY: ChatState = {
@@ -28,6 +31,7 @@ const EMPTY: ChatState = {
   presence: new Map(),
   rooms: new Map(),
   messages: new Map(),
+  typing: new Map(),
 };
 
 /** Server order: creation time, then id (ARCHITECTURE §3.3). */
@@ -101,6 +105,11 @@ export class ChatStore {
     this.#update({ rooms: new Map(rooms.map((r) => [r.id, r])) });
   }
 
+  /** After a resync: loaded history may have gaps, so drop it; open rooms load again. */
+  forgetMessages(): void {
+    this.#update({ messages: new Map() });
+  }
+
   /** A page of history from `GET /rooms/:id/messages`. Doesn't touch unread counts. */
   addMessages(roomId: string, messages: readonly Message[]): void {
     const map = new Map(this.#state.messages.get(roomId));
@@ -137,6 +146,22 @@ export class ChatStore {
     });
   }
 
+  /** Someone is typing; shown for `TYPING_TTL_MS` unless repeated. */
+  setTyping(roomId: string, userId: string, now = Date.now()): void {
+    const room = new Map(this.#state.typing.get(roomId));
+    room.set(userId, now + TYPING_TTL_MS);
+    this.#update({ typing: new Map(this.#state.typing).set(roomId, room) });
+  }
+
+  /** A message from someone ends their typing indicator at once. */
+  #stopTyping(roomId: string, userId: string): void {
+    const room = this.#state.typing.get(roomId);
+    if (!room?.has(userId)) return;
+    const next = new Map(room);
+    next.delete(userId);
+    this.#update({ typing: new Map(this.#state.typing).set(roomId, next) });
+  }
+
   /** Applies a durable event. Idempotent: replaying one around a reconnect changes nothing. */
   apply(event: DurableEvent): void {
     // Typed per event: a new event type doesn't compile until it has a handler below.
@@ -169,6 +194,7 @@ export class ChatStore {
     },
     message_created: (event) => {
       const { message } = event;
+      this.#stopTyping(message.roomId, message.authorId);
       const known = this.#state.messages.get(message.roomId)?.has(message.id) ?? false;
       this.addMessages(message.roomId, [message]);
       const room = this.#state.rooms.get(message.roomId);
@@ -256,6 +282,13 @@ export function activeRooms(state: ChatState): RoomEntry[] {
   return [...state.rooms.values()]
     .filter((r) => !r.archivedAt)
     .sort((a, b) => a.position - b.position);
+}
+
+/** Who is typing in a room right now, excluding expired entries. */
+export function typingIn(state: ChatState, roomId: string, now = Date.now()): string[] {
+  return [...(state.typing.get(roomId) ?? [])]
+    .filter(([, until]) => until > now)
+    .map(([userId]) => userId);
 }
 
 /** A room's loaded messages in display order. */

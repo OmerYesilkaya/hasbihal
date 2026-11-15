@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Block, Inline } from './ast.ts';
-import { parseMarkdown, toPlainText } from './parse.ts';
+import { decorate, parseMarkdown, toPlainText } from './parse.ts';
 
 const text = (t: string): Inline => ({ type: 'text', text: t });
 const p = (...children: Inline[]): Block => ({ type: 'paragraph', children });
@@ -203,6 +203,7 @@ describe('robustness', () => {
     ]) {
       const start = performance.now();
       parseMarkdown(nasty);
+      decorate(nasty); // the composer runs this on every keystroke
       expect(performance.now() - start, nasty.slice(0, 6)).toBeLessThan(200);
     }
   });

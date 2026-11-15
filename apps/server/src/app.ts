@@ -39,7 +39,12 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
   });
 
   registerErrorHandling(app);
-  await app.register(cors, { origin: config.allowedOrigins });
+  await app.register(cors, {
+    origin: config.allowedOrigins,
+    // @fastify/cors allows only GET, HEAD, and POST by default; editing, deleting, and reacting
+    // from the app need the rest (browsers preflight them).
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  });
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
   app.get('/health', async (_request, reply): Promise<HealthResponse> => {

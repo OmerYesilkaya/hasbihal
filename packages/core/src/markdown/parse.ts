@@ -1,4 +1,4 @@
-import type { Block, Inline } from './ast.ts';
+import type { Block, Decoration, DecorationKind, Inline } from './ast.ts';
 
 /**
  * The Markdown subset of DECISIONS A47 and A48, with chat semantics: every newline is a line
@@ -7,80 +7,146 @@ import type { Block, Inline } from './ast.ts';
  * is capped, so a hostile 4000-character message can't stall or crash the client.
  */
 export function parseMarkdown(source: string): Block[] {
-  return parseBlocks(source.replace(/\r\n?/g, '\n').split('\n'), 0);
+  return parseBlocks(toLines(source), 0, null);
+}
+
+/**
+ * The same parse, as source ranges to style, for the composer's live formatting (A47): it shows
+ * exactly what the message will look like, markers included. Ranges are offsets into `source`
+ * (with any `\r\n` counted as `\n`), sorted by start; they nest but never cross.
+ */
+export function decorate(source: string): Decoration[] {
+  const sink: Decoration[] = [];
+  parseBlocks(toLines(source), 0, sink);
+  return sink.sort((a, b) => a.from - b.from || b.to - a.to);
 }
 
 /** Deeper quotes or emphasis are kept as text. */
 const MAX_DEPTH = 8;
+
+/** A line of content, with the source offset of its first character. */
+interface Line {
+  text: string;
+  at: number;
+}
+
+function toLines(source: string): Line[] {
+  const lines: Line[] = [];
+  let at = 0;
+  for (const text of source.replace(/\r\n?/g, '\n').split('\n')) {
+    lines.push({ text, at });
+    at += text.length + 1;
+  }
+  return lines;
+}
+
+const mark = (sink: Decoration[] | null, kind: DecorationKind, from: number, to: number) => {
+  if (sink && to > from) sink.push({ kind, from, to });
+};
 
 // ---- blocks ----------------------------------------------------------------------------------
 
 const FENCE_OPEN = /^```\s*([\w+#.-]*)\s*$/;
 const FENCE_CLOSE = /^```\s*$/;
 const QUOTE = /^>[ \t]?/;
-const BULLET = /^[-*][ \t]+(\S.*)$/;
-const NUMBERED = /^(\d{1,9})[.)][ \t]+(\S.*)$/;
+const BULLET = /^([-*][ \t]+)(\S.*)$/;
+const NUMBERED = /^((\d{1,9})[.)][ \t]+)(\S.*)$/;
 
-function parseBlocks(lines: string[], depth: number): Block[] {
+function parseBlocks(lines: Line[], depth: number, sink: Decoration[] | null): Block[] {
   const blocks: Block[] = [];
-  let paragraph: string[] = [];
+  let paragraph: Line[] = [];
   const flush = () => {
     if (paragraph.length)
-      blocks.push({ type: 'paragraph', children: parseInline(paragraph.join('\n'), depth) });
+      blocks.push({ type: 'paragraph', children: parseText(paragraph, depth, sink) });
     paragraph = [];
   };
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? '';
+    const line = lines[i] ?? { text: '', at: 0 };
 
-    const fence = FENCE_OPEN.exec(line);
+    const fence = FENCE_OPEN.exec(line.text);
     if (fence) {
       flush();
-      const body: string[] = [];
-      for (i++; i < lines.length && !FENCE_CLOSE.test(lines[i] ?? ''); i++)
-        body.push(lines[i] ?? '');
+      mark(sink, 'marker', line.at, line.at + line.text.length);
+      const body: Line[] = [];
+      for (i++; i < lines.length && !FENCE_CLOSE.test(lines[i]?.text ?? ''); i++) {
+        const bodyLine = lines[i];
+        if (bodyLine) body.push(bodyLine);
+      }
+      const closing = lines[i];
+      const first = body[0];
+      const last = body.at(-1);
+      if (first && last) mark(sink, 'code_block', first.at, last.at + last.text.length);
+      if (closing) mark(sink, 'marker', closing.at, closing.at + closing.text.length);
       blocks.push({
         type: 'code_block',
         language: fence[1] ? fence[1].toLowerCase() : null,
-        text: body.join('\n'),
+        text: body.map((l) => l.text).join('\n'),
       });
       continue;
     }
 
-    if (QUOTE.test(line) && depth < MAX_DEPTH) {
+    if (QUOTE.test(line.text) && depth < MAX_DEPTH) {
       flush();
-      const quoted: string[] = [];
-      for (; i < lines.length && QUOTE.test(lines[i] ?? ''); i++)
-        quoted.push((lines[i] ?? '').replace(QUOTE, ''));
+      const quoted: Line[] = [];
+      for (; i < lines.length; i++) {
+        const l = lines[i];
+        const prefix = l ? QUOTE.exec(l.text)?.[0] : undefined;
+        if (!l || prefix === undefined) break;
+        mark(sink, 'marker', l.at, l.at + prefix.length);
+        quoted.push({ text: l.text.slice(prefix.length), at: l.at + prefix.length });
+      }
       i--;
-      blocks.push({ type: 'quote', children: parseBlocks(quoted, depth + 1) });
+      blocks.push({ type: 'quote', children: parseBlocks(quoted, depth + 1, sink) });
       continue;
     }
 
-    const numbered = NUMBERED.exec(line);
-    if (BULLET.test(line) || numbered) {
+    const numbered = NUMBERED.exec(line.text);
+    if (BULLET.test(line.text) || numbered) {
       flush();
       const ordered = numbered !== null;
       const pattern = ordered ? NUMBERED : BULLET;
       const items: Inline[][] = [];
       for (; i < lines.length; i++) {
-        const item = pattern.exec(lines[i] ?? '');
-        if (!item) break;
-        items.push(parseInline((ordered ? item[2] : item[1]) ?? '', depth));
+        const l = lines[i];
+        const item = l ? pattern.exec(l.text) : null;
+        if (!l || !item) break;
+        const prefix = item[1] ?? '';
+        const content = item[ordered ? 3 : 2] ?? '';
+        mark(sink, 'marker', l.at, l.at + prefix.length);
+        items.push(parseText([{ text: content, at: l.at + prefix.length }], depth, sink));
       }
       i--;
-      blocks.push({ type: 'list', ordered, start: ordered ? Number(numbered[1]) : 1, items });
+      blocks.push({ type: 'list', ordered, start: ordered ? Number(numbered[2]) : 1, items });
       continue;
     }
 
-    if (line.trim() === '') flush();
+    if (line.text.trim() === '') flush();
     else paragraph.push(line);
   }
   flush();
   return blocks;
 }
 
+/** Inline content spread over lines, which may not be contiguous in the source (quotes, lists). */
+function parseText(lines: Line[], depth: number, sink: Decoration[] | null): Inline[] {
+  const text = lines.map((l) => l.text).join('\n');
+  if (!sink) return parseInline(text, depth, null);
+  // Where each character of `text` sits in the source; the joining newline sits after its line.
+  const offsets: number[] = [];
+  for (const l of lines) {
+    for (let k = 0; k <= l.text.length; k++) offsets.push(l.at + k);
+  }
+  return parseInline(text, depth, { sink, offsets });
+}
+
 // ---- inline ----------------------------------------------------------------------------------
+
+/** Present only when decorating: where each character of the string sits in the source. */
+interface Positions {
+  sink: Decoration[];
+  offsets: number[];
+}
 
 const ESCAPABLE = new Set('\\`*_~|>#@[]()-.!');
 const WORD = /[\p{L}\p{N}]/u;
@@ -107,11 +173,14 @@ function runLength(s: string, i: number, char: string): number {
 }
 
 /**
- * The position of the delimiter closing `marker` opened just before `from`, or -1. Code spans and
- * escapes are skipped over, and a single `*` doesn't close on half of a `**`.
+ * Every position in `s` where `marker` could close an emphasis, in order. Code spans and escapes
+ * are paired left to right, exactly as the main loop pairs them, and a single `*` never closes on
+ * half of a `**`. Computed once per run of inline text, so each opener finds its closer by binary
+ * search: linear-ish even for thousands of unclosed openers.
  */
-function findClose(s: string, from: number, marker: string): number {
-  for (let i = from; i < s.length; i++) {
+function closingPositions(s: string, marker: string): number[] {
+  const found: number[] = [];
+  for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (c === '\\') {
       i++;
@@ -129,9 +198,21 @@ function findClose(s: string, from: number, marker: string): number {
       continue;
     }
     if (marker === '_' && isWord(s[i + 1])) continue; // intraword underscore
-    return i;
+    found.push(i);
   }
-  return -1;
+  return found;
+}
+
+/** The first of the sorted `positions` at or after `from`, or -1. */
+function firstFrom(positions: number[], from: number): number {
+  let lo = 0;
+  let hi = positions.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if ((positions[mid] ?? Infinity) < from) lo = mid + 1;
+    else hi = mid;
+  }
+  return positions[lo] ?? -1;
 }
 
 /** Start of the next run of exactly `n` backticks at or after `from`, or -1. */
@@ -159,12 +240,29 @@ function readUrl(s: string, i: number): string | undefined {
   return url;
 }
 
-function parseInline(s: string, depth: number): Inline[] {
+function parseInline(s: string, depth: number, positions: Positions | null): Inline[] {
   const out: Inline[] = [];
   let text = '';
   const flush = () => {
     if (text) out.push({ type: 'text', text });
     text = '';
+  };
+  /** Records the source range of s[from, to) when decorating. */
+  const at = (kind: DecorationKind, from: number, to: number) => {
+    if (!positions || to <= from) return;
+    const start = positions.offsets[from];
+    const end = positions.offsets[to - 1];
+    if (start !== undefined && end !== undefined) mark(positions.sink, kind, start, end + 1);
+  };
+
+  const closers = new Map<string, number[]>();
+  const findClose = (from: number, marker: string) => {
+    let positions = closers.get(marker);
+    if (!positions) {
+      positions = closingPositions(s, marker);
+      closers.set(marker, positions);
+    }
+    return firstFrom(positions, from);
   };
 
   let i = 0;
@@ -173,6 +271,7 @@ function parseInline(s: string, depth: number): Inline[] {
 
     const next = s[i + 1];
     if (c === '\\' && next !== undefined && ESCAPABLE.has(next)) {
+      at('marker', i, i + 1);
       text += next;
       i += 2;
       continue;
@@ -195,6 +294,9 @@ function parseInline(s: string, depth: number): Inline[] {
       }
       let code = s.slice(i + n, end);
       if (code.length > 2 && code.startsWith(' ') && code.endsWith(' ')) code = code.slice(1, -1);
+      at('code', i, end + n);
+      at('marker', i, i + n);
+      at('marker', end, end + n);
       flush();
       out.push({ type: 'code', text: code });
       i = end + n;
@@ -207,10 +309,21 @@ function parseInline(s: string, depth: number): Inline[] {
         if (marker === '_' && isWord(s[i - 1])) continue;
         // `**`/`*` runs longer than the marker are literal, e.g. "****" or "2 ** 8".
         if (marker === '*' && s[i + 1] === '*') continue;
-        const close = findClose(s, i + marker.length + 1, marker);
+        const close = findClose(i + marker.length + 1, marker);
         if (close === -1) continue;
+        const innerFrom = i + marker.length;
+        at(type, i, close + marker.length);
+        at('marker', i, innerFrom);
         flush();
-        out.push({ type, children: parseInline(s.slice(i + marker.length, close), depth + 1) });
+        const innerPositions = positions && {
+          sink: positions.sink,
+          offsets: positions.offsets.slice(innerFrom, close),
+        };
+        out.push({
+          type,
+          children: parseInline(s.slice(innerFrom, close), depth + 1, innerPositions),
+        });
+        at('marker', close, close + marker.length);
         i = close + marker.length;
         continue outer;
       }
@@ -219,6 +332,7 @@ function parseInline(s: string, depth: number): Inline[] {
     if (c === 'h' && !isWord(s[i - 1])) {
       const url = readUrl(s, i);
       if (url) {
+        at('link', i, i + url.length);
         flush();
         out.push({ type: 'link', url });
         i += url.length;
@@ -230,8 +344,10 @@ function parseInline(s: string, depth: number): Inline[] {
       MENTION_START.lastIndex = i;
       const name = MENTION_START.exec(s)?.[1]?.toLowerCase().replace(/\.+$/, '');
       if (name && name.length >= 3) {
+        const everyone = name === 'everyone';
+        at(everyone ? 'everyone' : 'mention', i, i + 1 + name.length);
         flush();
-        out.push(name === 'everyone' ? { type: 'everyone' } : { type: 'mention', username: name });
+        out.push(everyone ? { type: 'everyone' } : { type: 'mention', username: name });
         i += 1 + name.length;
         continue;
       }
