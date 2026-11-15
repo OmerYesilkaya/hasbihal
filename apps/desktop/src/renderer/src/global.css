@@ -318,10 +318,6 @@ body {
 
 /* ---- Signed-in shell additions ---- */
 
-.sidebar__spacer {
-  flex: 1;
-}
-
 .user-panel {
   display: flex;
   align-items: center;
@@ -451,4 +447,704 @@ body {
   border: none;
   background: none;
   cursor: pointer;
+}
+
+/* ---- Chat layout ---- */
+
+.content {
+  position: relative;
+}
+
+/* The connection state sits in the top-right corner, over the room header. */
+.content__status {
+  position: absolute;
+  top: 18px;
+  right: 16px;
+  z-index: 1;
+}
+
+.icon-button {
+  font: inherit;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--hb-text-secondary);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: var(--hb-selected);
+  color: var(--hb-text);
+}
+
+/* ---- Room list ---- */
+
+.room-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.room-list__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 14px;
+}
+
+.room-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 10px;
+}
+
+.room-list__create {
+  padding: 4px 10px 8px;
+}
+
+.room-list__create .field__input {
+  width: 100%;
+}
+
+.room-list__empty {
+  margin: 4px 20px;
+  font-size: 13px;
+  color: var(--hb-text-muted);
+}
+
+.room {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--hb-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.room:hover {
+  background: var(--hb-selected);
+  color: var(--hb-text);
+}
+
+.room[aria-current='page'] {
+  background: var(--hb-selected);
+  color: var(--hb-text);
+  font-weight: 600;
+}
+
+.room[data-unread] {
+  color: var(--hb-text);
+  font-weight: 600;
+}
+
+.room__hash {
+  color: var(--hb-text-muted);
+  font-weight: 400;
+}
+
+.room__name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  background: var(--hb-chip);
+  color: var(--hb-text-secondary);
+}
+
+.badge[data-mention] {
+  background: var(--hb-primary);
+  color: var(--hb-on-primary);
+}
+
+/* ---- Room view ---- */
+
+.room-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.room-view__header {
+  gap: 12px;
+  padding-right: 140px; /* room for the connection state */
+}
+
+.room-view__name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.room-view__name span {
+  color: var(--hb-text-muted);
+}
+
+.room-view__topic {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--hb-border);
+  font-size: 13px;
+  color: var(--hb-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-view__archived {
+  margin: 12px 20px 18px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--hb-chip);
+  color: var(--hb-text-secondary);
+  text-align: center;
+}
+
+.message-list {
+  flex: 1;
+  min-height: 0;
+}
+
+.message-list--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hb-text-muted);
+}
+
+.day-divider,
+.unread-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 20px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hb-text-muted);
+}
+
+.day-divider::before,
+.day-divider::after,
+.unread-divider::before,
+.unread-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hb-border);
+}
+
+.unread-divider {
+  color: var(--hb-primary);
+}
+
+.unread-divider::before,
+.unread-divider::after {
+  background: var(--hb-primary);
+}
+
+/* ---- Messages ---- */
+
+.message {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 2px 20px;
+  user-select: text;
+}
+
+.message[data-group-start] {
+  margin-top: 10px;
+  padding-top: 4px;
+}
+
+.message:hover {
+  background: var(--hb-selected);
+}
+
+.message__gutter {
+  width: 34px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.message__hover-time {
+  visibility: hidden;
+  font-size: 10px;
+  line-height: 22px;
+  color: var(--hb-text-muted);
+}
+
+.message:hover .message__hover-time {
+  visibility: visible;
+}
+
+.message__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.message__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.message__author {
+  font-weight: 600;
+}
+
+.message__time {
+  font-size: 11px;
+  color: var(--hb-text-muted);
+}
+
+.message__reply {
+  margin: 2px 0 2px;
+  font-size: 12px;
+  color: var(--hb-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message__reply-author {
+  font-weight: 600;
+  color: var(--hb-text-secondary);
+}
+
+.message__body {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* "(düzenlendi)" follows the last paragraph on its line, as in other chat apps. */
+.message__body > .md,
+.message__body > .md > .md-p:last-child {
+  display: inline;
+}
+
+.message__edited {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--hb-text-muted);
+}
+
+.message__deleted {
+  margin: 0;
+  font-style: italic;
+  color: var(--hb-text-muted);
+}
+
+.message__toolbar {
+  position: absolute;
+  top: -14px;
+  right: 20px;
+  display: none;
+  padding: 2px;
+  border: 1px solid var(--hb-border);
+  border-radius: 8px;
+  background: var(--hb-bg);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+}
+
+.message:hover .message__toolbar,
+.message:focus-within .message__toolbar {
+  display: flex;
+}
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.reaction {
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 8px;
+  border: 1px solid var(--hb-border);
+  border-radius: 12px;
+  background: var(--hb-chip);
+  color: var(--hb-text-secondary);
+  cursor: pointer;
+}
+
+.reaction[data-mine] {
+  border-color: var(--hb-accent);
+  background: var(--hb-mention);
+  color: var(--hb-text);
+}
+
+.reaction-picker {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(8, 32px);
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+}
+
+.reaction-picker__emoji {
+  font-size: 18px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.reaction-picker__emoji:hover {
+  background: var(--hb-selected);
+}
+
+/* ---- Rendered Markdown (A47, A48) ---- */
+
+.md-p {
+  margin: 0;
+}
+
+.md-p + .md-p,
+.md > * + * {
+  margin-top: 6px;
+}
+
+.md-code,
+.md-codeblock pre {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.md-code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--hb-chip);
+}
+
+.md-codeblock {
+  max-width: 760px;
+  border: 1px solid var(--hb-border);
+  border-radius: 8px;
+  background: var(--hb-chip);
+  overflow: hidden;
+}
+
+.md-codeblock__bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--hb-text-muted);
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.md-codeblock pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.md-quote {
+  margin: 0;
+  padding: 2px 0 2px 10px;
+  border-left: 3px solid var(--hb-accent);
+  color: var(--hb-text-secondary);
+}
+
+.md-list {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.md-link {
+  color: var(--hb-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mention {
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--hb-chip);
+  color: var(--hb-text);
+  font-weight: 500;
+}
+
+.mention[data-me] {
+  background: var(--hb-mention);
+  color: var(--hb-accent-text);
+}
+
+.spoiler {
+  border-radius: 4px;
+  background: var(--hb-text-muted);
+  color: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.spoiler * {
+  visibility: hidden;
+}
+
+.spoiler--shown {
+  background: var(--hb-chip);
+  color: inherit;
+  cursor: auto;
+  user-select: text;
+}
+
+.spoiler--shown * {
+  visibility: visible;
+}
+
+/* Code highlighting in Saray colors, light and dark via the theme variables. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: var(--hb-primary);
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-symbol {
+  color: var(--hb-secondary);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-title {
+  color: var(--hb-accent-text);
+}
+
+.hljs-comment {
+  color: var(--hb-text-muted);
+  font-style: italic;
+}
+
+/* ---- Typing indicator ---- */
+
+.typing {
+  height: 18px;
+  padding: 0 20px;
+  font-size: 12px;
+  color: var(--hb-text-muted);
+}
+
+/* ---- Composer: a textarea over a mirror that shows the formatting (A47) ---- */
+
+.composer {
+  margin: 0 20px 16px;
+}
+
+.composer__banner {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border: 1px solid var(--hb-border);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: var(--hb-chip);
+  font-size: 12px;
+  color: var(--hb-text-secondary);
+}
+
+.composer__error {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--hb-primary);
+}
+
+.composer__field {
+  position: relative;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-input);
+}
+
+.composer__banner + .composer__error + .composer__field,
+.composer__banner + .composer__field {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.composer__field:focus-within {
+  border-color: var(--hb-accent);
+}
+
+/*
+ * The mirror and the textarea must lay out text identically, character for character: same
+ * font, size, line height, padding, wrapping, and no scrollbar on either. Decoration styles below
+ * keep glyph widths (no weight or font changes), so the caret always sits on the right letter.
+ */
+.composer__mirror,
+.composer__input {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 10px 14px;
+  border: none;
+  font:
+    400 14px / 20px Inter,
+    system-ui,
+    sans-serif;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 4;
+  scrollbar-width: none;
+}
+
+.composer__mirror::-webkit-scrollbar,
+.composer__input::-webkit-scrollbar {
+  display: none;
+}
+
+.composer__mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--hb-text);
+  pointer-events: none;
+}
+
+.composer__input {
+  position: relative;
+  display: block;
+  min-height: 40px;
+  resize: none;
+  overflow-y: auto;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--hb-text);
+  outline: none;
+  user-select: text;
+}
+
+.composer__input::placeholder {
+  color: var(--hb-text-muted);
+}
+
+.composer__input::selection {
+  background: rgb(181 140 60 / 0.35);
+}
+
+.dk-marker {
+  color: var(--hb-text-muted);
+}
+
+/* Bold by stroking, not by weight: a heavier weight would widen the text and misplace the caret. */
+.dk-bold {
+  -webkit-text-stroke: 0.035em currentColor;
+}
+
+/* Inter's italic face isn't loaded, so this is a synthetic slant with unchanged widths. */
+.dk-italic {
+  font-style: italic;
+}
+
+.dk-strike {
+  text-decoration: line-through;
+}
+
+.dk-code,
+.dk-code_block {
+  border-radius: 3px;
+  background: var(--hb-chip);
+}
+
+.dk-spoiler {
+  border-radius: 3px;
+  background: var(--hb-selected);
+}
+
+.dk-link {
+  color: var(--hb-secondary);
+  text-decoration: underline;
+}
+
+.dk-mention,
+.dk-everyone {
+  border-radius: 3px;
+  background: var(--hb-mention);
+  color: var(--hb-accent-text);
+}
+
+.composer__count {
+  margin: 4px 2px 0;
+  font-size: 11px;
+  text-align: right;
+  color: var(--hb-text-muted);
+}
+
+.composer__count[data-over] {
+  color: var(--hb-primary);
+}
+
+.suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 3;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+}
+
+.suggestions button {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--hb-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggestions button span {
+  color: var(--hb-text-muted);
+}
+
+.suggestions [aria-selected='true'] button {
+  background: var(--hb-selected);
 }

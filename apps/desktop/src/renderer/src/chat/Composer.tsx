@@ -49,6 +49,8 @@ export function Composer({
   const lastTyping = useRef(0);
   /** A failed send keeps its id, so trying again can't create a duplicate (ARCHITECTURE §3.4). */
   const pending = useRef<{ id: string; body: string } | null>(null);
+  /** Where the caret goes once a programmatic text change has rendered. */
+  const caretAfterRender = useRef<number | null>(null);
   const [text, setText] = useState('');
   const [caret, setCaret] = useState(0);
   const [error, setError] = useState<MessageKey | null>(null);
@@ -66,6 +68,12 @@ export function Composer({
   useLayoutEffect(() => {
     const el = input.current;
     if (!el) return;
+    // Place the caret in the same commit as the new text, before the next keystroke is handled
+    // (a later frame would move it after letters typed in between).
+    if (caretAfterRender.current !== null) {
+      el.setSelectionRange(caretAfterRender.current, caretAfterRender.current);
+      caretAfterRender.current = null;
+    }
     el.style.height = 'auto';
     el.style.height = `${String(Math.min(el.scrollHeight, MAX_HEIGHT_PX))}px`;
   }, [text]);
@@ -97,12 +105,10 @@ export function Composer({
     const start = caret - query.length - 1;
     const next = `${text.slice(0, start)}@${name} ${text.slice(caret)}`;
     const position = start + name.length + 2;
+    caretAfterRender.current = position;
     setText(next);
     setCaret(position);
     setSelected(0);
-    requestAnimationFrame(() => {
-      input.current?.setSelectionRange(position, position);
-    });
   };
 
   // ---- sending ---------------------------------------------------------------------------

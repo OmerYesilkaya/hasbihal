@@ -94,6 +94,23 @@ describe('GET /health', () => {
 });
 
 // Authenticated behaviour (welcome, events, presence) is in gateway/gateway.test.ts.
+describe('CORS', () => {
+  it('lets the app use every method the API has', async () => {
+    for (const method of ['PUT', 'PATCH', 'DELETE']) {
+      const res = await app.inject({
+        method: 'OPTIONS',
+        url: '/messages/x',
+        headers: {
+          origin: 'app://hasbihal',
+          'access-control-request-method': method,
+          'access-control-request-headers': 'authorization,content-type',
+        },
+      });
+      expect(String(res.headers['access-control-allow-methods']), method).toContain(method);
+    }
+  });
+});
+
 describe('WebSocket gateway handshake', () => {
   const hello = (protocolVersion: number) =>
     JSON.stringify({ type: 'hello', protocolVersion, clientVersion: '0.1.0', accessToken: 'x' });

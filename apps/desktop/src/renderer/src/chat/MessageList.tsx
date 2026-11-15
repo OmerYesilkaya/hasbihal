@@ -94,6 +94,8 @@ export function MessageList({
       data={items}
       firstItemIndex={firstItemIndex}
       initialTopMostItemIndex={items.length - 1}
+      // A short conversation sits just above the composer, as in other chat apps.
+      alignToBottom
       computeItemKey={(_, item) => item.key}
       followOutput={(atBottom) => (atBottom ? 'auto' : false)}
       atBottomThreshold={48}

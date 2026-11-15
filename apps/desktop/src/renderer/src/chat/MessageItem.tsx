@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { parseMarkdown, toPlainText } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
@@ -103,7 +104,11 @@ export const MessageItem = memo(function MessageItem({
             <span className="message__reply-author">
               ↪ {replyAuthor?.displayName ?? t('message.unknownAuthor')}
             </span>{' '}
-            {message.replyTo.deleted ? <em>{t('message.deleted')}</em> : message.replyTo.excerpt}
+            {message.replyTo.deleted ? (
+              <em>{t('message.deleted')}</em>
+            ) : (
+              toPlainText(parseMarkdown(message.replyTo.excerpt))
+            )}
           </div>
         )}
         {deleted ? (
