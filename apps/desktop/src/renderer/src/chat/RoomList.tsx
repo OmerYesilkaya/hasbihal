@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { activeRooms } from '@hasbihal/core';
 import { Room } from '@hasbihal/protocol';
 import { api } from '../api.ts';
+import { Avatar } from '../components/Avatar.tsx';
 import { useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 
@@ -107,6 +108,25 @@ export function RoomList({
                   </span>
                 )}
               </button>
+              {(state.hangouts.get(room.id)?.length ?? 0) > 0 && (
+                <ul
+                  className="room__voice"
+                  aria-label={t('hangout.inRoom', {
+                    count: state.hangouts.get(room.id)?.length ?? 0,
+                  })}
+                >
+                  {state.hangouts.get(room.id)?.map((p) => {
+                    const member = state.members.get(p.userId);
+                    return member ? (
+                      <li key={p.userId}>
+                        <Avatar user={member} />
+                        <span>{member.displayName}</span>
+                        {p.screenShare && <span className="live-badge">CANLI</span>}
+                      </li>
+                    ) : null;
+                  })}
+                </ul>
+              )}
             </li>
           );
         })}

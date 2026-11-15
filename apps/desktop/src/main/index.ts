@@ -8,6 +8,7 @@ import { registerAppSchemePrivileges, serveRendererFromAppScheme } from './app-p
 import { AuthSession } from './auth-session.ts';
 import { DeepLinkRouter } from './deep-links.ts';
 import { IdleWatcher } from './idle.ts';
+import { HangoutShortcuts } from './shortcuts.ts';
 import { APP_ORIGIN, applyAppWideSecurity, contentSecurityPolicy } from './security.ts';
 import { SafeStorageTokenStore } from './token-store.ts';
 
@@ -22,6 +23,8 @@ const serverUrl =
   import.meta.env.MAIN_VITE_SERVER_URL ??
   'http://localhost:8080';
 const userDataDir = devOverride('HASBIHAL_USER_DATA_DIR');
+// A LiveKit on its own origin (local test runs); production LiveKit shares the server's.
+const livekitUrl = devOverride('HASBIHAL_LIVEKIT_URL');
 if (userDataDir) app.setPath('userData', path.resolve(userDataDir));
 
 app.enableSandbox();
@@ -29,6 +32,7 @@ registerAppSchemePrivileges();
 
 const deepLinks = new DeepLinkRouter();
 const idleWatcher = new IdleWatcher();
+const shortcuts = new HangoutShortcuts();
 deepLinks.listen();
 
 if (!app.requestSingleInstanceLock()) {
@@ -61,6 +65,7 @@ function createMainWindow(): BrowserWindow {
   });
   deepLinks.setTarget(window.webContents);
   idleWatcher.setTarget(window.webContents);
+  shortcuts.setTarget(window.webContents);
 
   if (isDev) {
     void window.loadURL(devServerUrl);
@@ -107,7 +112,11 @@ function handle<S extends z.ZodType, R>(
 }
 
 void app.whenReady().then(() => {
-  const csp = contentSecurityPolicy({ serverUrl, dev: isDev });
+  const csp = contentSecurityPolicy({
+    serverUrl,
+    dev: isDev,
+    ...(livekitUrl ? { livekitUrl } : {}),
+  });
   applyAppWideSecurity({ devServerUrl: isDev ? devServerUrl : undefined });
 
   if (isDev) {
@@ -146,6 +155,15 @@ void app.whenReady().then(() => {
   ipcMain.handle(IPC.authSignOut, () => auth.signOut());
   ipcMain.handle(IPC.deepLinkTakePending, () => deepLinks.takePending());
   ipcMain.handle(IPC.systemIsIdle, () => idleWatcher.idle);
+  ipcMain.on(IPC.systemShortcuts, (_event, active: unknown) => {
+    shortcuts.setActive(active === true);
+  });
+  ipcMain.on(IPC.focusWindow, () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
   idleWatcher.start();
 
   mainWindow = createMainWindow();

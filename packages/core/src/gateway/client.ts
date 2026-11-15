@@ -5,6 +5,7 @@ import {
   parseFrame,
   type ClientMessage,
   type DurableEvent,
+  type HangoutParticipant,
   type PresenceMode,
   type PresenceStatus,
   type ServerWelcome,
@@ -60,6 +61,12 @@ export interface GatewayClientOptions {
   onTyping?: (roomId: string, userId: string) => void;
   /** This member's read marker moved, possibly on another device. */
   onReadState?: (roomId: string, lastReadMessageId: string) => void;
+  /** A room's hangout changed: everyone in it now. */
+  onHangout?: (roomId: string, participants: HangoutParticipant[]) => void;
+  /** Someone joined an empty room (A28). */
+  onHangoutStarted?: (roomId: string, userId: string) => void;
+  /** Someone wants this member in a room (A13). */
+  onNudge?: (fromUserId: string, roomId: string) => void;
   backoff?: BackoffOptions;
   pingIntervalMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -194,6 +201,15 @@ export class GatewayClient {
           return;
         case 'read_state':
           this.options.onReadState?.(message.roomId, message.lastReadMessageId);
+          return;
+        case 'hangout':
+          this.options.onHangout?.(message.roomId, message.participants);
+          return;
+        case 'hangout_started':
+          this.options.onHangoutStarted?.(message.roomId, message.userId);
+          return;
+        case 'nudge':
+          this.options.onNudge?.(message.fromUserId, message.roomId);
           return;
         case 'upgrade_required':
           this.halt({ kind: 'upgrade_required' });

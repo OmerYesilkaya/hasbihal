@@ -1,6 +1,7 @@
 import {
   TYPING_TTL_MS,
   type DurableEvent,
+  type HangoutParticipant,
   type Message,
   type PresenceStatus,
   type Room,
@@ -23,6 +24,8 @@ export interface ChatState {
   messages: ReadonlyMap<string, ReadonlyMap<string, Message>>;
   /** Per room: who is typing, until when (ms since epoch). See `typingIn`. */
   typing: ReadonlyMap<string, ReadonlyMap<string, number>>;
+  /** Per room: who is in its hangout (rooms nobody is in are absent). */
+  hangouts: ReadonlyMap<string, readonly HangoutParticipant[]>;
 }
 
 const EMPTY: ChatState = {
@@ -32,6 +35,7 @@ const EMPTY: ChatState = {
   rooms: new Map(),
   messages: new Map(),
   typing: new Map(),
+  hangouts: new Map(),
 };
 
 /** Server order: creation time, then id (ARCHITECTURE §3.3). */
@@ -144,6 +148,21 @@ export class ChatStore {
         unreadMentionCount,
       }),
     });
+  }
+
+  /** Everyone in every hangout, from the gateway's welcome. */
+  setHangouts(hangouts: Readonly<Record<string, readonly HangoutParticipant[]>>): void {
+    this.#update({
+      hangouts: new Map(Object.entries(hangouts).filter(([, people]) => people.length > 0)),
+    });
+  }
+
+  /** One room's hangout changed. */
+  setHangout(roomId: string, participants: readonly HangoutParticipant[]): void {
+    const hangouts = new Map(this.#state.hangouts);
+    if (participants.length) hangouts.set(roomId, participants);
+    else hangouts.delete(roomId);
+    this.#update({ hangouts });
   }
 
   /** Someone is typing; shown for `TYPING_TTL_MS` unless repeated. */
@@ -289,6 +308,13 @@ export function activeRooms(state: ChatState): RoomEntry[] {
   return [...state.rooms.values()]
     .filter((r) => !r.archivedAt)
     .sort((a, b) => a.position - b.position);
+}
+
+/** The room whose hangout a member is in, if any. */
+export function hangoutOf(state: ChatState, userId: string): string | undefined {
+  for (const [roomId, people] of state.hangouts)
+    if (people.some((p) => p.userId === userId)) return roomId;
+  return undefined;
 }
 
 /** Who is typing in a room right now, excluding expired entries. */

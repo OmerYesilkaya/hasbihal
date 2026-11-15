@@ -3,6 +3,7 @@ import { roomMessages } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useT } from '../i18n.tsx';
+import { HangoutPanel } from '../hangout/HangoutPanel.tsx';
 import { Composer } from './Composer.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { MessageList } from './MessageList.tsx';
@@ -71,6 +72,7 @@ export function RoomView({ roomId }: { roomId: string }) {
         </h1>
         {room.topic && <p className="room-view__topic">{room.topic}</p>}
       </header>
+      <HangoutPanel roomId={roomId} />
       <MessageList
         roomId={roomId}
         readMarkerAtOpen={readMarkerAtOpen}

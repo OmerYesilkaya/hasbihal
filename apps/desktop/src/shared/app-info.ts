@@ -53,6 +53,11 @@ export interface SystemBridge {
   /** Whether the computer is idle now (10 minutes without input, or a locked screen). */
   isIdle(): Promise<boolean>;
   onIdleChanged(listener: (idle: boolean) => void): () => void;
+  /** Turns the global mute/deafen shortcuts on while in a hangout (A37). */
+  setHangoutShortcuts(active: boolean): void;
+  onShortcut(listener: (action: 'mute' | 'deafen') => void): () => void;
+  /** Brings the window to the front, e.g. after a notification is clicked. */
+  focusWindow(): void;
 }
 
 export const IPC = {
@@ -69,4 +74,7 @@ export const IPC = {
   deepLinkReceived: 'deep-link:received',
   systemIsIdle: 'system:is-idle',
   systemIdleChanged: 'system:idle-changed',
+  systemShortcuts: 'system:shortcuts',
+  shortcut: 'system:shortcut',
+  focusWindow: 'system:focus-window',
 } as const;

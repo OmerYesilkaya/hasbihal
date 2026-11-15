@@ -50,12 +50,18 @@ importers:
       '@hasbihal/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@workadventure/noise-suppression':
+        specifier: 0.2.0
+        version: 0.2.0
       hast-util-to-jsx-runtime:
         specifier: 2.3.7
         version: 2.3.7
       highlight.js:
         specifier: 11.12.0
         version: 11.12.0
+      livekit-client:
+        specifier: 2.24.1
+        version: 2.24.1(@types/dom-mediacapture-record@1.0.22)
       lowlight:
         specifier: 3.3.0
         version: 3.3.0
