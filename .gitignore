@@ -8,3 +8,5 @@ release/
 .DS_Store
 *.log
 coverage/
+*.p12
+*.tsbuildinfo

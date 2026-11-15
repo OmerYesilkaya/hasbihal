@@ -1,0 +1,32 @@
+{
+  "name": "hasbihal",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.13.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm infra:up && pnpm --parallel --filter @hasbihal/server --filter @hasbihal/desktop dev",
+    "infra:up": "docker compose -f infra/compose.dev.yml up -d --wait",
+    "infra:down": "docker compose -f infra/compose.dev.yml down",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
+    "eslint": "10.15.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "prettier": "3.10.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2",
+    "vitest": "5.1.0"
+  }
+}

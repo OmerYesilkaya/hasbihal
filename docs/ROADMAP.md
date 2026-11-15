@@ -11,13 +11,15 @@ Each milestone lists its **scope** and its **exit criteria**: what must be true 
 Prove the risky parts before building on them, and set up the skeleton everything else grows in.
 
 **Spikes** (throwaway code, findings recorded in DECISIONS.md):
-- **S1: macOS screen share with system audio.** An Electron app that captures a window plus system audio on macOS 14.2+ (Core Audio Tap, `audio: 'loopback'`) and on Windows, and publishes it to a local LiveKit server at 1080p60. Confirm: audio is in sync, nothing is recaptured from our own call (no echo of other participants), the permission prompts are understandable, and the behaviour holds after a rebuild with ad-hoc signing (A30).
-- **S2: DeepFilterNet in the browser.** DeepFilterNet (WASM, AudioWorklet) on a microphone track in Electron. Measure CPU use and added latency on the slowest Mac and Windows machines in the family. Decide the threshold for falling back to RNNoise (T7).
+
+- **S1: macOS screen share with system audio.** An Electron app that captures a window plus system audio on macOS 14.2+ (Core Audio Tap, `audio: 'loopback'`) and on Windows, and publishes it to a local LiveKit server at 1080p60. Confirm: audio is in sync, nothing is recaptured from our own call (no echo of other participants), the permission prompts are understandable, and permissions survive a rebuild (A30, A50).
+- **S2: DeepFilterNet in the browser.** DeepFilterNet (WASM, AudioWorklet) on a microphone track in Electron. Measure CPU use and added latency on the slowest Mac and Windows machines in the family. Decide the threshold for falling back to DTLN (T7).
 
 **Skeleton:**
+
 - pnpm monorepo with `apps/desktop`, `apps/server`, `packages/protocol`, `packages/core`, `packages/config` (§2).
 - Lint, format, type-check, and test commands. CI running them on every push (§10.4).
-- `infra/docker-compose.yml` for local development: PostgreSQL and LiveKit.
+- `infra/compose.dev.yml` for local development: PostgreSQL and LiveKit (with the codec config of T8).
 - Electron shell with the security hardening of §4.2 from day one: CSP, sandbox, fuses.
 - Design tokens from the Saray palette (A46), light/dark (A35), and the i18n setup with Turkish and English (A18).
 
@@ -49,7 +51,7 @@ The core experience.
 
 - Join and leave a room's hangout, with LiveKit tokens issued by our server (§6.1).
 - High-quality voice settings: Opus, RED, FEC, AEC (A29; §6.2).
-- DeepFilterNet noise suppression with a toggle, and the RNNoise fallback (T7).
+- DeepFilterNet noise suppression with a toggle, and the DTLN fallback (T7).
 - Camera with simulcast, and the Meet/Discord-style video grid with active-speaker highlighting (§5 of DECISIONS).
 - Mute, deafen, per-person volume, voice activation sensitivity, push-to-talk, and global shortcuts (A37).
 - Live "who is in which room" in the sidebar and member list, from LiveKit webhooks (§6.3).

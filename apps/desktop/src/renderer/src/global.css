@@ -1,0 +1,151 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.shell {
+  display: flex;
+  height: 100%;
+}
+
+.sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  background: var(--hb-sidebar);
+  border-right: 1px solid var(--hb-border);
+  display: flex;
+  flex-direction: column;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 18px 12px;
+}
+
+.brand__name {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brand__tagline {
+  font-size: 12px;
+  color: var(--hb-text-muted);
+  margin-top: 3px;
+}
+
+.divider {
+  border: none;
+  height: 1px;
+  background: var(--hb-border);
+  margin: 4px 18px 12px;
+}
+
+.section-label {
+  margin: 4px 20px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--hb-text-muted);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.content__header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px 0 20px;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.content__spacer {
+  flex: 1;
+}
+
+.content__placeholder {
+  margin: auto;
+  color: var(--hb-text-muted);
+}
+
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hb-text-secondary);
+}
+
+.connection__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hb-text-muted);
+}
+
+.connection[data-state='connected'] {
+  color: var(--hb-status-online);
+}
+
+.connection[data-state='connected'] .connection__dot {
+  background: var(--hb-status-online);
+}
+
+.connection[data-state='disconnected'] .connection__dot {
+  background: var(--hb-status-busy);
+}
+
+.members {
+  width: 248px;
+  flex-shrink: 0;
+  background: var(--hb-members);
+  border-left: 1px solid var(--hb-border);
+}
+
+.members__header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.upgrade {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+  font-size: 16px;
+}
