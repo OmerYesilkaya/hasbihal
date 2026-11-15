@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GatewayClient, type ChatStore, type GatewayStatus } from '@hasbihal/core';
-import { MemberList, type PresenceMode } from '@hasbihal/protocol';
+import { MemberList, RoomList, type PresenceMode } from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
 import { apiGet } from './api.ts';
 
@@ -24,6 +24,11 @@ export function useGateway(info: AppInfo, store: ChatStore) {
       const list = await apiGet(info.serverUrl, '/members', MemberList);
       if (list) store.setMembers(list.members);
     };
+    // Every welcome: unread counts may have moved on another device while this one was away.
+    const loadRooms = async () => {
+      const list = await apiGet(info.serverUrl, '/rooms', RoomList);
+      if (list) store.setRooms(list.rooms);
+    };
 
     const gateway = new GatewayClient({
       url: toWebSocketUrl(info.serverUrl),
@@ -40,16 +45,24 @@ export function useGateway(info: AppInfo, store: ChatStore) {
       onWelcome: (welcome) => {
         store.setMe(welcome.me);
         store.setPresenceSnapshot(welcome.presence);
+        if (welcome.resync) store.forgetMessages();
         if (!loaded || welcome.resync) {
           loaded = true;
           void loadMembers();
         }
+        void loadRooms();
       },
       onEvent: (event) => {
         store.apply(event);
       },
       onPresence: (userId, presence) => {
         store.setPresence(userId, presence);
+      },
+      onTyping: (roomId, userId) => {
+        store.setTyping(roomId, userId);
+      },
+      onReadState: (roomId, messageId) => {
+        store.setReadMarker(roomId, messageId);
       },
     });
     client.current = gateway;
@@ -74,5 +87,9 @@ export function useGateway(info: AppInfo, store: ChatStore) {
     client.current?.setPresence(mode);
   }, []);
 
-  return { status, setPresence };
+  const typing = useCallback((roomId: string) => {
+    client.current?.typing(roomId);
+  }, []);
+
+  return { status, setPresence, typing };
 }
