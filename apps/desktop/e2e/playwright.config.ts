@@ -6,7 +6,9 @@ export default defineConfig({
   testDir: '.',
   testMatch: '*.spec.ts',
   globalSetup: './global-setup.ts',
-  // One app and one server at a time: the flows share the server's database.
+  // Each test sets up its own people and rooms, so any one runs alone (`pnpm test:e2e hangout`)
+  // or in any order. One at a time: they share one server, and calls and screen sharing are
+  // timing-sensitive enough not to want a busy machine.
   workers: 1,
   timeout: 60_000,
   expect: { timeout: 10_000 },

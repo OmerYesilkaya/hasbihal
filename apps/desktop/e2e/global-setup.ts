@@ -9,12 +9,12 @@ import { tmpdir } from 'node:os';
 import { createServer, type AddressInfo } from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { SignedIn } from '@hasbihal/protocol';
+import { adminInviteUrl, PASSWORD, SERVER_DIR } from './support.ts';
 
 const run = promisify(execFile);
 const POSTGRES_IMAGE = 'postgres:17.12'; // same as infra/compose.dev.yml
 const LIVEKIT_IMAGE = 'livekit/livekit-server:v1.13.11';
-
-export const SERVER_DIR = path.resolve(import.meta.dirname, '../../server');
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -197,6 +197,28 @@ async function startSite(): Promise<{ url: string; stop: () => Promise<void> }> 
   };
 }
 
+/**
+ * The admin the tests act through to set the scene (invites, rooms), made the way the owner
+ * makes the first one (A52). Tests sign in as it with PASSWORD.
+ */
+async function createSeedAdmin(serverUrl: string, databaseUrl: string): Promise<string> {
+  const token = (await adminInviteUrl(databaseUrl)).split('/').at(-1);
+  const response = await fetch(new URL('/auth/sign-up', serverUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      inviteToken: token,
+      username: 'kurucu',
+      displayName: 'Kurucu',
+      password: PASSWORD,
+      deviceName: 'e2e',
+    }),
+  });
+  if (!response.ok)
+    throw new Error(`seed admin: ${String(response.status)} ${await response.text()}`);
+  return SignedIn.parse(await response.json()).user.username;
+}
+
 export default async function globalSetup(): Promise<() => Promise<void>> {
   const database = await startPostgres();
   const site = await startSite();
@@ -214,6 +236,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     LIVEKIT_API_URL: livekit.url.replace('ws:', 'http:'),
     // Link previews may reach the local stand-in site above.
     LINK_PREVIEW_ALLOW_PRIVATE: 'true',
+    // Every test signs people in and up through the API: far more than a person would.
+    AUTH_RATE_LIMIT_PER_MINUTE: '10000',
   };
   const server = spawn(process.execPath, ['src/main.ts'], {
     cwd: SERVER_DIR,
@@ -226,6 +250,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_LIVEKIT_URL = livekit.url;
   process.env.E2E_DATABASE_URL = database.url;
   process.env.E2E_SITE_URL = site.url;
+  process.env.E2E_SEED_USERNAME = await createSeedAdmin(serverUrl, database.url);
 
   return async () => {
     server.kill('SIGTERM');
