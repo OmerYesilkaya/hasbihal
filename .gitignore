@@ -10,3 +10,5 @@ release/
 coverage/
 *.p12
 *.tsbuildinfo
+test-results/
+playwright-report/
