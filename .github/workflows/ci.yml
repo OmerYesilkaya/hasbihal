@@ -47,3 +47,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: infra/production/backup/test.sh
+
+  # The desktop app end to end (apps/desktop/e2e), on Linux under a virtual display: a real
+  # server, database, and LiveKit in containers, fake camera and microphone.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: xvfb-run --auto-servernum pnpm --filter @hasbihal/desktop test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-traces
+          path: apps/desktop/test-results
+          retention-days: 7
