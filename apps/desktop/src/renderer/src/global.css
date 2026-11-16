@@ -1565,3 +1565,170 @@ body {
   font-size: 11px;
   color: var(--hb-text-muted);
 }
+
+/* Screen sharing (A14) */
+
+.share-picker {
+  width: 680px;
+}
+
+.share-picker__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 20px 0;
+}
+
+.share-picker__tab {
+  padding: 6px 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--hb-text-secondary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.share-picker__tab[aria-selected='true'] {
+  border-bottom-color: var(--hb-accent);
+  color: var(--hb-text);
+}
+
+.share-picker__sources {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.share-picker__sources > .field__hint {
+  grid-column: 1 / -1;
+}
+
+.share-source {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.share-source:hover,
+.share-source:focus-visible {
+  border-color: var(--hb-accent);
+}
+
+.share-source__preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  border-radius: 6px;
+  background: var(--hb-tile);
+}
+
+.share-source__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.share-picker__options {
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.share-picker__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+}
+
+.tile--share {
+  background: #1c1512;
+}
+
+.tile--share .tile__video {
+  object-fit: contain;
+}
+
+.tile__watch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: #f4ebe0;
+  font-size: 13px;
+}
+
+.tile__actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.tile:hover .tile__actions,
+.tile__actions:focus-within {
+  opacity: 1;
+}
+
+.tile__action {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tile:fullscreen {
+  border-radius: 0;
+}
+
+/* One share enlarged (A14): it fills the hangout area, everyone else in a strip below. */
+.stage--focused .stage__grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: center;
+}
+
+.stage--focused .tile[data-focused] {
+  flex: 0 0 100%;
+  height: calc(100% - 120px);
+}
+
+.stage--focused .tile:not([data-focused]) {
+  flex: 0 0 180px;
+  height: 110px;
+  min-height: 0;
+}
+
+.stage--focused .tile:not([data-focused]) .avatar--large {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+
+.member__status .live-badge {
+  margin-left: 6px;
+}

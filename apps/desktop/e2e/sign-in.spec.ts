@@ -43,6 +43,8 @@ async function launch(dataDir = userData): Promise<Page> {
       ...process.env,
       HASBIHAL_SERVER_URL: process.env.E2E_SERVER_URL ?? '',
       HASBIHAL_LIVEKIT_URL: process.env.E2E_LIVEKIT_URL ?? '',
+      // Screen sharing shares the app's own page: no screen-recording permission needed.
+      HASBIHAL_FAKE_SCREEN: '1',
       HASBIHAL_USER_DATA_DIR: dataDir,
     },
   });
@@ -343,6 +345,36 @@ test.describe.serial('accounts in the desktop app', () => {
         omer.getByTestId('tile').filter({ hasText: 'Zeynep Test' }).locator('video'),
       ).toBeVisible();
       await snap(omer, '10-hangout');
+
+      // Zeynep shares her screen. Ömer sees it live everywhere, and watches only when he chooses.
+      await zeynep.getByRole('button', { name: 'Ekranını paylaş' }).click();
+      await zeynep.getByTestId('share-source').click();
+      await expect(zeynep.getByTestId('share-tile').locator('video')).toBeVisible();
+      await expect(zeynep.getByTestId('share-tile')).toContainText('Senin ekranın');
+      const share = omer.getByTestId('share-tile');
+      await expect(share).toContainText('Zeynep Test · ekran');
+      await expect(share.locator('video')).toHaveCount(0);
+      await expect(omer.locator('.room__voice')).toContainText('CANLI');
+      await expect(omer.getByTestId('member').filter({ hasText: 'Zeynep Test' })).toContainText(
+        'CANLI',
+      );
+      await share.getByRole('button', { name: 'İzle' }).click();
+      await expect(share.locator('video')).toBeVisible();
+      // Real frames arrive, not just an element.
+      await expect
+        .poll(() =>
+          share
+            .locator('video')
+            .evaluate((v) => (v as unknown as { videoWidth: number }).videoWidth),
+        )
+        .toBeGreaterThan(0);
+      await share.hover();
+      await share.getByRole('button', { name: 'Büyüt' }).click();
+      await expect(omer.locator('.stage--focused')).toBeVisible();
+      await snap(omer, '11-screen-share');
+      await zeynep.getByRole('button', { name: 'Paylaşımı durdur' }).click();
+      await expect(share).toHaveCount(0);
+      await expect(omer.locator('.room__voice')).not.toContainText('CANLI');
 
       // Zeynep leaves; Ömer calls her back in with a nudge.
       await zeynep.getByRole('button', { name: 'Ayrıl' }).click();

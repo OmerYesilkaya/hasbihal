@@ -25,6 +25,10 @@ export function MemberList({ store }: { store: ChatStore }) {
       {members.map((member) => {
         const presence = state.presence.get(member.id) ?? 'offline';
         const voiceRoom = hangoutOf(state, member.id);
+        const sharing =
+          voiceRoom !== undefined &&
+          (state.hangouts.get(voiceRoom)?.some((p) => p.userId === member.id && p.screenShare) ??
+            false);
         // A13: from a call, call others in (not yourself, not people already there).
         const canNudge =
           call.roomId !== null && member.id !== state.me?.id && voiceRoom !== call.roomId;
@@ -37,6 +41,7 @@ export function MemberList({ store }: { store: ChatStore }) {
                 {voiceRoom
                   ? t('members.inHangout', { room: state.rooms.get(voiceRoom)?.name ?? '?' })
                   : t(PRESENCE_LABEL[presence])}
+                {sharing && <span className="live-badge">{t('share.live')}</span>}
               </div>
             </div>
             {canNudge && <NudgeButton member={member} roomId={call.roomId} />}

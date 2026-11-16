@@ -60,6 +60,25 @@ export interface SystemBridge {
   focusWindow(): void;
 }
 
+/** Something that can be shared (A14): a whole screen or one window. */
+export interface ScreenSource {
+  id: string;
+  name: string;
+  kind: 'screen' | 'window';
+  /** A small preview, as a data URL ('' when there is none). */
+  thumbnail: string;
+  /** The window's app icon, as a data URL. */
+  icon: string | null;
+}
+
+/** The app's own screen-share picker (ARCHITECTURE §6.2). */
+export interface ScreenBridge {
+  /** What can be shared now. On macOS the first call asks for screen-recording permission. */
+  sources(): Promise<ScreenSource[]>;
+  /** Picks a source (and whether to include the computer's sound) for the next getDisplayMedia. */
+  choose(id: string, audio: boolean): Promise<void>;
+}
+
 export const IPC = {
   getAppInfo: 'app:get-info',
   authRestore: 'auth:restore',
@@ -77,4 +96,6 @@ export const IPC = {
   systemShortcuts: 'system:shortcuts',
   shortcut: 'system:shortcut',
   focusWindow: 'system:focus-window',
+  screenSources: 'screen:sources',
+  screenChoose: 'screen:choose',
 } as const;

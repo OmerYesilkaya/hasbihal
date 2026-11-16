@@ -1,4 +1,5 @@
 import {
+  AudioPresets,
   ConnectionState,
   createLocalVideoTrack,
   LocalAudioTrack,
@@ -6,9 +7,10 @@ import {
   RoomEvent,
   Track,
   VideoPresets,
+  LocalVideoTrack,
   type LocalTrackPublication,
-  type LocalVideoTrack,
   type Participant,
+  type RemoteParticipant,
   type RemoteTrack,
   type VideoTrack,
 } from 'livekit-client';
@@ -26,12 +28,39 @@ export interface ParticipantView {
   camera: VideoTrack | null;
 }
 
+/** A screen share (A14): one tile each; viewers choose which ones to watch. */
+export interface ShareView {
+  userId: string;
+  isLocal: boolean;
+  /** The video, when watching (always, for your own). */
+  track: VideoTrack | null;
+  /** Shared with the computer's sound. */
+  hasAudio: boolean;
+  watching: boolean;
+}
+
+/**
+ * What a share is tuned for (A14). Motion keeps the frame rate (games, films); detail keeps
+ * the resolution (text, code), so small letters stay sharp when the picture changes.
+ */
+export type SharePreset = 'motion' | 'detail';
+
+const SHARE_ENCODING: Record<SharePreset, { maxBitrate: number; maxFramerate: number }> = {
+  motion: { maxBitrate: 8_000_000, maxFramerate: 60 },
+  detail: { maxBitrate: 6_000_000, maxFramerate: 30 },
+};
+
+/** The key a share's sound volume is remembered under, next to the person's voice volume. */
+export const screenVolumeKey = (userId: string) => `${userId}:screen`;
+
 export interface VoiceSettings extends MicSettings {
   cameraId: string | null;
   /** `KeyboardEvent.code` held for push-to-talk while the app is focused. */
   pttKey: string;
-  /** Per-person volume, 0–2 (A29), by user id. */
+  /** Per-person volume, 0–2 (A29), by user id; a share's sound by `screenVolumeKey`. */
   volumes: Record<string, number>;
+  sharePreset: SharePreset;
+  shareAudio: boolean;
 }
 
 export interface HangoutState {
@@ -40,10 +69,13 @@ export interface HangoutState {
   micMuted: boolean;
   deafened: boolean;
   cameraOn: boolean;
+  /** Sharing a screen or window now. */
+  sharing: boolean;
   /** The mic couldn't be opened (no device, permission refused): listening only. */
   micUnavailable: boolean;
   noiseSuppressionAvailable: boolean;
   participants: ParticipantView[];
+  shares: ShareView[];
   settings: VoiceSettings;
   /** Something the user should know, e.g. "noise suppression was switched off". */
   notice: MessageKey | null;
@@ -58,6 +90,8 @@ const DEFAULT_SETTINGS: VoiceSettings = {
   thresholdDb: -50,
   pttKey: 'AltRight',
   volumes: {},
+  sharePreset: 'motion',
+  shareAudio: true,
 };
 
 function loadSettings(): VoiceSettings {
@@ -82,9 +116,11 @@ export class HangoutSession {
     micMuted: false,
     deafened: false,
     cameraOn: false,
+    sharing: false,
     micUnavailable: false,
     noiseSuppressionAvailable: true,
     participants: [],
+    shares: [],
     settings: loadSettings(),
     notice: null,
   };
@@ -94,6 +130,10 @@ export class HangoutSession {
   #mic: Microphone | null = null;
   #micPublication: LocalTrackPublication | null = null;
   #camera: LocalVideoTrack | null = null;
+  #screen: { video: LocalVideoTrack; audio: LocalAudioTrack | null } | null = null;
+  /** Whose shares this viewer watches (A14); the rest aren't downloaded at all. */
+  readonly #watching = new Set<string>();
+  /** Remote audio elements, by track sid. */
   readonly #audioElements = new Map<string, HTMLMediaElement[]>();
 
   constructor(serverUrl: string) {
@@ -131,6 +171,8 @@ export class HangoutSession {
       disconnectOnPageLeave: false,
       adaptiveStream: true,
       dynacast: true,
+      // Remote sound through Web Audio: per-person volume above 100% (A29) needs a gain node.
+      webAudioMix: true,
       // T8: H.264 so the hardware encoder is used where there is one.
       publishDefaults: {
         videoCodec: 'h264',
@@ -145,14 +187,29 @@ export class HangoutSession {
       this.#refresh();
     };
     room
-      .on(RoomEvent.ParticipantConnected, refresh)
-      .on(RoomEvent.ParticipantDisconnected, refresh)
-      .on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
-        if (track.kind === Track.Kind.Audio) this.#attachAudio(track, participant.identity);
+      .on(RoomEvent.ParticipantConnected, (participant) => {
+        this.#syncSubscriptions(participant);
         refresh();
       })
-      .on(RoomEvent.TrackUnsubscribed, (track, _publication, participant) => {
-        if (track.kind === Track.Kind.Audio) this.#detachAudio(track, participant.identity);
+      .on(RoomEvent.ParticipantDisconnected, (participant) => {
+        this.#watching.delete(participant.identity);
+        refresh();
+      })
+      .on(RoomEvent.TrackPublished, (_publication, participant) => {
+        this.#syncSubscriptions(participant);
+        refresh();
+      })
+      .on(RoomEvent.TrackUnpublished, (publication, participant) => {
+        if (publication.source === Track.Source.ScreenShare)
+          this.#watching.delete(participant.identity);
+        refresh();
+      })
+      .on(RoomEvent.TrackSubscribed, (track, publication) => {
+        if (track.kind === Track.Kind.Audio) this.#attachAudio(track, publication.trackSid);
+        refresh();
+      })
+      .on(RoomEvent.TrackUnsubscribed, (track, publication) => {
+        if (track.kind === Track.Kind.Audio) this.#detachAudio(track, publication.trackSid);
         refresh();
       })
       .on(RoomEvent.TrackMuted, refresh)
@@ -171,7 +228,8 @@ export class HangoutSession {
       });
 
     try {
-      await room.connect(token.value.url, token.value.token);
+      // Subscriptions are chosen per track (#syncSubscriptions): shares only when watched.
+      await room.connect(token.value.url, token.value.token, { autoSubscribe: false });
     } catch {
       this.#room = null;
       this.#set({ roomId: null, status: 'idle', notice: 'hangout.joinFailed' });
@@ -179,6 +237,8 @@ export class HangoutSession {
     }
     if (this.#room !== room) return; // left while connecting
     this.#set({ status: 'connected' });
+    for (const participant of room.remoteParticipants.values())
+      this.#syncSubscriptions(participant);
     this.#refresh(); // show the call at once; the mic can take a moment to load
     await this.#openMic();
     this.#refresh();
@@ -192,10 +252,19 @@ export class HangoutSession {
     this.#micPublication = null;
     this.#camera?.stop();
     this.#camera = null;
+    this.#stopScreenTracks();
+    this.#watching.clear();
     for (const elements of this.#audioElements.values()) for (const el of elements) el.remove();
     this.#audioElements.clear();
     if (room) await room.disconnect();
-    this.#set({ roomId: null, status: 'idle', cameraOn: false, participants: [] });
+    this.#set({
+      roomId: null,
+      status: 'idle',
+      cameraOn: false,
+      sharing: false,
+      participants: [],
+      shares: [],
+    });
   }
 
   async toggleMute(): Promise<void> {
@@ -240,6 +309,106 @@ export class HangoutSession {
     this.#refresh();
   }
 
+  /**
+   * Shares a screen or window picked in the app's picker (A14): up to 1080p, at the preset's
+   * frame rate, H.264 like the camera (T8), optionally with the computer's sound.
+   */
+  async startScreenShare(sourceId: string): Promise<void> {
+    const room = this.#room;
+    if (!room || this.#screen) return;
+    const { sharePreset: preset, shareAudio } = this.#state.settings;
+    let stream: MediaStream;
+    try {
+      await window.hasbihal.screen.choose(sourceId, shareAudio);
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: 1920, height: 1080, frameRate: 60 },
+        audio: shareAudio
+          ? // The computer's sound as it is, without our own playback (the others' voices),
+            // which would otherwise echo back to them (ARCHITECTURE §6.2).
+            ({
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              restrictOwnAudio: true,
+            } as MediaTrackConstraints)
+          : false,
+      });
+    } catch {
+      this.#set({ notice: 'hangout.shareFailed' });
+      return;
+    }
+    const [videoTrack] = stream.getVideoTracks();
+    const [audioTrack] = stream.getAudioTracks();
+    if (!videoTrack || this.#room !== room) {
+      for (const t of stream.getTracks()) t.stop();
+      return;
+    }
+    // Electron's handler ignores getDisplayMedia's size hints, so the cap is applied here (S1).
+    await videoTrack
+      .applyConstraints({
+        width: { max: 1920 },
+        height: { max: 1080 },
+        frameRate: { ideal: SHARE_ENCODING[preset].maxFramerate, max: 60 },
+      })
+      .catch(() => undefined);
+    videoTrack.contentHint = preset === 'motion' ? 'motion' : 'detail';
+
+    const video = new LocalVideoTrack(videoTrack, undefined, false);
+    const audio = audioTrack ? new LocalAudioTrack(audioTrack, undefined, false) : null;
+    this.#screen = { video, audio };
+    // Sharing ends from outside too: the OS's own "stop sharing", or the window closing.
+    videoTrack.addEventListener('ended', () => {
+      if (this.#screen?.video === video) void this.stopScreenShare();
+    });
+    try {
+      await room.localParticipant.publishTrack(video, {
+        source: Track.Source.ScreenShare,
+        simulcast: false,
+        // LiveKit ignores videoEncoding for shares; its own default is 15 fps (S1).
+        screenShareEncoding: SHARE_ENCODING[preset],
+        degradationPreference: preset === 'motion' ? 'maintain-framerate' : 'maintain-resolution',
+      });
+      if (audio)
+        await room.localParticipant.publishTrack(audio, {
+          source: Track.Source.ScreenShareAudio,
+          audioPreset: AudioPresets.musicHighQualityStereo,
+          forceStereo: true,
+          dtx: false,
+          red: false,
+        });
+      this.#set({ sharing: true, notice: null });
+    } catch {
+      await this.stopScreenShare();
+      this.#set({ notice: 'hangout.shareFailed' });
+    }
+    this.#refresh();
+  }
+
+  async stopScreenShare(): Promise<void> {
+    const room = this.#room;
+    const screen = this.#screen;
+    if (!screen) return;
+    this.#screen = null;
+    if (room) {
+      await room.localParticipant.unpublishTrack(screen.video).catch(() => undefined);
+      if (screen.audio)
+        await room.localParticipant.unpublishTrack(screen.audio).catch(() => undefined);
+    }
+    screen.video.stop();
+    screen.audio?.stop();
+    this.#set({ sharing: false });
+    this.#refresh();
+  }
+
+  /** Starts or stops watching someone's share; only watched shares are downloaded. */
+  watch(userId: string, watching: boolean): void {
+    if (watching) this.#watching.add(userId);
+    else this.#watching.delete(userId);
+    const participant = this.#room?.remoteParticipants.get(userId);
+    if (participant) this.#syncSubscriptions(participant);
+    this.#refresh();
+  }
+
   setPushToTalk(held: boolean): void {
     this.#mic?.setPushToTalk(held);
   }
@@ -254,8 +423,9 @@ export class HangoutSession {
     if (change.deviceId !== undefined && this.#room) void this.#reopenMic();
   }
 
-  setVolume(userId: string, volume: number): void {
-    this.updateSettings({ volumes: { ...this.#state.settings.volumes, [userId]: volume } });
+  /** A person's voice volume by user id, or their share's sound by `screenVolumeKey`. */
+  setVolume(key: string, volume: number): void {
+    this.updateSettings({ volumes: { ...this.#state.settings.volumes, [key]: volume } });
   }
 
   async #openMic(): Promise<void> {
@@ -313,27 +483,48 @@ export class HangoutSession {
     this.#refresh();
   }
 
-  #attachAudio(track: RemoteTrack, userId: string): void {
+  #stopScreenTracks(): void {
+    this.#screen?.video.stop();
+    this.#screen?.audio?.stop();
+    this.#screen = null;
+  }
+
+  /** Voices and cameras always; a share and its sound only while watched (A14). */
+  #syncSubscriptions(participant: RemoteParticipant): void {
+    const watching = this.#watching.has(participant.identity);
+    for (const publication of participant.trackPublications.values()) {
+      const isShare =
+        publication.source === Track.Source.ScreenShare ||
+        publication.source === Track.Source.ScreenShareAudio;
+      const wanted = !isShare || watching;
+      if (publication.isDesired !== wanted) publication.setSubscribed(wanted);
+    }
+  }
+
+  #attachAudio(track: RemoteTrack, trackSid: string): void {
     const element = track.attach();
     element.hidden = true;
     document.body.append(element);
-    this.#audioElements.set(userId, [...(this.#audioElements.get(userId) ?? []), element]);
+    this.#audioElements.set(trackSid, [...(this.#audioElements.get(trackSid) ?? []), element]);
     this.#applyVolumes();
   }
 
-  #detachAudio(track: RemoteTrack, userId: string): void {
+  #detachAudio(track: RemoteTrack, trackSid: string): void {
     for (const element of track.detach()) element.remove();
-    this.#audioElements.delete(userId);
+    this.#audioElements.delete(trackSid);
   }
 
   #applyVolumes(): void {
     const room = this.#room;
     if (!room) return;
+    const { deafened, settings } = this.#state;
     for (const participant of room.remoteParticipants.values()) {
-      const volume = this.#state.deafened
-        ? 0
-        : (this.#state.settings.volumes[participant.identity] ?? 1);
-      participant.setVolume(volume);
+      const id = participant.identity;
+      participant.setVolume(deafened ? 0 : (settings.volumes[id] ?? 1), Track.Source.Microphone);
+      participant.setVolume(
+        deafened ? 0 : (settings.volumes[screenVolumeKey(id)] ?? 1),
+        Track.Source.ScreenShareAudio,
+      );
     }
   }
 
@@ -353,11 +544,33 @@ export class HangoutSession {
         camera: camera && !camera.isMuted ? (camera.videoTrack ?? null) : null,
       };
     };
+    const shares: ShareView[] = [];
+    if (this.#screen)
+      shares.push({
+        userId: room.localParticipant.identity,
+        isLocal: true,
+        track: this.#screen.video,
+        hasAudio: this.#screen.audio !== null,
+        watching: true,
+      });
+    for (const p of room.remoteParticipants.values()) {
+      const screen = p.getTrackPublication(Track.Source.ScreenShare);
+      if (!screen) continue;
+      const watching = this.#watching.has(p.identity);
+      shares.push({
+        userId: p.identity,
+        isLocal: false,
+        track: watching ? (screen.videoTrack ?? null) : null,
+        hasAudio: p.getTrackPublication(Track.Source.ScreenShareAudio) !== undefined,
+        watching,
+      });
+    }
     this.#set({
       participants: [
         view(room.localParticipant, true),
         ...[...room.remoteParticipants.values()].map((p) => view(p, false)),
       ],
+      shares,
     });
     this.#applyVolumes();
   }
