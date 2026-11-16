@@ -11,6 +11,7 @@ import { RoomView } from './chat/RoomView.tsx';
 import { Avatar } from './components/Avatar.tsx';
 import { ConnectionBadge } from './components/ConnectionBadge.tsx';
 import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
+import { SearchPanel } from './components/SearchPanel.tsx';
 import { Tulip } from './components/Tulip.tsx';
 import { I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
@@ -227,8 +228,10 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
         </main>
 
         <aside className="members" aria-label={t('members.heading')}>
-          <header className="members__header">{t('members.heading')}</header>
-          <MemberList store={store} />
+          <SearchPanel onOpenRoom={setChosenRoom}>
+            <header className="members__header">{t('members.heading')}</header>
+            <MemberList store={store} />
+          </SearchPanel>
         </aside>
       </div>
       {profileOpen && (
