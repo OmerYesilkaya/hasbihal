@@ -10,6 +10,7 @@ const USER: User = {
   avatarFileId: null,
   role: 'admin',
   createdAt: '2026-11-15T10:00:00.000Z',
+  removedAt: null,
 };
 const SESSION_ID = '0192f0c4-7b5e-7c8e-9a3b-1234567890ac';
 

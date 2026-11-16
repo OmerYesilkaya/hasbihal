@@ -10,6 +10,7 @@ import { RoomList } from './chat/RoomList.tsx';
 import { RoomView } from './chat/RoomView.tsx';
 import { Avatar } from './components/Avatar.tsx';
 import { ConnectionBadge } from './components/ConnectionBadge.tsx';
+import { AdminDialog } from './admin/AdminDialog.tsx';
 import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
 import { SearchPanel } from './components/SearchPanel.tsx';
 import { Tulip } from './components/Tulip.tsx';
@@ -180,6 +181,7 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const me = state.me ?? user;
   // The chosen room, or the first one; a deleted or archived choice falls back the same way.
   const [profileOpen, setProfileOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const rooms = activeRooms(state);
   const roomId = rooms.some((r) => r.id === chosenRoom) ? chosenRoom : (rooms[0]?.id ?? null);
 
@@ -205,6 +207,17 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
           </div>
           <hr className="divider" />
           <RoomList selectedId={roomId} onSelect={setChosenRoom} />
+          {me.role === 'admin' && (
+            <button
+              type="button"
+              className="sidebar__admin"
+              onClick={() => {
+                setAdminOpen(true);
+              }}
+            >
+              ⚙ {t('admin.heading')}
+            </button>
+          )}
           <UserPanel
             user={me}
             presence={state.presence.get(me.id) ?? 'offline'}
@@ -244,6 +257,13 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
           </SearchPanel>
         </aside>
       </div>
+      {adminOpen && (
+        <AdminDialog
+          onClose={() => {
+            setAdminOpen(false);
+          }}
+        />
+      )}
       {profileOpen && (
         <ProfileDialog
           onClose={() => {

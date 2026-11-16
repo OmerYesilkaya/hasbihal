@@ -49,6 +49,8 @@ export const User = z.object({
   avatarFileId: Id.nullable(),
   role: Role,
   createdAt: z.iso.datetime(),
+  /** Removed by an admin: their messages stay under their name (A42), they can't sign in. */
+  removedAt: z.iso.datetime().nullable(),
 });
 export type User = z.infer<typeof User>;
 
@@ -92,6 +94,22 @@ export type InviteInfo = z.infer<typeof InviteInfo>;
 
 export const CreateInviteRequest = z.object({ role: Role.default('member') });
 export type CreateInviteRequest = z.input<typeof CreateInviteRequest>;
+
+/** An invite not used yet (the admin page, A44). Its link was shown once, when it was made. */
+export const PendingInvite = z.object({
+  id: Id,
+  role: Role,
+  createdBy: Id.nullable(),
+  createdAt: z.iso.datetime(),
+  expiresAt: z.iso.datetime(),
+});
+export type PendingInvite = z.infer<typeof PendingInvite>;
+
+export const InviteList = z.object({ invites: z.array(PendingInvite) });
+export type InviteList = z.infer<typeof InviteList>;
+
+export const ChangeRoleRequest = z.object({ role: Role });
+export type ChangeRoleRequest = z.infer<typeof ChangeRoleRequest>;
 
 /** A single-use link: `hasbihal://invite/<token>` or `hasbihal://recover/<token>` (A51). */
 export const OneTimeLink = z.object({

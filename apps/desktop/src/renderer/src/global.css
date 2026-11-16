@@ -2558,3 +2558,104 @@ body {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Admin page (A44) */
+
+.sidebar__admin {
+  margin: 4px 12px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--hb-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar__admin:hover {
+  background: var(--hb-chip);
+  color: var(--hb-text);
+}
+
+.admin {
+  width: 680px;
+}
+
+.admin__body {
+  min-height: 320px;
+}
+
+.admin__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin__row .field__input {
+  flex: 1;
+}
+
+.admin__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.admin__item:last-child {
+  border-bottom: none;
+}
+
+.admin__member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin__actions {
+  display: flex;
+  gap: 14px;
+  white-space: nowrap;
+}
+
+.admin__badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--hb-chip);
+  color: var(--hb-text-secondary);
+  font-size: 11px;
+}
+
+.link-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed var(--hb-accent);
+  border-radius: 8px;
+}
+
+.link-box code {
+  flex: 1;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.link-box .field__hint {
+  flex-basis: 100%;
+  margin: 0;
+}
