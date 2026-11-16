@@ -7,6 +7,13 @@ import tray2xPng from '../../resources/tray@2x.png?asset';
 import templatePng from '../../resources/trayTemplate.png?asset';
 import template2xPng from '../../resources/trayTemplate@2x.png?asset';
 
+/**
+ * A bundled resource's real path. In a packaged app, resources/ is unpacked next to app.asar
+ * (electron-builder.yml), and the bundler's asset paths still point inside the archive.
+ */
+const unpacked = (file: string) =>
+  file.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+
 /** Started by the OS at login (A39): stay in the tray rather than open a window. */
 const HIDDEN_ARG = '--hidden';
 
@@ -101,11 +108,11 @@ export class Background {
     const image = nativeImage.createEmpty();
     image.addRepresentation({
       scaleFactor: 1,
-      buffer: nativeImage.createFromPath(mac ? templatePng : trayPng).toPNG(),
+      buffer: nativeImage.createFromPath(unpacked(mac ? templatePng : trayPng)).toPNG(),
     });
     image.addRepresentation({
       scaleFactor: 2,
-      buffer: nativeImage.createFromPath(mac ? template2xPng : tray2xPng).toPNG(),
+      buffer: nativeImage.createFromPath(unpacked(mac ? template2xPng : tray2xPng)).toPNG(),
     });
     // The menu bar tints a template image to match light and dark menus.
     if (mac) image.setTemplateImage(true);

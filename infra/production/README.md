@@ -78,13 +78,20 @@ It prints a single-use `hasbihal://invite/…` link. Open it on your computer wi
 
 ## 5. The desktop app for this server
 
-The server address is built into the app (A30). Build it once per platform, on that platform:
+The server address is built into the app (A30), so the installers are made for this server, by GitHub Actions (`.github/workflows/release.yml`):
 
-```bash
-MAIN_VITE_SERVER_URL=https://hasbihal.duckdns.org pnpm --filter @hasbihal/desktop package
-```
+1. In the repository's **Settings → Secrets and variables → Actions**:
+   - add the **variable** `HASBIHAL_SERVER_URL`, e.g. `https://hasbihal.duckdns.org`;
+   - add the **secrets** `MAC_CERT_P12` (the "Hasbihal Self-Signed" certificate and key, exported as .p12, then `base64 -i cert.p12 | pbcopy`) and `MAC_CERT_PASSWORD` (A50).
+2. Tag the version from `apps/desktop/package.json` and push it:
 
-The installers end up in `apps/desktop/release/`. The macOS build needs the "Hasbihal Self-Signed" certificate (A50). Send family members the installer with the install notes from A30.
+   ```bash
+   git tag v1.0.0 && git push origin v1.0.0
+   ```
+
+3. The workflow builds the macOS `.dmg` and the Windows `.exe` and puts them on a **draft release**, with the install guide (`docs/KURULUM.md`) as its notes. Try both installers, then publish it and send the family the link.
+
+On GitHub's free plan for private repositories, a release uses about 150 of the 2,000 monthly minutes, because macOS minutes count ten times.
 
 ## Backups (A31)
 

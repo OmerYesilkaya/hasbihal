@@ -4,8 +4,9 @@ import { defineConfig } from 'electron-vite';
 export default defineConfig({
   main: {
     build: {
-      // Bundle workspace packages (they ship TypeScript source); keep real npm deps external.
-      externalizeDeps: { exclude: ['@hasbihal/core', '@hasbihal/protocol'] },
+      // Bundle everything (only Electron and Node's own modules stay outside): the installer
+      // then carries just the built app, not node_modules (every package is a devDependency).
+      externalizeDeps: false,
     },
   },
   preload: {

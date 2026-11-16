@@ -6,7 +6,11 @@ directories:
   buildResources: build
 files:
   - out/**
+  - resources/**
   - package.json
+# The tray icons are read with nativeImage.createFromPath, from a real file.
+asarUnpack:
+  - resources/**
 asar: true
 # hasbihal:// invite and recovery links (DECISIONS A51). macOS registers through Info.plist;
 # Windows registers at first launch (DeepLinkRouter.register).
