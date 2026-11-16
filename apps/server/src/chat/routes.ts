@@ -245,7 +245,6 @@ export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps
             .select('id')
             .where('id', 'in', body.attachmentIds)
             .where('uploader_id', '=', userId)
-            .where('kind', '!=', 'voice')
             .where((eb) =>
               eb.not(
                 eb.exists(

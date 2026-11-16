@@ -442,6 +442,16 @@ test.describe.serial('accounts in the desktop app', () => {
     await snap(page, '13-viewer');
     await page.keyboard.press('Escape');
     await expect(viewer).toBeHidden();
+
+    // A voice message (A22): record a couple of seconds of the fake mic, send, play it back.
+    await page.getByRole('button', { name: 'Sesli mesaj kaydet' }).click();
+    await expect(page.getByTestId('recorder-time')).toHaveText('0:02', { timeout: 5_000 });
+    await page.getByTestId('recorder').getByRole('button', { name: 'Gönder' }).click();
+    const voice = page.getByTestId('voice-message').last();
+    await expect(voice).toContainText('0:02');
+    await voice.getByRole('button', { name: 'Dinle' }).click();
+    await expect(voice).toHaveAttribute('data-playing', 'true');
+    await snap(page, '14-voice-message');
   });
 
   test('explains that a used invite no longer works', async () => {

@@ -7,6 +7,18 @@ import { Id } from './id.ts';
 export const UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
 /** Files on one message. */
 export const ATTACHMENTS_MAX = 10;
+/** A22: voice messages are short notes, not podcasts. */
+export const VOICE_MAX_MS = 5 * 60 * 1000;
+/** Opus at voice bitrates is ~4 KB/s; this leaves room for any encoder. */
+export const VOICE_MAX_BYTES = 10 * 1024 * 1024;
+
+/** `POST /files?kind=voice&durationMs=…` marks an upload as a recorded voice message. */
+export const UploadQuery = z.object({
+  kind: z.literal('voice').optional(),
+  /** As the recorder measured it; used when the file itself doesn't say (WebM from a recorder). */
+  durationMs: z.coerce.number().int().min(0).max(VOICE_MAX_MS).optional(),
+});
+export type UploadQuery = z.infer<typeof UploadQuery>;
 
 export const FileKind = z.enum(['image', 'video', 'audio', 'voice', 'other']);
 export type FileKind = z.infer<typeof FileKind>;

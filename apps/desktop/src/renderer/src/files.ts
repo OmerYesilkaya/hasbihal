@@ -14,12 +14,19 @@ export async function uploadFile(
   file: File,
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
+  /** A recorded voice message (A22), with the recorder's measured length. */
+  voice?: { durationMs: number },
 ): Promise<ApiResult<Attachment>> {
   const token = await window.hasbihal.auth.accessToken();
   if (!token.ok) return token;
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', new URL('/files', serverUrl));
+    const url = new URL('/files', serverUrl);
+    if (voice) {
+      url.searchParams.set('kind', 'voice');
+      url.searchParams.set('durationMs', String(Math.round(voice.durationMs)));
+    }
+    xhr.open('POST', url);
     xhr.setRequestHeader('authorization', `Bearer ${token.value}`);
     xhr.responseType = 'json';
     xhr.upload.onprogress = (e) => {

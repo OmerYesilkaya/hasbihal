@@ -132,6 +132,31 @@ async function inspectVideo(localPath: string, mime: string): Promise<MediaInfo>
   return { kind: 'video', mime, width, height, durationMs, thumbnail };
 }
 
+/** Voice messages (A22): recorded by the app as Opus, in WebM or Ogg. */
+const VOICE_MIME = /^audio\/(webm|ogg)$/;
+
+/**
+ * A recorded voice message, or null when it isn't one. Recorders often leave the duration out of
+ * the file, so the recorder's own measurement fills in.
+ */
+export async function inspectVoice(
+  localPath: string,
+  claimedMime: string,
+  recordedMs: number | undefined,
+): Promise<MediaInfo | null> {
+  const mime = claimedMime.toLowerCase().split(';')[0]?.trim() ?? '';
+  if (!VOICE_MIME.test(mime)) return null;
+  const { durationMs } = await probe(localPath);
+  return {
+    kind: 'audio',
+    mime,
+    width: null,
+    height: null,
+    durationMs: durationMs ?? recordedMs ?? null,
+    thumbnail: null,
+  };
+}
+
 /** Duration and picture size from ffprobe; all null without it. */
 async function probe(
   localPath: string,
