@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { activeRooms, ChatStore } from '@hasbihal/core';
 import type { PresenceMode, PresenceStatus, User } from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
@@ -13,6 +13,7 @@ import { ConnectionBadge } from './components/ConnectionBadge.tsx';
 import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
 import { Tulip } from './components/Tulip.tsx';
 import { I18nProvider, useT } from './i18n.tsx';
+import { HangoutSession } from './hangout/session.ts';
 import { useGateway } from './useGateway.ts';
 
 export function App({ info }: { info: AppInfo }) {
@@ -80,13 +81,93 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const t = useT();
   // One store per signed-in session: signing out unmounts the shell and drops it.
   const [store] = useState(() => new ChatStore());
-  const { status, setPresence, typing } = useGateway(info, store);
+  // One call per signed-in session too; signing out leaves it.
+  const [hangout] = useState(() => new HangoutSession(info.serverUrl));
+  const hangoutState = useSyncExternalStore(hangout.subscribe, hangout.getSnapshot);
+  const [chosenRoom, setChosenRoom] = useState<string | null>(null);
+
+  /** A system notification that brings the app forward and runs `onClick` (A28, A13). */
+  const notify = (title: string, body: string, onClick: () => void) => {
+    const notification = new Notification(title, { body });
+    notification.onclick = () => {
+      window.hasbihal.system.focusWindow();
+      onClick();
+    };
+  };
+  const nameOf = (userId: string) => store.getSnapshot().members.get(userId)?.displayName ?? '?';
+  const roomName = (roomId: string) => store.getSnapshot().rooms.get(roomId)?.name ?? '?';
+  const { status, setPresence, typing } = useGateway(info, store, {
+    hangoutStarted: (roomId, userId) => {
+      if (hangoutState.roomId === roomId) return; // already there
+      notify(
+        t('hangoutStarted.title', { name: nameOf(userId) }),
+        t('hangoutStarted.body', { room: roomName(roomId) }),
+        () => {
+          setChosenRoom(roomId);
+        },
+      );
+    },
+    nudge: (fromUserId, roomId) => {
+      notify(
+        t('nudge.notificationTitle', { name: nameOf(fromUserId) }),
+        t('nudge.notificationBody', { room: roomName(roomId) }),
+        () => {
+          setChosenRoom(roomId);
+          void hangout.join(roomId);
+        },
+      );
+    },
+  });
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  const chat = useMemo((): Chat => ({ info, store, typing }), [info, store, typing]);
+  const chat = useMemo(
+    (): Chat => ({ info, store, typing, hangout }),
+    [info, store, typing, hangout],
+  );
+
+  useEffect(
+    () => () => {
+      void hangout.leave();
+    },
+    [hangout],
+  );
+  // A37: mute and deafen from anywhere, but only while in a call.
+  const inCall = hangoutState.roomId !== null;
+  useEffect(() => {
+    window.hasbihal.system.setHangoutShortcuts(inCall);
+  }, [inCall]);
+  useEffect(
+    () =>
+      window.hasbihal.system.onShortcut((action) => {
+        void (action === 'mute' ? hangout.toggleMute() : hangout.toggleDeafen());
+      }),
+    [hangout],
+  );
+  // Push-to-talk while the app is focused (a global one needs a native keyboard hook).
+  const pttKey =
+    hangoutState.settings.mode === 'ptt' && inCall ? hangoutState.settings.pttKey : null;
+  useEffect(() => {
+    if (!pttKey) return;
+    const down = (e: KeyboardEvent) => {
+      if (e.code === pttKey) hangout.setPushToTalk(true);
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === pttKey) hangout.setPushToTalk(false);
+    };
+    const release = () => {
+      hangout.setPushToTalk(false);
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', release);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', release);
+    };
+  }, [pttKey, hangout]);
   // The gateway's copy of me is the freshest; the sign-in answer covers the moment before it.
   const me = state.me ?? user;
   // The chosen room, or the first one; a deleted or archived choice falls back the same way.
-  const [chosenRoom, setChosenRoom] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const rooms = activeRooms(state);
   const roomId = rooms.some((r) => r.id === chosenRoom) ? chosenRoom : (rooms[0]?.id ?? null);

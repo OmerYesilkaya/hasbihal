@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Message, User } from '@hasbihal/protocol';
-import { activeRooms, ChatStore, roomMessages, sortMembers, typingIn } from './store.ts';
+import { activeRooms, ChatStore, hangoutOf, roomMessages, sortMembers, typingIn } from './store.ts';
 
 const user = (id: string, displayName: string): User => ({
   id,
@@ -208,5 +208,21 @@ describe('ChatStore typing', () => {
       },
     });
     expect(typingIn(store.getSnapshot(), roomId)).toEqual([]);
+  });
+});
+
+describe('ChatStore hangouts', () => {
+  const salon = '0192f0c4-7b5e-7c8e-9a3b-0000000000b1';
+  const joinedAt = '2026-11-15T10:00:00.000Z';
+
+  it('tracks who is in which hangout', () => {
+    const store = new ChatStore();
+    store.setHangouts({
+      [salon]: [{ userId: ayse.id, joinedAt, camera: false, screenShare: false }],
+    });
+    expect(hangoutOf(store.getSnapshot(), ayse.id)).toBe(salon);
+    store.setHangout(salon, []);
+    expect(store.getSnapshot().hangouts.has(salon)).toBe(false);
+    expect(hangoutOf(store.getSnapshot(), ayse.id)).toBeUndefined();
   });
 });

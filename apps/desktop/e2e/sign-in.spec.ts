@@ -37,10 +37,12 @@ async function adminInviteUrl(): Promise<string> {
 /** Starts the app; another `dataDir` is another computer (its own session and window). */
 async function launch(dataDir = userData): Promise<Page> {
   const app = await electron.launch({
-    args: [APP_DIR, '--lang=tr'],
+    // Fake microphone (a beeping tone) and camera. Permissions go through the app's own handler.
+    args: ['--use-fake-device-for-media-stream', APP_DIR, '--lang=tr'],
     env: {
       ...process.env,
       HASBIHAL_SERVER_URL: process.env.E2E_SERVER_URL ?? '',
+      HASBIHAL_LIVEKIT_URL: process.env.E2E_LIVEKIT_URL ?? '',
       HASBIHAL_USER_DATA_DIR: dataDir,
     },
   });
@@ -291,6 +293,71 @@ test.describe.serial('accounts in the desktop app', () => {
     await expect(
       page.getByTestId('member').filter({ hasText: 'Ömer Faruk' }).locator('img.avatar__photo'),
     ).toBeVisible();
+  });
+
+  test('talks in a hangout: join, speaking, mute, camera, nudge, leave', async () => {
+    const omer = await launch();
+    await expect(omer.getByTestId('current-user')).toHaveText('Ömer Faruk');
+    await omer.getByTestId('room').filter({ hasText: 'Salon' }).click();
+
+    const otherData = await mkdtemp(path.join(tmpdir(), 'hasbihal-e2e-zeynep-'));
+    try {
+      const zeynep = await launch(otherData);
+      await openLink(await adminInviteUrl());
+      await zeynep.getByLabel('Görünen ad').fill('Zeynep Test');
+      await zeynep.getByLabel('Kullanıcı adı').fill('zeynep');
+      await zeynep.getByLabel('Parola').fill('dördüncü uzun parola cümlesi');
+      await zeynep.getByRole('button', { name: 'Hesabı oluştur' }).click();
+      await expect(zeynep.getByTestId('current-user')).toHaveText('Zeynep Test');
+      await zeynep.getByTestId('room').filter({ hasText: 'Salon' }).click();
+
+      // Ömer joins; Zeynep sees him in the sidebar and in the room's join bar.
+      await omer.getByRole('button', { name: /Sesli sohbete katıl/ }).click();
+      await expect(omer.getByTestId('tile')).toHaveCount(1);
+      await expect(zeynep.locator('.room__voice')).toContainText('Ömer Faruk');
+      await expect(zeynep.getByText('1 kişi sohbette')).toBeVisible();
+
+      // Zeynep joins: both see two tiles; the fake mic's tone makes Zeynep "speak" once noise
+      // suppression, which rightly treats a beep as noise, is off.
+      await zeynep.getByRole('button', { name: /Sesli sohbete katıl/ }).click();
+      await expect(omer.getByTestId('tile')).toHaveCount(2);
+      await expect(zeynep.getByTestId('tile')).toHaveCount(2);
+      await zeynep.getByRole('button', { name: 'Ses ve görüntü ayarları' }).click();
+      await zeynep.getByLabel('Gürültü engelleme').uncheck();
+      await zeynep.getByRole('button', { name: 'Ses ve görüntü ayarları' }).click();
+      await expect(omer.getByTestId('tile').filter({ hasText: 'Zeynep Test' })).toHaveAttribute(
+        'data-speaking',
+        'true',
+        { timeout: 15_000 },
+      );
+
+      // Ömer mutes; Zeynep sees it.
+      await omer.getByRole('button', { name: 'Mikrofonu kapat' }).click();
+      await expect(zeynep.getByTestId('tile').filter({ hasText: 'Ömer Faruk' })).toContainText(
+        '🔇',
+      );
+
+      // Zeynep turns her camera on; Ömer gets video.
+      await zeynep.getByRole('button', { name: 'Kamerayı aç' }).click();
+      await expect(
+        omer.getByTestId('tile').filter({ hasText: 'Zeynep Test' }).locator('video'),
+      ).toBeVisible();
+      await snap(omer, '10-hangout');
+
+      // Zeynep leaves; Ömer calls her back in with a nudge.
+      await zeynep.getByRole('button', { name: 'Ayrıl' }).click();
+      await expect(omer.getByTestId('tile')).toHaveCount(1);
+      const zeynepRow = omer.getByTestId('member').filter({ hasText: 'Zeynep Test' });
+      await zeynepRow.hover();
+      await zeynepRow.getByRole('button', { name: 'Sohbete çağır' }).click();
+      await expect(zeynepRow).toContainText('Çağrıldı');
+
+      await omer.getByRole('button', { name: 'Ayrıl' }).click();
+      await expect(zeynep.locator('.room__voice')).toHaveCount(0);
+      await apps.pop()?.close();
+    } finally {
+      await rm(otherData, { recursive: true, force: true });
+    }
   });
 
   test('explains that a used invite no longer works', async () => {

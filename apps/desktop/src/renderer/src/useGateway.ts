@@ -14,9 +14,20 @@ function toWebSocketUrl(serverUrl: string): string {
  * Connects the signed-in app to the gateway and keeps `store` up to date: a full load on the first
  * welcome and after a resync, then durable events and presence (ARCHITECTURE §5).
  */
-export function useGateway(info: AppInfo, store: ChatStore) {
+/** What the gateway can ask the UI to show: notifications (A28, A13). */
+export interface GatewayNotices {
+  hangoutStarted: (roomId: string, userId: string) => void;
+  nudge: (fromUserId: string, roomId: string) => void;
+}
+
+export function useGateway(info: AppInfo, store: ChatStore, notices: GatewayNotices) {
   const [status, setStatus] = useState<GatewayStatus>({ kind: 'connecting', attempt: 0 });
   const client = useRef<GatewayClient | null>(null);
+  // The latest handlers, without reconnecting when they change.
+  const latestNotices = useRef(notices);
+  useEffect(() => {
+    latestNotices.current = notices;
+  });
 
   useEffect(() => {
     let loaded = false;
@@ -45,6 +56,7 @@ export function useGateway(info: AppInfo, store: ChatStore) {
       onWelcome: (welcome) => {
         store.setMe(welcome.me);
         store.setPresenceSnapshot(welcome.presence);
+        store.setHangouts(welcome.hangouts);
         if (welcome.resync) store.forgetMessages();
         if (!loaded || welcome.resync) {
           loaded = true;
@@ -63,6 +75,15 @@ export function useGateway(info: AppInfo, store: ChatStore) {
       },
       onReadState: (roomId, messageId) => {
         store.setReadMarker(roomId, messageId);
+      },
+      onHangout: (roomId, participants) => {
+        store.setHangout(roomId, participants);
+      },
+      onHangoutStarted: (roomId, userId) => {
+        latestNotices.current.hangoutStarted(roomId, userId);
+      },
+      onNudge: (fromUserId, roomId) => {
+        latestNotices.current.nudge(fromUserId, roomId);
       },
     });
     client.current = gateway;

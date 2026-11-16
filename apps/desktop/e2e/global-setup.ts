@@ -3,12 +3,15 @@
 // docker CLI rather than Testcontainers, which trips a module-loading bug in Node 24.2 when loaded
 // through Playwright.
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 const POSTGRES_IMAGE = 'postgres:17.12'; // same as infra/compose.dev.yml
+const LIVEKIT_IMAGE = 'livekit/livekit-server:v1.13.11';
 
 export const SERVER_DIR = path.resolve(import.meta.dirname, '../../server');
 
@@ -83,10 +86,89 @@ async function startPostgres(): Promise<{ url: string; stop: () => Promise<void>
   throw new Error('PostgreSQL did not start');
 }
 
+/**
+ * A LiveKit of its own (not the dev one), with webhooks to this test server. Fixed ports beside
+ * the dev LiveKit's 7880–7882, so both can run.
+ */
+const LIVEKIT_PORTS = { http: 7980, tcp: 7981, udp: 7982 };
+
+async function startLiveKit(
+  serverPort: number,
+): Promise<{ url: string; stop: () => Promise<void> }> {
+  const dir = await mkdtemp(path.join(tmpdir(), 'hasbihal-e2e-livekit-'));
+  const config = path.join(dir, 'livekit.yaml');
+  const dev = await readFile(
+    path.resolve(import.meta.dirname, '../../../infra/livekit.dev.yaml'),
+    'utf8',
+  );
+  // The dev codec list (T8), with this run's ports and webhook target.
+  const devConfig = dev.replace(/webhook:[\s\S]*$/, '');
+  await writeFile(
+    config,
+    `${devConfig}port: ${String(LIVEKIT_PORTS.http)}
+rtc:
+  tcp_port: ${String(LIVEKIT_PORTS.tcp)}
+  udp_port: ${String(LIVEKIT_PORTS.udp)}
+# Chrome's fake microphone beeps briefly once a second; the default (sound in 40% of frames)
+# never counts that as speaking.
+audio:
+  min_percentile: 5
+webhook:
+  api_key: devkey
+  urls:
+    - http://host.docker.internal:${String(serverPort)}/hooks/livekit
+`,
+  );
+  const { stdout } = await run('docker', [
+    'run',
+    '--detach',
+    '--rm',
+    '--add-host',
+    'host.docker.internal:host-gateway',
+    '--publish',
+    `127.0.0.1:${String(LIVEKIT_PORTS.http)}:${String(LIVEKIT_PORTS.http)}`,
+    '--publish',
+    `127.0.0.1:${String(LIVEKIT_PORTS.tcp)}:${String(LIVEKIT_PORTS.tcp)}`,
+    '--publish',
+    `127.0.0.1:${String(LIVEKIT_PORTS.udp)}:${String(LIVEKIT_PORTS.udp)}/udp`,
+    '--volume',
+    `${config}:/etc/livekit.yaml:ro`,
+    LIVEKIT_IMAGE,
+    '--dev',
+    '--config',
+    '/etc/livekit.yaml',
+    '--bind',
+    '0.0.0.0',
+    '--node-ip',
+    '127.0.0.1',
+  ]);
+  const id = stdout.trim();
+  const url = `http://127.0.0.1:${String(LIVEKIT_PORTS.http)}`;
+  for (let i = 0; i < 100; i++) {
+    if (
+      await fetch(url).then(
+        (r) => r.ok,
+        () => false,
+      )
+    ) {
+      return {
+        url: `ws://127.0.0.1:${String(LIVEKIT_PORTS.http)}`,
+        stop: async () => {
+          await run('docker', ['rm', '--force', id]).catch(() => undefined);
+        },
+      };
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  await run('docker', ['rm', '--force', id]).catch(() => undefined);
+  throw new Error('LiveKit did not start');
+}
+
 export default async function globalSetup(): Promise<() => Promise<void>> {
   const database = await startPostgres();
   const port = await freePort();
   const serverUrl = `http://127.0.0.1:${String(port)}`;
+  const livekit = await startLiveKit(port);
   const env = {
     ...process.env,
     DATABASE_URL: database.url,
@@ -94,6 +176,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     HOST: '127.0.0.1',
     LOG_LEVEL: 'warn',
     NODE_ENV: 'test',
+    LIVEKIT_URL: livekit.url,
+    LIVEKIT_API_URL: livekit.url.replace('ws:', 'http:'),
   };
   const server = spawn(process.execPath, ['src/main.ts'], {
     cwd: SERVER_DIR,
@@ -103,10 +187,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   await waitForHealth(serverUrl, server);
 
   process.env.E2E_SERVER_URL = serverUrl;
+  process.env.E2E_LIVEKIT_URL = livekit.url;
   process.env.E2E_DATABASE_URL = database.url;
 
   return async () => {
     server.kill('SIGTERM');
-    await database.stop();
+    await Promise.all([database.stop(), livekit.stop()]);
   };
 }

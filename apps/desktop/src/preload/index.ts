@@ -51,6 +51,19 @@ const system: SystemBridge = {
     ipcRenderer.on(IPC.systemIdleChanged, handler);
     return () => ipcRenderer.off(IPC.systemIdleChanged, handler);
   },
+  setHangoutShortcuts: (active) => {
+    ipcRenderer.send(IPC.systemShortcuts, active);
+  },
+  onShortcut: (listener) => {
+    const handler = (_event: unknown, action: 'mute' | 'deafen') => {
+      listener(action);
+    };
+    ipcRenderer.on(IPC.shortcut, handler);
+    return () => ipcRenderer.off(IPC.shortcut, handler);
+  },
+  focusWindow: () => {
+    ipcRenderer.send(IPC.focusWindow);
+  },
 };
 
 /** The only main-process capabilities the renderer can reach (ARCHITECTURE §4.1). */

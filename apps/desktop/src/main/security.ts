@@ -13,17 +13,35 @@ function toWebSocketOrigin(httpOrigin: string): string {
   return httpOrigin.replace(/^http/, 'ws');
 }
 
-export function contentSecurityPolicy(options: { serverUrl: string; dev: boolean }): string {
+export function contentSecurityPolicy(options: {
+  serverUrl: string;
+  dev: boolean;
+  livekitUrl?: string;
+}): string {
   const server = new URL(options.serverUrl).origin;
+  // Production LiveKit shares the server's origin (wss://<host>/livekit). A separate one (local
+  // test runs) is added in both forms: LiveKit also uses HTTP to check connections.
+  const livekit = options.livekitUrl
+    ? new URL(options.livekitUrl.replace(/^ws/, 'http')).origin
+    : undefined;
   const directives: Record<string, string[]> = {
     'default-src': ["'none'"],
     // Dev only: Vite's React Refresh preamble is an inline script.
-    'script-src': options.dev ? ["'self'", "'unsafe-inline'"] : ["'self'"],
+    // 'wasm-unsafe-eval' lets WebAssembly compile (DeepFilterNet, T7); JavaScript eval stays forbidden.
+    'script-src': options.dev
+      ? ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"]
+      : ["'self'", "'wasm-unsafe-eval'"],
     'style-src': options.dev ? ["'self'", "'unsafe-inline'"] : ["'self'"],
     'font-src': ["'self'"],
     'img-src': ["'self'", 'data:', 'blob:', server],
     'media-src': ["'self'", 'blob:', 'mediastream:', server],
-    'connect-src': ["'self'", server, toWebSocketOrigin(server), ...(options.dev ? ['ws:'] : [])],
+    'connect-src': [
+      "'self'",
+      server,
+      toWebSocketOrigin(server),
+      ...(livekit ? [livekit, toWebSocketOrigin(livekit)] : []),
+      ...(options.dev ? ['ws:'] : []),
+    ],
     'worker-src': ["'self'", 'blob:'],
     'base-uri': ["'none'"],
     'form-action': ["'none'"],
@@ -42,9 +60,15 @@ const ALLOWED_PERMISSIONS = new Set([
   'clipboard-sanitized-write',
 ]);
 
-function isTrustedOrigin(url: string, devServerUrl: string | undefined): boolean {
+/**
+ * Whether a page (or a permission request's origin) is the app's own UI. Built from protocol
+ * and host because `URL.origin` is "null" for custom schemes such as `app:`, which would make
+ * every permission check fail in the packaged app.
+ */
+export function isTrustedOrigin(url: string, devServerUrl: string | undefined): boolean {
   try {
-    const origin = new URL(url).origin;
+    const { protocol, host } = new URL(url);
+    const origin = `${protocol}//${host}`;
     if (origin === APP_ORIGIN) return true;
     return devServerUrl !== undefined && origin === new URL(devServerUrl).origin;
   } catch {
