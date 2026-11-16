@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GatewayClient, type ChatStore, type GatewayStatus } from '@hasbihal/core';
-import { MemberList, RoomList, type PresenceMode } from '@hasbihal/protocol';
+import { MemberList, RoomList, type Message, type PresenceMode } from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
 import { apiGet } from './api.ts';
 
@@ -16,6 +16,8 @@ function toWebSocketUrl(serverUrl: string): string {
  */
 /** What the gateway can ask the UI to show: notifications (A28, A13). */
 export interface GatewayNotices {
+  /** A new message from someone, to weigh for a notification (A28). */
+  message: (message: Message) => void;
   hangoutStarted: (roomId: string, userId: string) => void;
   nudge: (fromUserId: string, roomId: string) => void;
   eventReminder: (reminder: { roomId: string; title: string; startsAt: string }) => void;
@@ -68,6 +70,10 @@ export function useGateway(info: AppInfo, store: ChatStore, notices: GatewayNoti
       },
       onEvent: (event) => {
         store.apply(event);
+        if (event.type === 'message_created') latestNotices.current.message(event.message);
+      },
+      onRoomPrefs: (roomId, prefs) => {
+        store.setRoomPrefs(roomId, prefs);
       },
       onPresence: (userId, presence) => {
         store.setPresence(userId, presence);

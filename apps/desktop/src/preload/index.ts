@@ -66,6 +66,13 @@ const system: SystemBridge = {
   focusWindow: () => {
     ipcRenderer.send(IPC.focusWindow);
   },
+  launchAtStartup: () => ipcRenderer.invoke(IPC.launchAtStartup) as Promise<boolean | null>,
+  setLaunchAtStartup: async (on) => {
+    await ipcRenderer.invoke(IPC.setLaunchAtStartup, on);
+  },
+  setMentions: (count) => {
+    ipcRenderer.send(IPC.mentions, count);
+  },
 };
 
 const screen: ScreenBridge = {

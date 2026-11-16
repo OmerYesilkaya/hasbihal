@@ -41,6 +41,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
       <PhotoSection me={me} />
       <NameSection me={me} />
       <PasswordSection />
+      <StartupSection />
       <SessionsSection />
     </dialog>
   );
@@ -290,6 +291,39 @@ function SessionsSection() {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+/** A39: starting with the computer, on by default; shown only where the build manages it. */
+function StartupSection() {
+  const t = useT();
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let current = true;
+    void window.hasbihal.system.launchAtStartup().then((value) => {
+      if (current) setOn(value);
+    });
+    return () => {
+      current = false;
+    };
+  }, []);
+  if (on === null) return null;
+  return (
+    <section className="profile__section">
+      <label className="voice-settings__check">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => {
+            const value = e.target.checked;
+            setOn(value);
+            void window.hasbihal.system.setLaunchAtStartup(value);
+          }}
+        />
+        {t('profile.launchAtStartup')}
+      </label>
+      <p className="field__hint">{t('profile.launchAtStartupHint')}</p>
     </section>
   );
 }

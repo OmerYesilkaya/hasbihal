@@ -1,6 +1,11 @@
 import { sql, type Kysely, type Selectable } from 'kysely';
 import { extractMentions } from '@hasbihal/core';
-import type { Message, Room, RoomWithState } from '@hasbihal/protocol';
+import {
+  DEFAULT_ROOM_PREFS,
+  type Message,
+  type Room,
+  type RoomWithState,
+} from '@hasbihal/protocol';
 import type { Database, MessagesTable, RoomsTable } from '../db/schema.ts';
 import { toAttachment } from '../files/routes.ts';
 
@@ -192,10 +197,14 @@ export async function roomsWithState(
     created_at: Date;
     archived_at: Date | null;
     last_read_message_id: string | null;
+    notify_level: 'mentions' | 'all' | 'muted' | null;
+    sound_on_message: boolean | null;
+    hangout_start_alerts: boolean | null;
     unread: string;
     unread_mentions: string;
   }>`
     select r.id, r.name, r.topic, r.position, r.created_at, r.archived_at, p.last_read_message_id,
+      p.notify_level, p.sound_on_message, p.hangout_start_alerts,
       count(m.id) as unread,
       count(m.id) filter (
         where m.mentions_everyone
@@ -212,12 +221,18 @@ export async function roomsWithState(
         when lm.id is null then m.created_at > me.created_at
         else (m.created_at, m.id) > (lm.created_at, lm.id)
       end
-    group by r.id, p.last_read_message_id
+    group by r.id, p.room_id, p.user_id
     order by r.position, r.created_at
   `.execute(db);
   return result.rows.map((row) => ({
     ...toRoom(row),
     lastReadMessageId: row.last_read_message_id,
+    // No row yet: the defaults (A28).
+    prefs: {
+      notify: row.notify_level ?? DEFAULT_ROOM_PREFS.notify,
+      sound: row.sound_on_message ?? DEFAULT_ROOM_PREFS.sound,
+      hangoutAlerts: row.hangout_start_alerts ?? DEFAULT_ROOM_PREFS.hangoutAlerts,
+    },
     unreadCount: Number(row.unread),
     unreadMentionCount: Number(row.unread_mentions),
   }));

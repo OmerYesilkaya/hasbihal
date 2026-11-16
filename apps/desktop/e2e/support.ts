@@ -153,6 +153,8 @@ export interface Desktop {
   openLink(page: Page, url: string): Promise<void>;
   /** Quits the app showing `page` (that computer goes offline). */
   close(page: Page): Promise<void>;
+  /** The Electron app behind a page, to reach its main process. */
+  appOf(page: Page): ElectronApplication;
 }
 
 export const test = base.extend<{ desktop: Desktop }>({
@@ -204,6 +206,11 @@ export const test = base.extend<{ desktop: Desktop }>({
         await running.get(page)?.app.evaluate(({ app: electronApp }, link) => {
           electronApp.emit('open-url', { preventDefault: () => undefined }, link);
         }, url);
+      },
+      appOf(page) {
+        const entry = running.get(page);
+        if (!entry) throw new Error('not a running app');
+        return entry.app;
       },
       async close(page) {
         const entry = running.get(page);

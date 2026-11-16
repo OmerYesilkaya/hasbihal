@@ -1,16 +1,26 @@
 import {
+  DEFAULT_ROOM_PREFS,
   TYPING_TTL_MS,
   type DurableEvent,
   type HangoutParticipant,
   type Message,
   type PresenceStatus,
   type Room,
+  type RoomPrefs,
   type RoomWithState,
   type User,
 } from '@hasbihal/protocol';
 
 /** A room as this member sees it: unread state kept up to date by events (A28 badges). */
 export type RoomEntry = RoomWithState;
+
+/** A room just created: nothing read, nothing unread, default notifications. */
+const FRESH_ROOM = {
+  lastReadMessageId: null,
+  prefs: DEFAULT_ROOM_PREFS,
+  unreadCount: 0,
+  unreadMentionCount: 0,
+};
 
 /** The client's view of the shared state, fed by HTTP loads and the gateway (ARCHITECTURE §4.3). */
 export interface ChatState {
@@ -208,14 +218,11 @@ export class ChatStore {
     },
     room_created: (event) => {
       if (this.#state.rooms.has(event.room.id)) return;
-      this.#putRoom(event.room, { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 });
+      this.#putRoom(event.room, FRESH_ROOM);
     },
     room_updated: (event) => {
       const current = this.#state.rooms.get(event.room.id);
-      this.#putRoom(
-        event.room,
-        current ?? { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
-      );
+      this.#putRoom(event.room, current ?? FRESH_ROOM);
     },
     room_deleted: (event) => {
       const rooms = new Map(this.#state.rooms);
@@ -259,6 +266,12 @@ export class ChatStore {
     },
   };
 
+  /** This member changed how they hear about a room (A28), here or on another device. */
+  setRoomPrefs(roomId: string, prefs: RoomPrefs): void {
+    const room = this.#state.rooms.get(roomId);
+    if (room) this.#update({ rooms: new Map(this.#state.rooms).set(roomId, { ...room, prefs }) });
+  }
+
   /** Event views should reload: after `events_changed`, or after a reconnect missed some. */
   eventsChanged(): void {
     this.#update({ eventsRevision: this.#state.eventsRevision + 1 });
@@ -270,11 +283,12 @@ export class ChatStore {
 
   #putRoom(
     room: Room,
-    state: Pick<RoomEntry, 'lastReadMessageId' | 'unreadCount' | 'unreadMentionCount'>,
+    state: Pick<RoomEntry, 'lastReadMessageId' | 'prefs' | 'unreadCount' | 'unreadMentionCount'>,
   ): void {
     const entry: RoomEntry = {
       ...room,
       lastReadMessageId: state.lastReadMessageId,
+      prefs: state.prefs,
       unreadCount: state.unreadCount,
       unreadMentionCount: state.unreadMentionCount,
     };

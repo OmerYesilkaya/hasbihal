@@ -2352,7 +2352,6 @@ body {
 }
 
 .event-chip {
-  margin-left: auto;
   padding: 4px 10px;
   border: 1px solid var(--hb-border);
   border-radius: 14px;
@@ -2658,4 +2657,65 @@ body {
 .link-box .field__hint {
   flex-basis: 100%;
   margin: 0;
+}
+
+/* Notification settings per room (A28) */
+
+.room[data-muted] .room__name {
+  opacity: 0.55;
+}
+
+.room-prefs {
+  position: relative;
+}
+
+.room-prefs__button {
+  padding: 4px 8px;
+  border-radius: 8px;
+  list-style: none;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.room-prefs__button::-webkit-details-marker {
+  display: none;
+}
+
+.room-prefs__button:hover {
+  background: var(--hb-chip);
+}
+
+.room-prefs__menu {
+  position: absolute;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 280px;
+  padding: 12px 14px;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.room-prefs__menu fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.room-prefs__menu .field__hint {
+  margin: 4px 0 0;
+}
+
+.room-view__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
 }

@@ -6,6 +6,7 @@ import { RecoverRequest, SignInRequest, SignUpRequest } from '@hasbihal/protocol
 import { IPC, type AppInfo, type AuthResult } from '../shared/app-info.ts';
 import { registerAppSchemePrivileges, serveRendererFromAppScheme } from './app-protocol.ts';
 import { AuthSession } from './auth-session.ts';
+import { Background } from './background.ts';
 import { DeepLinkRouter } from './deep-links.ts';
 import { IdleWatcher } from './idle.ts';
 import { ScreenSources } from './screen-share.ts';
@@ -39,6 +40,8 @@ registerAppSchemePrivileges();
 const deepLinks = new DeepLinkRouter();
 const idleWatcher = new IdleWatcher();
 const shortcuts = new HangoutShortcuts();
+// Packaged builds only: development and test runs never register a login item.
+const background = new Background({ manageStartup: app.isPackaged });
 deepLinks.listen();
 
 if (!app.requestSingleInstanceLock()) {
@@ -67,8 +70,10 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.once('ready-to-show', () => {
-    window.show();
+    // Started with the computer (A39): stay in the tray until wanted.
+    if (!background.startedHidden) window.show();
   });
+  background.attach(window);
   deepLinks.setTarget(window.webContents);
   idleWatcher.setTarget(window.webContents);
   shortcuts.setTarget(window.webContents);
@@ -117,7 +122,7 @@ function handle<S extends z.ZodType, R>(
   });
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   const csp = contentSecurityPolicy({
     serverUrl,
     dev: isDev,
@@ -165,11 +170,17 @@ void app.whenReady().then(() => {
     shortcuts.setActive(active === true);
   });
   ipcMain.on(IPC.focusWindow, () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    background.show();
   });
+  ipcMain.handle(IPC.launchAtStartup, () => background.launchAtStartup());
+  ipcMain.handle(IPC.setLaunchAtStartup, (_event, on: unknown) =>
+    background.setLaunchAtStartup(on === true),
+  );
+  ipcMain.on(IPC.mentions, (_event, count: unknown) => {
+    if (typeof count === 'number' && Number.isInteger(count) && count >= 0)
+      background.setMentions(count);
+  });
+  await background.start();
   // End-to-end tests share the app's own page instead of a real screen (no OS permission).
   const screens = new ScreenSources({
     fake: devOverride('HASBIHAL_FAKE_SCREEN') === '1',
@@ -184,19 +195,19 @@ void app.whenReady().then(() => {
 
   mainWindow = createMainWindow();
 
+  // macOS: clicking the Dock icon brings the hidden window back.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) mainWindow = createMainWindow();
+    else background.show();
   });
 });
 
 app.on('second-instance', (_event, argv) => {
   deepLinks.handleArgv(argv);
-  if (!mainWindow) return;
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.focus();
+  background.show();
 });
 
+// Closing the window only hides it (A38, Background), so this happens only while quitting.
 app.on('window-all-closed', () => {
-  // Tray behaviour (DECISIONS A38) arrives in M6; until then quit like a normal app off macOS.
-  if (process.platform !== 'darwin') app.quit();
+  app.quit();
 });

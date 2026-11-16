@@ -1,6 +1,18 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { activeRooms, ChatStore } from '@hasbihal/core';
-import type { PresenceMode, PresenceStatus, User } from '@hasbihal/protocol';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  activeRooms,
+  ChatStore,
+  noticeFor,
+  parseMarkdown,
+  toPlainText,
+  type Occasion,
+} from '@hasbihal/core';
+import {
+  DEFAULT_ROOM_PREFS,
+  type PresenceMode,
+  type PresenceStatus,
+  type User,
+} from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
 import { AuthScreen } from './auth/AuthScreen.tsx';
 import { useDeepLink, useSession } from './auth/useSession.ts';
@@ -16,6 +28,7 @@ import { SearchPanel } from './components/SearchPanel.tsx';
 import { Tulip } from './components/Tulip.tsx';
 import { formatTime, I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
+import { playChime } from './sound.ts';
 import { useGateway } from './useGateway.ts';
 
 export function App({ info }: { info: AppInfo }) {
@@ -88,9 +101,32 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const hangoutState = useSyncExternalStore(hangout.subscribe, hangout.getSnapshot);
   const [chosenRoom, setChosenRoom] = useState<string | null>(null);
 
-  /** A system notification that brings the app forward and runs `onClick` (A28, A13). */
-  const notify = (title: string, body: string, onClick: () => void) => {
-    const notification = new Notification(title, { body });
+  /** The room on screen, for "they're already looking at it" (kept current below). */
+  const shownRoom = useRef<string | null>(null);
+  const situation = () => {
+    const snapshot = store.getSnapshot();
+    const myId = snapshot.me?.id ?? '';
+    return { myId, busy: snapshot.presence.get(myId) === 'busy', now: Date.now() };
+  };
+  const prefsOf = (roomId: string) =>
+    store.getSnapshot().rooms.get(roomId)?.prefs ?? DEFAULT_ROOM_PREFS;
+
+  /**
+   * A system notification, if the A28 rules want one: it brings the app forward and runs
+   * `onClick`. Our own chime instead of the system sound, so it's the same everywhere.
+   */
+  const notify = (
+    occasion: Occasion,
+    roomId: string,
+    title: string,
+    body: string,
+    onClick: () => void,
+  ) => {
+    const viewingRoom = document.hasFocus() && shownRoom.current === roomId;
+    const notice = noticeFor(occasion, { ...situation(), viewingRoom });
+    if (!notice.notify) return;
+    if (notice.sound) playChime();
+    const notification = new Notification(title, { body, silent: true });
     notification.onclick = () => {
       window.hasbihal.system.focusWindow();
       onClick();
@@ -99,9 +135,23 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const nameOf = (userId: string) => store.getSnapshot().members.get(userId)?.displayName ?? '?';
   const roomName = (roomId: string) => store.getSnapshot().rooms.get(roomId)?.name ?? '?';
   const { status, setPresence, typing } = useGateway(info, store, {
+    message: (message) => {
+      const text = toPlainText(parseMarkdown(message.body)).replace(/\s+/g, ' ').trim();
+      notify(
+        { kind: 'message', message, prefs: prefsOf(message.roomId) },
+        message.roomId,
+        `${nameOf(message.authorId)} · #${roomName(message.roomId)}`,
+        text.slice(0, 200) || t('attachment.only'),
+        () => {
+          setChosenRoom(message.roomId);
+        },
+      );
+    },
     hangoutStarted: (roomId, userId) => {
       if (hangoutState.roomId === roomId) return; // already there
       notify(
+        { kind: 'hangout_started', prefs: prefsOf(roomId) },
+        roomId,
         t('hangoutStarted.title', { name: nameOf(userId) }),
         t('hangoutStarted.body', { room: roomName(roomId) }),
         () => {
@@ -111,6 +161,8 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
     },
     nudge: (fromUserId, roomId) => {
       notify(
+        { kind: 'nudge' },
+        roomId,
         t('nudge.notificationTitle', { name: nameOf(fromUserId) }),
         t('nudge.notificationBody', { room: roomName(roomId) }),
         () => {
@@ -122,6 +174,8 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
     // A15: "Ders · 09:00, in 10 minutes".
     eventReminder: ({ roomId, title, startsAt }) => {
       notify(
+        { kind: 'event_reminder' },
+        roomId,
         t('events.reminderTitle', { title }),
         t('events.reminderBody', { time: formatTime(startsAt), room: roomName(roomId) }),
         () => {
@@ -184,6 +238,14 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const [adminOpen, setAdminOpen] = useState(false);
   const rooms = activeRooms(state);
   const roomId = rooms.some((r) => r.id === chosenRoom) ? chosenRoom : (rooms[0]?.id ?? null);
+  useEffect(() => {
+    shownRoom.current = roomId;
+  }, [roomId]);
+  // Unread mentions on the macOS dock and in the tray's tooltip.
+  const mentions = [...state.rooms.values()].reduce((sum, r) => sum + r.unreadMentionCount, 0);
+  useEffect(() => {
+    window.hasbihal.system.setMentions(mentions);
+  }, [mentions]);
 
   if (status.kind === 'upgrade_required') {
     return (

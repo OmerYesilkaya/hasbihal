@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { User } from './auth.ts';
-import { Message, Room } from './chat.ts';
+import { Message, Room, RoomPrefs } from './chat.ts';
 import { HangoutParticipant } from './hangout.ts';
 import { Id } from './id.ts';
 
@@ -187,6 +187,14 @@ export const ServerReadState = z.object({
 });
 export type ServerReadState = z.infer<typeof ServerReadState>;
 
+/** This member changed how they hear about a room, possibly on another device. */
+export const ServerRoomPrefs = z.object({
+  type: z.literal('room_prefs'),
+  roomId: Id,
+  prefs: RoomPrefs,
+});
+export type ServerRoomPrefs = z.infer<typeof ServerRoomPrefs>;
+
 export const ServerUpgradeRequired = z.object({
   type: z.literal('upgrade_required'),
   minProtocolVersion: z.number().int(),
@@ -210,6 +218,7 @@ export const ServerMessage = z.discriminatedUnion('type', [
   ServerPresence,
   ServerTyping,
   ServerReadState,
+  ServerRoomPrefs,
   ServerHangout,
   ServerHangoutStarted,
   ServerNudge,
