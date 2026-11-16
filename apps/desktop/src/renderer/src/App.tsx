@@ -23,6 +23,7 @@ import { RoomView } from './chat/RoomView.tsx';
 import { Avatar } from './components/Avatar.tsx';
 import { ConnectionBadge } from './components/ConnectionBadge.tsx';
 import { AdminDialog } from './admin/AdminDialog.tsx';
+import { EmptyState } from './components/EmptyState.tsx';
 import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
 import { SearchPanel } from './components/SearchPanel.tsx';
 import { Tulip } from './components/Tulip.tsx';
@@ -306,9 +307,9 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
           {roomId ? (
             <RoomView key={roomId} roomId={roomId} />
           ) : (
-            <p className="content__placeholder">
-              {t(me.role === 'admin' ? 'rooms.noneAdmin' : 'rooms.none')}
-            </p>
+            <div className="content__placeholder">
+              <EmptyState>{t(me.role === 'admin' ? 'rooms.noneAdmin' : 'rooms.none')}</EmptyState>
+            </div>
           )}
         </main>
 

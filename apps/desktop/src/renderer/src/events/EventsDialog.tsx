@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MessageKey } from '@hasbihal/core';
 import type { Occurrence, RoomEvent, RsvpResponse } from '@hasbihal/protocol';
 import { api } from '../api.ts';
+import { EmptyState } from '../components/EmptyState.tsx';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatWhen, formatTime, useT } from '../i18n.tsx';
 import { EventForm, fromInputs, toInputs } from './EventForm.tsx';
@@ -76,7 +77,7 @@ export function EventsDialog({
             {!view.loaded ? (
               <p className="field__hint">{t('room.loading')}</p>
             ) : occurrences.length === 0 ? (
-              <p className="field__hint">{t('events.none')}</p>
+              <EmptyState>{t('events.none')}</EmptyState>
             ) : (
               <ul className="occurrences">
                 {occurrences.map((o) => {

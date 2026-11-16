@@ -4,6 +4,7 @@ import { SearchResults, type Message } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
+import { EmptyState } from './EmptyState.tsx';
 
 /** Searching starts from this many characters; one letter matches half the archive. */
 const MIN_LENGTH = 2;
@@ -120,7 +121,7 @@ export function SearchPanel({
           ) : !current ? (
             <p className="search__note">{t('search.searching')}</p>
           ) : current.messages.length === 0 ? (
-            <p className="search__note">{t('search.none')}</p>
+            <EmptyState>{t('search.none')}</EmptyState>
           ) : (
             <>
               {current.messages.map((m) => (
