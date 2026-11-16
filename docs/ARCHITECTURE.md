@@ -310,14 +310,14 @@ LiveKit **webhooks** (`participant_joined`, `participant_left`, `track_published
 
 One VPS, located close to Turkey: **4 vCPU, 8 GB RAM, ≥160 GB disk, 1 Gbps** with generous traffic.
 
-`infra/docker-compose.yml` services:
+`infra/production/compose.yml` services (runbook: `infra/production/README.md`):
 
-| Service    | Notes                                                                                         |
-| ---------- | --------------------------------------------------------------------------------------------- |
-| `caddy`    | TLS via Let's Encrypt; reverse proxy for the API and WebSocket on 443.                        |
-| `server`   | The Hasbihal server.                                                                          |
-| `postgres` | PostgreSQL 17 with a persistent volume.                                                       |
-| `livekit`  | Uses host networking for media. Ports: 7881/tcp, 50000–60000/udp, TURN 3478/udp and 5349/tls. |
+| Service    | Notes                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| `caddy`    | TLS via Let's Encrypt; reverse proxy for the API and gateway, and for LiveKit signaling at `/livekit`, all on 443. |
+| `server`   | The Hasbihal server.                                                                                               |
+| `postgres` | PostgreSQL 17 with a persistent volume.                                                                            |
+| `livekit`  | Uses host networking for media. Ports: 7881/tcp, 50000–60000/udp, TURN 3478/udp and 5349/tls.                      |
 
 **Needed from the owner:** a **domain name** (e.g. `hasbihal.example`, with subdomains for the API and LiveKit/TURN) and a VPS account.
 

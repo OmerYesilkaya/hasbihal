@@ -1,0 +1,14 @@
+# TLS from Let's Encrypt for HASBIHAL_HOST (a free DuckDNS name is fine), renewed automatically.
+{$HASBIHAL_HOST} {
+	encode zstd gzip
+
+	# LiveKit signaling (WebSocket), at wss://<host>/livekit. Media itself is UDP, not proxied.
+	handle_path /livekit/* {
+		reverse_proxy host.docker.internal:7880
+	}
+
+	# Everything else is the Hasbihal API and gateway.
+	handle {
+		reverse_proxy server:8080
+	}
+}
