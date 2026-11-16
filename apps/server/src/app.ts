@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { PROTOCOL_VERSION, type HealthResponse } from '@hasbihal/protocol';
@@ -11,12 +12,17 @@ import { GatewayHub } from './gateway/hub.ts';
 import { registerGateway } from './gateway/routes.ts';
 import { registerMembers } from './members/routes.ts';
 import { registerChat } from './chat/routes.ts';
+import { registerFiles } from './files/routes.ts';
+import { LocalFileStore, type FileStore } from './files/store.ts';
+import { registerProfile } from './profile/routes.ts';
 
 /** What the app needs from outside. The caller owns these and closes them. */
 export interface AppDeps {
   db: Db;
   /** Pass one to observe it (tests); otherwise the app makes its own. */
   hub?: GatewayHub;
+  /** Defaults to the local disk at `config.filesDir`. */
+  files?: FileStore;
 }
 
 /**
@@ -46,6 +52,8 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
+  // Uploads set their own size limits per route; this only bounds the rest of a multipart request.
+  await app.register(multipart, { limits: { fields: 10, files: 1, fieldSize: 1024 } });
 
   app.get('/health', async (_request, reply): Promise<HealthResponse> => {
     const ok = await isDatabaseReachable(deps.db);
@@ -72,6 +80,9 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
   });
   registerMembers(app, deps.db, guards);
   registerChat(app, { db: deps.db, hub, guards });
+  const files = deps.files ?? new LocalFileStore(config.filesDir);
+  registerFiles(app, deps.db, files, guards);
+  registerProfile(app, { db: deps.db, store: files, hub, guards });
   registerGateway(app, config, { db: deps.db, keys, hub });
 
   return app;

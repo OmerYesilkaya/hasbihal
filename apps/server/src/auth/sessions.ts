@@ -35,6 +35,7 @@ export function toUser(row: Selectable<UsersTable>): User {
     username: row.username,
     displayName: row.display_name,
     avatarColor: row.avatar_color,
+    avatarFileId: row.avatar_file_id,
     role: row.role,
     createdAt: row.created_at.toISOString(),
   };

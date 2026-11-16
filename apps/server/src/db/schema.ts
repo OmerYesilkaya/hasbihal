@@ -18,6 +18,7 @@ export interface Database {
   message_mentions: MessageMentionsTable;
   reactions: ReactionsTable;
   room_user_prefs: RoomUserPrefsTable;
+  files: FilesTable;
 }
 
 /** A timestamp with a database default: optional on insert, never updated by hand. */
@@ -34,6 +35,7 @@ export interface UsersTable {
   presence_mode: Generated<'available' | 'busy'>;
   created_at: CreatedAt;
   removed_at: NullableTime;
+  avatar_file_id: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface CredentialsTable {
@@ -123,4 +125,21 @@ export interface RoomUserPrefsTable {
   sound_on_message: Generated<boolean>;
   hangout_start_alerts: Generated<boolean>;
   last_read_message_id: ColumnType<string | null, string | null | undefined, string | null>;
+}
+
+export interface FilesTable {
+  id: string;
+  uploader_id: string;
+  kind: 'image' | 'video' | 'audio' | 'voice' | 'other';
+  original_name: string;
+  mime: string;
+  /** int8: pg returns a string. */
+  size_bytes: ColumnType<string, number, number>;
+  sha256: Buffer;
+  storage_key: string;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  thumbnail_key: string | null;
+  created_at: CreatedAt;
 }

@@ -174,6 +174,13 @@ export class ChatStore {
     member_joined: (event) => {
       this.#update({ members: new Map(this.#state.members).set(event.user.id, event.user) });
     },
+    member_updated: (event) => {
+      const { user } = event;
+      this.#update({
+        members: new Map(this.#state.members).set(user.id, user),
+        ...(this.#state.me?.id === user.id ? { me: user } : {}),
+      });
+    },
     room_created: (event) => {
       if (this.#state.rooms.has(event.room.id)) return;
       this.#putRoom(event.room, { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 });

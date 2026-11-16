@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { z } from 'zod';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -26,6 +27,8 @@ const Env = z.object({
     .transform((pem) => pem?.replaceAll('\\n', '\n')),
   // Behind a reverse proxy (production), trust its X-Forwarded-For so rate limits see real client IPs.
   TRUST_PROXY: z.stringbool().default(false),
+  // Where uploaded files are stored (A54). Relative paths are resolved from the working directory.
+  FILES_DIR: z.string().default('data/files'),
   // Requests per IP per minute on the unauthenticated auth routes (sign-in, sign-up, …).
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
 });
@@ -40,6 +43,7 @@ export interface Config {
   production: boolean;
   signingKeyPem: string | undefined;
   trustProxy: boolean;
+  filesDir: string;
   authRateLimitPerMinute: number;
   serverVersion: string;
 }
@@ -56,6 +60,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     production: parsed.NODE_ENV === 'production',
     signingKeyPem: parsed.AUTH_SIGNING_KEY,
     trustProxy: parsed.TRUST_PROXY,
+    filesDir: path.resolve(parsed.FILES_DIR),
     authRateLimitPerMinute: parsed.AUTH_RATE_LIMIT_PER_MINUTE,
     serverVersion: pkg.version,
   };

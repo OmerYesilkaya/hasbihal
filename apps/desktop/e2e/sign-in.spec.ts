@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -259,6 +259,38 @@ test.describe.serial('accounts in the desktop app', () => {
     } finally {
       await rm(otherData, { recursive: true, force: true });
     }
+  });
+
+  test('edits the profile: photo, display name, devices', async () => {
+    const page = await launch();
+    await page.getByTestId('current-user').click();
+    const dialog = page.getByRole('dialog', { name: 'Profil' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('session').filter({ hasText: 'Bu cihaz' })).toHaveCount(1);
+
+    // A tiny PNG; the server turns it into a 256 px WebP.
+    const photoPath = path.join(userData, 'foto.png');
+    await writeFile(
+      photoPath,
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    );
+    await dialog.getByTestId('avatar-input').setInputFiles(photoPath);
+    await expect(dialog.getByRole('button', { name: 'Fotoğrafı kaldır' })).toBeVisible();
+    await expect(page.locator('.user-panel img.avatar__photo')).toBeVisible();
+
+    await dialog.getByLabel('Görünen ad').fill('Ömer Faruk');
+    await dialog.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(dialog.getByText('Kaydedildi.')).toBeVisible();
+    await snap(page, '9-profile');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTestId('current-user')).toHaveText('Ömer Faruk');
+    await expect(
+      page.getByTestId('member').filter({ hasText: 'Ömer Faruk' }).locator('img.avatar__photo'),
+    ).toBeVisible();
   });
 
   test('explains that a used invite no longer works', async () => {

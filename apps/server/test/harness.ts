@@ -1,5 +1,8 @@
 // A running app on a fresh database, with helpers to sign members up and open gateway
 // connections that record what the server sends. Shared by the integration tests.
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { expect } from 'vitest';
 import type { WebSocket } from 'ws';
@@ -14,6 +17,7 @@ import {
 import { buildApp } from '../src/app.ts';
 import { createInvite } from '../src/auth/routes.ts';
 import { loadConfig } from '../src/config.ts';
+import { LocalFileStore } from '../src/files/store.ts';
 import { GatewayHub } from '../src/gateway/hub.ts';
 import { createTestDatabase, type TestDatabase } from './database.ts';
 
@@ -37,6 +41,8 @@ export interface Harness {
   app: FastifyInstance;
   hub: GatewayHub;
   testDb: TestDatabase;
+  /** Where this harness's uploads go (a temporary folder). */
+  filesDir: string;
   signUp(role?: Role): Promise<SignedIn>;
   connect(accessToken: string, lastSeq?: number): Promise<TestClient>;
   /** An authenticated request; `payload` makes it JSON. */
@@ -54,12 +60,10 @@ let counter = 0;
 export async function startHarness(): Promise<Harness> {
   const testDb = await createTestDatabase();
   const hub = new GatewayHub(testDb.db);
+  const filesDir = await mkdtemp(path.join(tmpdir(), 'hasbihal-files-'));
   const app = await buildApp(
     loadConfig({ LOG_LEVEL: 'silent', AUTH_RATE_LIMIT_PER_MINUTE: '10000' }),
-    {
-      db: testDb.db,
-      hub,
-    },
+    { db: testDb.db, hub, files: new LocalFileStore(filesDir) },
   );
   await app.ready();
 
@@ -67,6 +71,7 @@ export async function startHarness(): Promise<Harness> {
     app,
     hub,
     testDb,
+    filesDir,
     async signUp(role: Role = 'member') {
       const invite = await createInvite(testDb.db, role, null);
       const n = String(++counter);
@@ -131,6 +136,7 @@ export async function startHarness(): Promise<Harness> {
     async close() {
       await app.close();
       await testDb.drop();
+      await rm(filesDir, { recursive: true, force: true });
     },
   };
 }

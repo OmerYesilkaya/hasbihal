@@ -70,9 +70,19 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
-/** "omers-macbook.local" → "omers-macbook"; shown in the sessions list. */
+/**
+ * The name shown in the sessions list: the computer's name ("omers-macbook.local" → "omers-macbook"),
+ * or "Mac"/"Windows PC" when it has none worth showing (empty, or just an IP address).
+ */
 function deviceName(): string {
-  return hostname().replace(/\.local$/, '') || (process.platform === 'darwin' ? 'Mac' : 'PC');
+  const name = hostname().replace(/\.(local|lan|home)$/i, '');
+  const meaningless = !name || /^[\d.]+$/.test(name) || name.includes(':');
+  if (!meaningless) return name;
+  return process.platform === 'darwin'
+    ? 'Mac'
+    : process.platform === 'win32'
+      ? 'Windows PC'
+      : 'Linux';
 }
 
 /**
