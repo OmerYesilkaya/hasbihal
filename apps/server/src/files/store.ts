@@ -1,5 +1,5 @@
 import { createReadStream, type ReadStream } from 'node:fs';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -9,9 +9,19 @@ import { randomUUID } from 'node:crypto';
  */
 export interface FileStore {
   put(key: string, data: Buffer): Promise<void>;
-  /** A stream of the bytes; rejects (ENOENT) when the key doesn't exist. */
-  read(key: string): Promise<ReadStream>;
+  /** Moves a finished local file (an upload) in under `key`; the local file is gone afterwards. */
+  putFile(key: string, localPath: string): Promise<void>;
+  /**
+   * A stream of the bytes, or of `range` (inclusive byte offsets, as in HTTP); rejects (ENOENT)
+   * when the key doesn't exist.
+   */
+  read(key: string, range?: ByteRange): Promise<ReadStream>;
   remove(key: string): Promise<void>;
+}
+
+export interface ByteRange {
+  start: number;
+  end: number;
 }
 
 /** Keys like `ab/cd/<id>.webp`: two levels of fan-out keep directories small. */
@@ -43,9 +53,24 @@ export class LocalFileStore implements FileStore {
     await rename(temporary, target);
   }
 
-  read(key: string): Promise<ReadStream> {
+  async putFile(key: string, localPath: string): Promise<void> {
+    const target = this.#path(key);
+    await mkdir(path.dirname(target), { recursive: true });
+    try {
+      await rename(localPath, target);
+    } catch (error) {
+      // Another file system (e.g. the temp directory on another volume): copy, then rename.
+      if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+      const temporary = `${target}.${randomUUID()}.tmp`;
+      await copyFile(localPath, temporary);
+      await rename(temporary, target);
+      await rm(localPath, { force: true });
+    }
+  }
+
+  read(key: string, range?: ByteRange): Promise<ReadStream> {
     return new Promise((resolve, reject) => {
-      const stream = createReadStream(this.#path(key));
+      const stream = createReadStream(this.#path(key), range);
       stream.once('open', () => {
         resolve(stream);
       });

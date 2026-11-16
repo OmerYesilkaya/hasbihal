@@ -19,6 +19,7 @@ export interface Database {
   reactions: ReactionsTable;
   room_user_prefs: RoomUserPrefsTable;
   files: FilesTable;
+  attachments: AttachmentsTable;
 }
 
 /** A timestamp with a database default: optional on insert, never updated by hand. */
@@ -142,4 +143,10 @@ export interface FilesTable {
   duration_ms: number | null;
   thumbnail_key: string | null;
   created_at: CreatedAt;
+}
+
+export interface AttachmentsTable {
+  message_id: string;
+  file_id: string;
+  position: number;
 }

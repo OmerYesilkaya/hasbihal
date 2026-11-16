@@ -3,6 +3,7 @@ export * from './id.ts';
 export * from './errors.ts';
 export * from './auth.ts';
 export * from './chat.ts';
+export * from './files.ts';
 export * from './hangout.ts';
 export * from './http.ts';
 export * from './gateway.ts';

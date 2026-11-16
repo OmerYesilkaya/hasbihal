@@ -6,6 +6,10 @@
 # @hasbihal/protocol are symlinks to real source folders, instead of flattening them.
 FROM node:24-slim
 
+# ffmpeg reads video sizes and makes poster frames for uploaded videos (ARCHITECTURE §7).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /app
 

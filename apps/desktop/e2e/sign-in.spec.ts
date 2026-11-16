@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -390,6 +390,58 @@ test.describe.serial('accounts in the desktop app', () => {
     } finally {
       await rm(otherData, { recursive: true, force: true });
     }
+  });
+
+  test('shares a photo and a file: upload, send, view, download card', async () => {
+    const page = await launch();
+    await page.getByTestId('room').filter({ hasText: 'Salon' }).click();
+    await page.getByTestId('file-picker').setInputFiles([
+      {
+        name: 'manzara.jpg',
+        mimeType: 'image/jpeg',
+        buffer: await readFile(path.join(import.meta.dirname, 'fixtures/manzara.jpg')),
+      },
+      {
+        name: 'Mercimek çorbası tarifi.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('Mercimek, soğan, havuç, bir tutam kimyon.'),
+      },
+    ]);
+    await expect(page.locator('[data-testid="upload"][data-status="done"]')).toHaveCount(2);
+    const composer = page.getByLabel('Mesaj', { exact: true });
+    await composer.fill('Pazar kahvaltısından');
+    await composer.press('Enter');
+    await expect(page.getByTestId('upload')).toHaveCount(0);
+
+    const sent = page.getByTestId('message').filter({ hasText: 'Pazar kahvaltısından' });
+    const photo = sent.getByTestId('attachment-media');
+    // The thumbnail really loads, through a signed address the CSP allows.
+    await expect
+      .poll(() =>
+        photo
+          .locator('img')
+          .evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth),
+      )
+      .toBeGreaterThan(0);
+    await expect(sent.getByTestId('attachment-file')).toContainText('Mercimek çorbası tarifi.txt');
+    await expect(
+      sent.getByTestId('attachment-file').getByRole('link', { name: 'İndir' }),
+    ).toBeVisible();
+    await snap(page, '12-attachments');
+
+    await photo.click();
+    const viewer = page.getByTestId('viewer');
+    await expect(viewer).toBeVisible();
+    await expect
+      .poll(() =>
+        viewer
+          .locator('img')
+          .evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth),
+      )
+      .toBe(900); // the original, full size
+    await snap(page, '13-viewer');
+    await page.keyboard.press('Escape');
+    await expect(viewer).toBeHidden();
   });
 
   test('explains that a used invite no longer works', async () => {

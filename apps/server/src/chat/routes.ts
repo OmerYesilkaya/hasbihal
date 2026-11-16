@@ -238,6 +238,42 @@ export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps
               'The replied-to message is not in this room.',
             );
         }
+        // Only the sender's own uploads, each on one message only (A26).
+        if (body.attachmentIds.length) {
+          const usable = await trx
+            .selectFrom('files')
+            .select('id')
+            .where('id', 'in', body.attachmentIds)
+            .where('uploader_id', '=', userId)
+            .where('kind', '!=', 'voice')
+            .where((eb) =>
+              eb.not(
+                eb.exists(
+                  eb
+                    .selectFrom('attachments')
+                    .select('attachments.file_id')
+                    .whereRef('attachments.file_id', '=', 'files.id'),
+                ),
+              ),
+            )
+            .where((eb) =>
+              eb.not(
+                eb.exists(
+                  eb
+                    .selectFrom('users')
+                    .select('users.id')
+                    .whereRef('users.avatar_file_id', '=', 'files.id'),
+                ),
+              ),
+            )
+            .execute();
+          if (usable.length !== body.attachmentIds.length)
+            throw new AppError(
+              400,
+              'validation_failed',
+              'A file is missing, not yours, or already sent.',
+            );
+        }
         const inserted = await trx
           .insertInto('messages')
           .values({
@@ -252,6 +288,18 @@ export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps
           .returningAll()
           .executeTakeFirst();
         if (!inserted) return null; // a concurrent retry won the race
+        if (body.attachmentIds.length) {
+          await trx
+            .insertInto('attachments')
+            .values(
+              body.attachmentIds.map((file_id, position) => ({
+                message_id: inserted.id,
+                file_id,
+                position,
+              })),
+            )
+            .execute();
+        }
         if (mentions.userIds.length) {
           await trx
             .insertInto('message_mentions')
@@ -297,6 +345,15 @@ export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps
       const row = await ownMessage(trx, id, userId);
       if (row.deleted_at)
         throw new AppError(409, 'conflict', 'A deleted message cannot be edited.');
+      if (!body.body) {
+        // Only a message with files may be left without words.
+        const file = await trx
+          .selectFrom('attachments')
+          .select('file_id')
+          .where('message_id', '=', id)
+          .executeTakeFirst();
+        if (!file) throw new AppError(400, 'validation_failed', 'Write something.');
+      }
       const updated = await trx
         .updateTable('messages')
         .set({ body: body.body, edited_at: new Date(), mentions_everyone: mentions.everyone })
@@ -332,6 +389,8 @@ export function registerChat(app: FastifyInstance, { db, hub, guards }: ChatDeps
         .executeTakeFirstOrThrow();
       await trx.deleteFrom('message_mentions').where('message_id', '=', id).execute();
       await trx.deleteFrom('reactions').where('message_id', '=', id).execute();
+      // Its files are collected later (files/gc.ts).
+      await trx.deleteFrom('attachments').where('message_id', '=', id).execute();
       const [message] = await hydrateMessages(trx, [deleted]);
       if (!message) throw new Error('message vanished');
       await appendEvent(trx, { type: 'message_updated', message });

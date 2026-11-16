@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import { roomMessages } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useT } from '../i18n.tsx';
 import { HangoutPanel } from '../hangout/HangoutPanel.tsx';
-import { Composer } from './Composer.tsx';
+import { Composer, type ComposerHandle } from './Composer.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { MessageList } from './MessageList.tsx';
 import { TypingIndicator } from './TypingIndicator.tsx';
@@ -40,6 +40,8 @@ export function RoomView({ roomId }: { roomId: string }) {
   const [editing, setEditing] = useState<Message | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const focused = useWindowFocused();
+  const composer = useRef<ComposerHandle>(null);
+  const [dragging, setDragging] = useState(false);
 
   const messages = roomMessages(state, roomId);
   const latest = messages.at(-1);
@@ -63,9 +65,29 @@ export function RoomView({ roomId }: { roomId: string }) {
 
   if (!room) return null;
   const readOnly = room.archivedAt !== null;
+  /** Files dragged in from the desktop (not text or links dragged within the page). */
+  const carriesFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
 
   return (
-    <section className="room-view" aria-label={room.name}>
+    <section
+      className="room-view"
+      aria-label={room.name}
+      data-dragging={dragging ? true : undefined}
+      onDragOver={(e) => {
+        if (readOnly || !carriesFiles(e)) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        setDragging(false);
+        if (readOnly || !carriesFiles(e)) return;
+        e.preventDefault();
+        composer.current?.addFiles([...e.dataTransfer.files]);
+      }}
+    >
       <header className="content__header room-view__header">
         <h1 className="room-view__name">
           <span aria-hidden>#</span> {room.name}
@@ -85,6 +107,7 @@ export function RoomView({ roomId }: { roomId: string }) {
         <p className="room-view__archived">{t('room.archived')}</p>
       ) : (
         <Composer
+          ref={composer}
           roomId={roomId}
           roomName={room.name}
           replyTo={replyTo}
@@ -100,6 +123,11 @@ export function RoomView({ roomId }: { roomId: string }) {
             if (mine) edit(mine);
           }}
         />
+      )}
+      {dragging && (
+        <div className="room-view__drop" aria-hidden>
+          {t('composer.dropHere')}
+        </div>
       )}
     </section>
   );
