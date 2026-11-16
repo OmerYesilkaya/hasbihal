@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ATTACHMENTS_MAX, Attachment } from './files.ts';
+import { ATTACHMENTS_MAX, Attachment, LinkPreview } from './files.ts';
 import { Id } from './id.ts';
 
 // Rooms and messages (ARCHITECTURE §3.3, DECISIONS A8, A11, A12, A22).
@@ -69,6 +69,8 @@ export const Message = z.object({
   reactions: z.array(Reaction),
   /** Files, in the order they were attached; none once deleted. */
   attachments: z.array(Attachment),
+  /** Previews of its first links, once the server has fetched them (A24). */
+  previews: z.array(LinkPreview),
   createdAt: z.iso.datetime(),
   /** Shown as "düzenlendi" (A22). */
   editedAt: z.iso.datetime().nullable(),

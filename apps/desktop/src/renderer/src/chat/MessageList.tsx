@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { compareMessages, roomMessages } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
@@ -43,6 +43,38 @@ export function MessageList({
   const { loaded, hasMore, loadOlder } = useRoomHistory(roomId);
   const messages = useMemo(() => roomMessages(state, roomId), [state, roomId]);
   const meId = state.me?.id;
+  /**
+   * Whether to keep the end in view. Only the reader scrolling away turns it off: the list's own
+   * layout moves the scroll position too (growing past the window), which says nothing.
+   */
+  const stick = useRef(true);
+  const scroller = useRef<HTMLElement | null>(null);
+  const [follow] = useState(() => {
+    let userUntil = 0;
+    const byUser = (e: Event) => {
+      // A press counts only on the scrollbar (the scroller itself), not a click on a message.
+      if (e.type === 'pointerdown' && e.target !== scroller.current) return;
+      userUntil = performance.now() + 500;
+    };
+    const onScroll = () => {
+      const el = scroller.current;
+      if (!el) return;
+      const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+      if (atEnd) stick.current = true;
+      else if (performance.now() < userUntil) stick.current = false;
+    };
+    const events = ['wheel', 'touchmove', 'pointerdown', 'keydown'] as const;
+    return {
+      attach(el: HTMLElement) {
+        el.addEventListener('scroll', onScroll, { passive: true });
+        for (const name of events) el.addEventListener(name, byUser, { passive: true });
+      },
+      detach(el: HTMLElement) {
+        el.removeEventListener('scroll', onScroll);
+        for (const name of events) el.removeEventListener(name, byUser);
+      },
+    };
+  });
 
   const items = useMemo(() => {
     const marker = readMarkerAtOpen ? state.messages.get(roomId)?.get(readMarkerAtOpen) : undefined;
@@ -100,6 +132,22 @@ export function MessageList({
       followOutput={(atBottom) => (atBottom ? 'auto' : false)}
       atBottomThreshold={48}
       atBottomStateChange={onAtBottomChange}
+      scrollerRef={(el) => {
+        const node = el instanceof HTMLElement ? el : null;
+        if (node === scroller.current) return;
+        if (scroller.current) follow.detach(scroller.current);
+        scroller.current = node;
+        if (node) follow.attach(node);
+      }}
+      // Messages also grow after they arrive: pictures load, link previews come in. Someone
+      // reading the latest messages keeps seeing the end of them (after layout settles).
+      totalListHeightChanged={() => {
+        if (!stick.current) return;
+        requestAnimationFrame(() => {
+          const el = scroller.current;
+          if (el && stick.current) el.scrollTop = el.scrollHeight;
+        });
+      }}
       startReached={() => {
         if (hasMore) void loadOlder();
       }}

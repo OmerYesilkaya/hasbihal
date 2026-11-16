@@ -6,6 +6,7 @@ import { Avatar } from '../components/Avatar.tsx';
 import { formatDateTime, formatTime, useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { Attachments } from './Attachments.tsx';
+import { LinkPreviews } from './LinkPreviews.tsx';
 import { MarkdownView } from './Markdown.tsx';
 
 /** A small, fixed set; no picker library and no emoji search (A23-style simplicity). */
@@ -129,6 +130,7 @@ export const MessageItem = memo(function MessageItem({
               </div>
             )}
             {message.attachments.length > 0 && <Attachments attachments={message.attachments} />}
+            {message.previews.length > 0 && <LinkPreviews previews={message.previews} />}
           </>
         )}
         {message.reactions.length > 0 && (

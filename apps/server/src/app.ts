@@ -15,6 +15,9 @@ import { registerChat } from './chat/routes.ts';
 import { collectOrphanFiles } from './files/gc.ts';
 import { registerFiles } from './files/routes.ts';
 import { FileUrlSigner } from './files/signing.ts';
+import { JobQueue } from './jobs/queue.ts';
+import { SafeFetcher, type Fetcher } from './previews/fetcher.ts';
+import { LINK_PREVIEW_JOB, linkPreviewJob } from './previews/service.ts';
 import { LocalFileStore, type FileStore } from './files/store.ts';
 import { registerProfile } from './profile/routes.ts';
 import { liveKitRooms, type LiveKitRooms } from './hangouts/livekit.ts';
@@ -28,6 +31,10 @@ export interface AppDeps {
   hub?: GatewayHub;
   /** Defaults to the local disk at `config.filesDir`. */
   files?: FileStore;
+  /** Defaults to the safe internet fetcher; tests reach a local site. */
+  fetcher?: Fetcher;
+  /** Defaults to running jobs in the background; tests run them on demand. */
+  runJobs?: boolean;
   /** Defaults to LiveKit's API at `config.livekit.apiUrl`. */
   livekitRooms?: LiveKitRooms;
 }
@@ -86,8 +93,33 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     gateway: hub,
   });
   registerMembers(app, deps.db, guards);
-  registerChat(app, { db: deps.db, hub, guards });
   const files = deps.files ?? new LocalFileStore(config.filesDir);
+  const jobs = new JobQueue(deps.db, app.log, {
+    [LINK_PREVIEW_JOB]: linkPreviewJob({
+      db: deps.db,
+      store: files,
+      fetcher: deps.fetcher ?? new SafeFetcher({ allowPrivate: config.linkPreviewAllowPrivate }),
+      committed: () => {
+        hub.eventsCommitted();
+      },
+    }),
+  });
+  app.decorate('jobs', jobs);
+  if (deps.runJobs !== false) {
+    app.addHook('onReady', (done) => {
+      jobs.start();
+      done();
+    });
+  }
+  app.addHook('onClose', () => jobs.stop());
+  registerChat(app, {
+    db: deps.db,
+    hub,
+    guards,
+    jobsQueued: () => {
+      jobs.wake();
+    },
+  });
   registerFiles(app, {
     db: deps.db,
     store: files,

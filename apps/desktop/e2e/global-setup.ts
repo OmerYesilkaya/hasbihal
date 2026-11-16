@@ -4,8 +4,9 @@
 // through Playwright.
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { createServer } from 'node:net';
+import { createServer, type AddressInfo } from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -164,8 +165,41 @@ webhook:
   throw new Error('LiveKit did not start');
 }
 
+/** A stand-in website for link previews: one page with Open Graph tags and a picture. */
+async function startSite(): Promise<{ url: string; stop: () => Promise<void> }> {
+  const picture = await readFile(path.resolve(import.meta.dirname, 'fixtures/manzara.jpg'));
+  const site = createHttpServer((request, response) => {
+    if (request.url === '/tarif') {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(`<head><title>Kuru fasulye</title>
+        <meta property="og:title" content="Kuru fasulye ve pilav">
+        <meta property="og:description" content="Annemin tarifi, adım adım: bir gece önceden ıslatılmış fasulye, kuru soğan, salça.">
+        <meta property="og:site_name" content="Lezzet Defteri">
+        <meta property="og:image" content="/kapak.jpg"></head>`);
+    } else if (request.url === '/kapak.jpg') {
+      response.writeHead(200, { 'content-type': 'image/jpeg' });
+      response.end(picture);
+    } else {
+      response.writeHead(404);
+      response.end();
+    }
+  });
+  await new Promise<void>((resolve) => site.listen(0, '127.0.0.1', resolve));
+  const address = site.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${String(address.port)}`,
+    stop: () =>
+      new Promise((resolve) => {
+        site.close(() => {
+          resolve();
+        });
+      }),
+  };
+}
+
 export default async function globalSetup(): Promise<() => Promise<void>> {
   const database = await startPostgres();
+  const site = await startSite();
   const port = await freePort();
   const serverUrl = `http://127.0.0.1:${String(port)}`;
   const livekit = await startLiveKit(port);
@@ -178,6 +212,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     NODE_ENV: 'test',
     LIVEKIT_URL: livekit.url,
     LIVEKIT_API_URL: livekit.url.replace('ws:', 'http:'),
+    // Link previews may reach the local stand-in site above.
+    LINK_PREVIEW_ALLOW_PRIVATE: 'true',
   };
   const server = spawn(process.execPath, ['src/main.ts'], {
     cwd: SERVER_DIR,
@@ -189,9 +225,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_SERVER_URL = serverUrl;
   process.env.E2E_LIVEKIT_URL = livekit.url;
   process.env.E2E_DATABASE_URL = database.url;
+  process.env.E2E_SITE_URL = site.url;
 
   return async () => {
     server.kill('SIGTERM');
-    await Promise.all([database.stop(), livekit.stop()]);
+    await Promise.all([database.stop(), livekit.stop(), site.stop()]);
   };
 }

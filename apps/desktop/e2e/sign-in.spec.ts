@@ -452,6 +452,27 @@ test.describe.serial('accounts in the desktop app', () => {
     await voice.getByRole('button', { name: 'Dinle' }).click();
     await expect(voice).toHaveAttribute('data-playing', 'true');
     await snap(page, '14-voice-message');
+
+    // A link gets a preview card (A24), fetched by the server and delivered live.
+    const link = `${process.env.E2E_SITE_URL ?? ''}/tarif`;
+    await composer.fill(`Bu akşam bunu yapalım mı? ${link}`);
+    await composer.press('Enter');
+    const preview = page
+      .getByTestId('message')
+      .filter({ hasText: 'Bu akşam' })
+      .getByTestId('link-preview');
+    await expect(preview).toContainText('Kuru fasulye ve pilav');
+    await expect(preview).toContainText('Lezzet Defteri');
+    await expect
+      .poll(() =>
+        preview
+          .locator('img')
+          .evaluate((img) => (img as unknown as { naturalWidth: number }).naturalWidth),
+      )
+      .toBeGreaterThan(0);
+    // It arrives after the message; the conversation still ends with it in view.
+    await expect(preview).toBeInViewport({ ratio: 1 });
+    await snap(page, '15-link-preview');
   });
 
   test('explains that a used invite no longer works', async () => {

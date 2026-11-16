@@ -41,6 +41,17 @@ export const Attachment = z.object({
 });
 export type Attachment = z.infer<typeof Attachment>;
 
+/** A link's preview card (A24), fetched by the server. */
+export const LinkPreview = z.object({
+  url: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  siteName: z.string().nullable(),
+  /** A copy of the page's picture, in our own storage. */
+  image: Attachment.nullable(),
+});
+export type LinkPreview = z.infer<typeof LinkPreview>;
+
 /** `POST /files/urls`: signed addresses for files, so `<img>` and `<video>` can load them. */
 export const FileUrlsRequest = z.object({ ids: z.array(Id).min(1).max(100) });
 export type FileUrlsRequest = z.infer<typeof FileUrlsRequest>;

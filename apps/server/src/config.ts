@@ -35,6 +35,9 @@ const Env = z.object({
   LIVEKIT_API_URL: z.string().default('http://localhost:7880'),
   LIVEKIT_API_KEY: z.string().min(1).optional(),
   LIVEKIT_API_SECRET: z.string().min(1).optional(),
+  // Lets link previews reach this machine and private networks: end-to-end tests with a local
+  // site only. Refused in production, where it would open the server to SSRF (ARCHITECTURE §7).
+  LINK_PREVIEW_ALLOW_PRIVATE: z.stringbool().default(false),
   // Requests per IP per minute on the unauthenticated auth routes (sign-in, sign-up, …).
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
 });
@@ -52,6 +55,7 @@ export interface Config {
   filesDir: string;
   livekit: { url: string; apiUrl: string; apiKey: string; apiSecret: string };
   authRateLimitPerMinute: number;
+  linkPreviewAllowPrivate: boolean;
   serverVersion: string;
 }
 
@@ -80,6 +84,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       apiSecret: parsed.LIVEKIT_API_SECRET ?? devOnly('LIVEKIT_API_SECRET', 'secret'),
     },
     authRateLimitPerMinute: parsed.AUTH_RATE_LIMIT_PER_MINUTE,
+    linkPreviewAllowPrivate: (() => {
+      if (parsed.LINK_PREVIEW_ALLOW_PRIVATE && parsed.NODE_ENV === 'production')
+        throw new Error('LINK_PREVIEW_ALLOW_PRIVATE is never allowed in production');
+      return parsed.LINK_PREVIEW_ALLOW_PRIVATE;
+    })(),
     serverVersion: pkg.version,
   };
 }

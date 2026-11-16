@@ -20,6 +20,9 @@ export interface Database {
   room_user_prefs: RoomUserPrefsTable;
   files: FilesTable;
   attachments: AttachmentsTable;
+  jobs: JobsTable;
+  link_previews: LinkPreviewsTable;
+  message_links: MessageLinksTable;
 }
 
 /** A timestamp with a database default: optional on insert, never updated by hand. */
@@ -148,5 +151,32 @@ export interface FilesTable {
 export interface AttachmentsTable {
   message_id: string;
   file_id: string;
+  position: number;
+}
+
+export interface JobsTable {
+  /** bigserial: pg returns a string. */
+  id: Generated<string>;
+  kind: string;
+  payload: unknown;
+  run_at: ColumnType<Date, Date | undefined, Date>;
+  attempts: Generated<number>;
+  last_error: string | null;
+  created_at: CreatedAt;
+}
+
+export interface LinkPreviewsTable {
+  url: string;
+  status: 'pending' | 'ok' | 'none';
+  title: string | null;
+  description: string | null;
+  site_name: string | null;
+  image_file_id: string | null;
+  fetched_at: Date | null;
+}
+
+export interface MessageLinksTable {
+  message_id: string;
+  url: string;
   position: number;
 }

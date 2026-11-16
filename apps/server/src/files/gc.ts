@@ -38,6 +38,16 @@ export async function collectOrphanFiles(
         ),
       ),
     )
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('link_previews')
+            .select(sql`1`.as('one'))
+            .whereRef('link_previews.image_file_id', '=', 'files.id'),
+        ),
+      ),
+    )
     .returning(['storage_key', 'thumbnail_key'])
     .execute();
   for (const file of orphans) {

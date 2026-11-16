@@ -222,7 +222,7 @@ function MediaViewer({
   const { info } = useChat();
   const dialog = useRef<HTMLDialogElement>(null);
   const item = items[index];
-  const addresses = useFileAddresses(info.serverUrl, item?.id ?? '');
+  const addresses = useFileAddresses(info.serverUrl, item?.id ?? null);
 
   useEffect(() => {
     dialog.current?.showModal();

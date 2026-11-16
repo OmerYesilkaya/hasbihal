@@ -32,7 +32,7 @@ export async function hydrateMessages(
   const ids = rows.map((r) => r.id);
   const replyIds = [...new Set(rows.flatMap((r) => (r.reply_to_id ? [r.reply_to_id] : [])))];
 
-  const [mentions, reactions, replies, attachments] = await Promise.all([
+  const [mentions, reactions, replies, attachments, previews] = await Promise.all([
     db
       .selectFrom('message_mentions')
       .select(['message_id', 'user_id'])
@@ -69,6 +69,30 @@ export async function hydrateMessages(
       .where('attachments.message_id', 'in', ids)
       .orderBy('attachments.position')
       .execute(),
+    db
+      .selectFrom('message_links')
+      .innerJoin('link_previews', 'link_previews.url', 'message_links.url')
+      .leftJoin('files', 'files.id', 'link_previews.image_file_id')
+      .select([
+        'message_links.message_id',
+        'link_previews.url',
+        'link_previews.title',
+        'link_previews.description',
+        'link_previews.site_name',
+        'files.id as file_id',
+        'files.kind',
+        'files.original_name',
+        'files.mime',
+        'files.size_bytes',
+        'files.width',
+        'files.height',
+        'files.duration_ms',
+        'files.thumbnail_key',
+      ])
+      .where('message_links.message_id', 'in', ids)
+      .where('link_previews.status', '=', 'ok')
+      .orderBy('message_links.position')
+      .execute(),
   ]);
   const replyById = new Map(replies.map((r) => [r.id, r]));
 
@@ -98,6 +122,28 @@ export async function hydrateMessages(
       mentionsEveryone: row.mentions_everyone,
       reactions: [...reactionsByEmoji].map(([emoji, userIds]) => ({ emoji, userIds })),
       attachments: attachments.filter((a) => a.message_id === row.id).map(toAttachment),
+      previews: previews
+        .filter((p) => p.message_id === row.id && p.title !== null)
+        .map((p) => ({
+          url: p.url,
+          title: p.title ?? '',
+          description: p.description,
+          siteName: p.site_name,
+          image:
+            p.file_id && p.kind && p.original_name && p.mime && p.size_bytes !== null
+              ? toAttachment({
+                  id: p.file_id,
+                  kind: p.kind,
+                  original_name: p.original_name,
+                  mime: p.mime,
+                  size_bytes: p.size_bytes,
+                  width: p.width,
+                  height: p.height,
+                  duration_ms: p.duration_ms,
+                  thumbnail_key: p.thumbnail_key,
+                })
+              : null,
+        })),
       createdAt: row.created_at.toISOString(),
       editedAt: row.edited_at?.toISOString() ?? null,
       deletedAt: row.deleted_at?.toISOString() ?? null,
