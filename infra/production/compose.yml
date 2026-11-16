@@ -74,8 +74,30 @@ services:
       - caddy-data:/data
       - caddy-config:/config
 
+  # Nightly encrypted backups of the database and the files, and a monthly restore drill
+  # (A31; backup/). Logs: docker compose logs backup
+  backup:
+    build: ./backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://hasbihal:${POSTGRES_PASSWORD}@postgres:5432/hasbihal
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?set RESTIC_REPOSITORY in .env}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?set RESTIC_PASSWORD in .env}
+      # Off-site storage through its S3-compatible API (Backblaze B2, …); unused for /backups.
+      AWS_ACCESS_KEY_ID: ${BACKUP_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_KEY:-}
+    volumes:
+      - files:/data/files
+      - backup-state:/state
+      # A local repository (RESTIC_REPOSITORY=/backups) until off-site storage is set up.
+      - ${BACKUP_LOCAL_DIR:-./backups}:/backups
+
 volumes:
   postgres-data:
   files:
+  backup-state:
   caddy-data:
   caddy-config:
