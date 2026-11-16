@@ -3,7 +3,8 @@ import { activeRooms } from '@hasbihal/core';
 import { Room } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
-import { useT } from '../i18n.tsx';
+import { nextOccurrence, useEvents } from '../events/useEvents.ts';
+import { dayKey, formatTime, useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 
 /** The sidebar's rooms (A36), with unread badges (A28); admins can add one (A12). */
@@ -15,6 +16,9 @@ export function RoomList({
   onSelect: (roomId: string) => void;
 }) {
   const t = useT();
+  // A16: rooms with an event today show its time.
+  const events = useEvents(null, 1);
+  const today = dayKey(new Date().toISOString());
   const { info, store } = useChat();
   const state = useChatState();
   const rooms = activeRooms(state);
@@ -98,6 +102,14 @@ export function RoomList({
                   #
                 </span>
                 <span className="room__name">{room.name}</span>
+                {(() => {
+                  const next = nextOccurrence(events, room.id);
+                  return next && dayKey(next.startsAt) === today ? (
+                    <span className="room__event" data-testid="room-event">
+                      📅 {formatTime(next.startsAt)}
+                    </span>
+                  ) : null;
+                })()}
                 {unread && (
                   <span
                     className="badge"

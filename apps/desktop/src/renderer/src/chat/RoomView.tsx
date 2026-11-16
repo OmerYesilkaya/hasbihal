@@ -3,6 +3,9 @@ import { roomMessages } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useT } from '../i18n.tsx';
+import { EventChip } from '../events/EventChip.tsx';
+import { EventsDialog } from '../events/EventsDialog.tsx';
+import { nextOccurrence, useEvents } from '../events/useEvents.ts';
 import { HangoutPanel } from '../hangout/HangoutPanel.tsx';
 import { Composer, type ComposerHandle } from './Composer.tsx';
 import { useChat, useChatState } from './context.tsx';
@@ -42,6 +45,9 @@ export function RoomView({ roomId }: { roomId: string }) {
   const focused = useWindowFocused();
   const composer = useRef<ComposerHandle>(null);
   const [dragging, setDragging] = useState(false);
+  // A16: the room's events, four weeks ahead (the chip shows the next one).
+  const events = useEvents(roomId, 28);
+  const [eventsOpen, setEventsOpen] = useState(false);
 
   const messages = roomMessages(state, roomId);
   const latest = messages.at(-1);
@@ -93,7 +99,26 @@ export function RoomView({ roomId }: { roomId: string }) {
           <span aria-hidden>#</span> {room.name}
         </h1>
         {room.topic && <p className="room-view__topic">{room.topic}</p>}
+        {/* Members see it when something is coming up; admins always, to add one. */}
+        {(nextOccurrence(events, roomId) !== undefined || state.me?.role === 'admin') && (
+          <EventChip
+            view={events}
+            roomId={roomId}
+            onOpen={() => {
+              setEventsOpen(true);
+            }}
+          />
+        )}
       </header>
+      {eventsOpen && (
+        <EventsDialog
+          roomId={roomId}
+          view={events}
+          onClose={() => {
+            setEventsOpen(false);
+          }}
+        />
+      )}
       <HangoutPanel roomId={roomId} />
       <MessageList
         roomId={roomId}

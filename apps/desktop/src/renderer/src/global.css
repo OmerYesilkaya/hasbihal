@@ -2337,3 +2337,224 @@ body {
   color: var(--hb-text-secondary);
   font-size: 12px;
 }
+
+/* Events (A15, A16) */
+
+.room__event {
+  margin-left: auto;
+  color: var(--hb-text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.room__event + .badge {
+  margin-left: 6px;
+}
+
+.event-chip {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--hb-border);
+  border-radius: 14px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.event-chip:hover {
+  border-color: var(--hb-accent);
+}
+
+.event-chip[data-running] {
+  border-color: var(--hb-secondary);
+  color: var(--hb-secondary);
+  font-weight: 600;
+}
+
+.events-dialog {
+  width: 620px;
+}
+
+.events-dialog__add {
+  flex-direction: row;
+}
+
+.occurrences {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.occurrence {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.occurrence:last-child {
+  border-bottom: none;
+}
+
+.occurrence[data-skipped] .occurrence__when,
+.occurrence[data-skipped] .occurrence__title {
+  color: var(--hb-text-secondary);
+  text-decoration: line-through;
+}
+
+.occurrence__when {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.occurrence__when span {
+  color: var(--hb-text-secondary);
+}
+
+.occurrence__what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.occurrence__title {
+  font-weight: 600;
+}
+
+.occurrence__title em,
+.occurrence__invited {
+  color: var(--hb-text-secondary);
+  font-weight: 400;
+}
+
+.occurrence__description,
+.occurrence__rsvps {
+  color: var(--hb-text-secondary);
+  font-size: 12px;
+}
+
+.occurrence__rsvps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.occurrence__move {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.occurrence__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border: 1px solid var(--hb-border);
+  border-radius: 14px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--hb-secondary);
+  background: var(--hb-secondary);
+  color: #fff;
+}
+
+.occurrence__admin {
+  position: relative;
+}
+
+.occurrence__admin summary {
+  padding: 2px 8px;
+  border-radius: 6px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.occurrence__admin summary::-webkit-details-marker {
+  display: none;
+}
+
+.occurrence__admin summary:hover {
+  background: var(--hb-chip);
+}
+
+.occurrence__menu {
+  position: absolute;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 170px;
+  padding: 10px 12px;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  white-space: nowrap;
+}
+
+.link--danger {
+  color: var(--hb-primary);
+}
+
+.event-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-form__row {
+  display: flex;
+  gap: 10px;
+}
+
+.event-form__row > label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.event-form__days,
+.event-form__invitees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  border: none;
+}
+
+.event-form__invitees .field__hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.event-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}

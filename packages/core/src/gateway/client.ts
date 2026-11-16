@@ -67,6 +67,13 @@ export interface GatewayClientOptions {
   onHangoutStarted?: (roomId: string, userId: string) => void;
   /** Someone wants this member in a room (A13). */
   onNudge?: (fromUserId: string, roomId: string) => void;
+  /** An event this member is invited to starts soon (A15). */
+  onEventReminder?: (reminder: {
+    eventId: string;
+    roomId: string;
+    title: string;
+    startsAt: string;
+  }) => void;
   backoff?: BackoffOptions;
   pingIntervalMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -210,6 +217,9 @@ export class GatewayClient {
           return;
         case 'nudge':
           this.options.onNudge?.(message.fromUserId, message.roomId);
+          return;
+        case 'event_reminder':
+          this.options.onEventReminder?.(message);
           return;
         case 'upgrade_required':
           this.halt({ kind: 'upgrade_required' });

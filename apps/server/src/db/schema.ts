@@ -23,6 +23,10 @@ export interface Database {
   jobs: JobsTable;
   link_previews: LinkPreviewsTable;
   message_links: MessageLinksTable;
+  events: EventsTable;
+  event_invitees: EventInviteesTable;
+  event_exceptions: EventExceptionsTable;
+  event_rsvps: EventRsvpsTable;
 }
 
 /** A timestamp with a database default: optional on insert, never updated by hand. */
@@ -179,4 +183,39 @@ export interface MessageLinksTable {
   message_id: string;
   url: string;
   position: number;
+}
+
+export interface EventsTable {
+  id: string;
+  room_id: string;
+  title: string;
+  description: string | null;
+  starts_at: Date;
+  duration_min: number;
+  rrule: string | null;
+  tz: Generated<string>;
+  reminder_offset_min: number;
+  revision: Generated<number>;
+  created_by: string;
+  created_at: CreatedAt;
+}
+
+export interface EventInviteesTable {
+  event_id: string;
+  user_id: string;
+}
+
+export interface EventExceptionsTable {
+  event_id: string;
+  occurrence_start: Date;
+  kind: 'skipped' | 'moved';
+  new_starts_at: Date | null;
+}
+
+export interface EventRsvpsTable {
+  event_id: string;
+  occurrence_start: Date;
+  user_id: string;
+  response: 'yes' | 'no';
+  updated_at: CreatedAt;
 }
