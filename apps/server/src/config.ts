@@ -29,6 +29,12 @@ const Env = z.object({
   TRUST_PROXY: z.stringbool().default(false),
   // Where uploaded files are stored (A54). Relative paths are resolved from the working directory.
   FILES_DIR: z.string().default('data/files'),
+  // LiveKit (T5). The URL clients connect to, and where the server reaches LiveKit's API.
+  // The key and secret default to LiveKit's dev mode; production must set its own.
+  LIVEKIT_URL: z.string().default('ws://localhost:7880'),
+  LIVEKIT_API_URL: z.string().default('http://localhost:7880'),
+  LIVEKIT_API_KEY: z.string().min(1).optional(),
+  LIVEKIT_API_SECRET: z.string().min(1).optional(),
   // Requests per IP per minute on the unauthenticated auth routes (sign-in, sign-up, …).
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
 });
@@ -44,12 +50,18 @@ export interface Config {
   signingKeyPem: string | undefined;
   trustProxy: boolean;
   filesDir: string;
+  livekit: { url: string; apiUrl: string; apiKey: string; apiSecret: string };
   authRateLimitPerMinute: number;
   serverVersion: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = Env.parse(env);
+  /** LiveKit's dev-mode credentials are fine locally and never in production. */
+  const devOnly = (name: string, value: string) => {
+    if (parsed.NODE_ENV === 'production') throw new Error(`${name} is required in production`);
+    return value;
+  };
   return {
     host: parsed.HOST,
     port: parsed.PORT,
@@ -61,6 +73,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     signingKeyPem: parsed.AUTH_SIGNING_KEY,
     trustProxy: parsed.TRUST_PROXY,
     filesDir: path.resolve(parsed.FILES_DIR),
+    livekit: {
+      url: parsed.LIVEKIT_URL,
+      apiUrl: parsed.LIVEKIT_API_URL,
+      apiKey: parsed.LIVEKIT_API_KEY ?? devOnly('LIVEKIT_API_KEY', 'devkey'),
+      apiSecret: parsed.LIVEKIT_API_SECRET ?? devOnly('LIVEKIT_API_SECRET', 'secret'),
+    },
     authRateLimitPerMinute: parsed.AUTH_RATE_LIMIT_PER_MINUTE,
     serverVersion: pkg.version,
   };

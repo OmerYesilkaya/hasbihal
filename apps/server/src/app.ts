@@ -15,6 +15,9 @@ import { registerChat } from './chat/routes.ts';
 import { registerFiles } from './files/routes.ts';
 import { LocalFileStore, type FileStore } from './files/store.ts';
 import { registerProfile } from './profile/routes.ts';
+import { liveKitRooms, type LiveKitRooms } from './hangouts/livekit.ts';
+import { registerHangouts } from './hangouts/routes.ts';
+import { HangoutTracker } from './hangouts/tracker.ts';
 
 /** What the app needs from outside. The caller owns these and closes them. */
 export interface AppDeps {
@@ -23,6 +26,8 @@ export interface AppDeps {
   hub?: GatewayHub;
   /** Defaults to the local disk at `config.filesDir`. */
   files?: FileStore;
+  /** Defaults to LiveKit's API at `config.livekit.apiUrl`. */
+  livekitRooms?: LiveKitRooms;
 }
 
 /**
@@ -83,7 +88,27 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
   const files = deps.files ?? new LocalFileStore(config.filesDir);
   registerFiles(app, deps.db, files, guards);
   registerProfile(app, { db: deps.db, store: files, hub, guards });
-  registerGateway(app, config, { db: deps.db, keys, hub });
+  const tracker = new HangoutTracker({
+    changed: (roomId, participants) => {
+      hub.broadcast({ type: 'hangout', roomId, participants });
+    },
+    // A28: everyone hears that a hangout started, except the joiner and anyone busy (A19).
+    started: (roomId, userId) => {
+      hub.broadcast(
+        { type: 'hangout_started', roomId, userId },
+        (id) => id === userId || hub.isBusy(id),
+      );
+    },
+  });
+  await registerHangouts(app, {
+    db: deps.db,
+    hub,
+    tracker,
+    livekit: config.livekit,
+    rooms: deps.livekitRooms ?? liveKitRooms(config.livekit),
+    guards,
+  });
+  registerGateway(app, config, { db: deps.db, keys, hub, hangouts: () => tracker.snapshot() });
 
   return app;
 }

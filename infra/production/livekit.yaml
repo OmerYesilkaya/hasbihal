@@ -27,5 +27,11 @@ room:
       fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f
     - mime: video/h264
       fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032
+# Hangout membership reaches the server through webhooks (ARCHITECTURE §6.3). LiveKit uses host
+# networking, and the server's port is published on the host's loopback only.
+webhook:
+  api_key: hasbihal
+  urls:
+    - http://127.0.0.1:8080/hooks/livekit
 logging:
   level: info

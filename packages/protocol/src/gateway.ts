@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { User } from './auth.ts';
 import { Message, Room } from './chat.ts';
+import { HangoutParticipant } from './hangout.ts';
 import { Id } from './id.ts';
 
 /**
@@ -120,6 +121,8 @@ export const ServerWelcome = z.object({
   me: User,
   /** Everyone who is not offline. */
   presence: z.record(Id, PresenceStatus),
+  /** Who is in each room's hangout right now; rooms nobody is in are left out. */
+  hangouts: z.record(Id, z.array(HangoutParticipant)),
 });
 export type ServerWelcome = z.infer<typeof ServerWelcome>;
 
@@ -136,6 +139,26 @@ export const ServerPresence = z.object({
   status: PresenceStatus,
 });
 export type ServerPresence = z.infer<typeof ServerPresence>;
+
+/** A room's hangout changed: everyone in it now (empty when the last one left). */
+export const ServerHangout = z.object({
+  type: z.literal('hangout'),
+  roomId: Id,
+  participants: z.array(HangoutParticipant),
+});
+export type ServerHangout = z.infer<typeof ServerHangout>;
+
+/** Someone joined an empty room (A28). Not sent to people in Busy mode (A19). */
+export const ServerHangoutStarted = z.object({
+  type: z.literal('hangout_started'),
+  roomId: Id,
+  userId: Id,
+});
+export type ServerHangoutStarted = z.infer<typeof ServerHangoutStarted>;
+
+/** "Ömer wants you in Salon" (A13): a strong notification that joins the room when clicked. */
+export const ServerNudge = z.object({ type: z.literal('nudge'), fromUserId: Id, roomId: Id });
+export type ServerNudge = z.infer<typeof ServerNudge>;
 
 /** Someone is typing (ephemeral): show it for `TYPING_TTL_MS` unless repeated. */
 export const ServerTyping = z.object({ type: z.literal('typing'), roomId: Id, userId: Id });
@@ -173,6 +196,9 @@ export const ServerMessage = z.discriminatedUnion('type', [
   ServerPresence,
   ServerTyping,
   ServerReadState,
+  ServerHangout,
+  ServerHangoutStarted,
+  ServerNudge,
   ServerUpgradeRequired,
   ServerPong,
   ServerError,

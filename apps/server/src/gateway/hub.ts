@@ -125,9 +125,25 @@ export class GatewayHub implements SessionCloser, EventNotifier {
       c.socket.close(GatewayCloseCode.unauthorized, 'session ended');
   }
 
-  /** A private message to every connection of one member (e.g. their read marker moved). */
-  sendToUser(userId: string, message: ServerMessage): void {
-    for (const c of this.#connectionsOf(userId)) if (c.welcomed) send(c.socket, message);
+  /** A private message to every connection of one member. Returns how many it reached. */
+  sendToUser(userId: string, message: ServerMessage): number {
+    let reached = 0;
+    for (const c of this.#connectionsOf(userId)) {
+      if (!c.welcomed) continue;
+      send(c.socket, message);
+      reached++;
+    }
+    return reached;
+  }
+
+  /** A message to every welcomed connection whose member `skip` doesn't exclude. */
+  broadcast(message: ServerMessage, skip: (userId: string) => boolean = () => false): void {
+    for (const c of this.#connections) if (c.welcomed && !skip(c.userId)) send(c.socket, message);
+  }
+
+  /** Busy mode (A19) suppresses nudges and notifications. Offline members aren't busy. */
+  isBusy(userId: string): boolean {
+    return this.#modes.get(userId) === 'busy';
   }
 
   /** Tells everyone else that `userId` is typing in a room, at most every 2 seconds. */

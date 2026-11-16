@@ -19,3 +19,9 @@ room:
       fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f
     - mime: video/h264
       fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032
+# Hangout membership reaches the server through webhooks (ARCHITECTURE §6.3). The dev server runs on
+# the host, which LiveKit's container reaches as host.docker.internal.
+webhook:
+  api_key: devkey
+  urls:
+    - http://host.docker.internal:8080/hooks/livekit

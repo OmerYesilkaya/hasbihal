@@ -66,6 +66,7 @@ const welcome = (seq: number, resync = false) => ({
   resync,
   me: ME,
   presence: { [ME.id]: 'available' },
+  hangouts: {},
 });
 
 function setup(token: () => string | null = () => 'token-1') {
