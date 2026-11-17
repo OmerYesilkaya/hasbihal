@@ -248,6 +248,7 @@ export const tr = {
   'hangout.leave': 'Ayrıl',
   'hangout.mute': 'Mikrofonu kapat',
   'hangout.unmute': 'Mikrofonu aç',
+  'hangout.muted': 'Mikrofon kapalı',
   'hangout.deafen': 'Sesi kapat',
   'hangout.undeafen': 'Sesi aç',
   'hangout.cameraOn': 'Kamerayı aç',

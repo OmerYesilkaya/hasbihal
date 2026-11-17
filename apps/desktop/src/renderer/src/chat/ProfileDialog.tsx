@@ -12,6 +12,8 @@ import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
+import { X } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /** The profile view (A41): photo (A40), display name, password, and this member's devices. */
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
@@ -35,7 +37,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
           aria-label={t('profile.close')}
           onClick={onClose}
         >
-          ×
+          <Icon icon={X} />
         </button>
       </header>
       <PhotoSection me={me} />

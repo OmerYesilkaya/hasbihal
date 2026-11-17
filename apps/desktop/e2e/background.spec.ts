@@ -6,10 +6,10 @@ test('mutes a room, and keeps the setting (A28)', async ({ desktop }) => {
   await roomButton(page, room.name).click();
 
   const bell = page.getByTestId('room-prefs');
-  await expect(bell).toHaveText('🔔');
+  await expect(bell).not.toHaveAttribute('data-muted');
   await bell.click();
   await page.getByLabel('Sessiz').check();
-  await expect(bell).toHaveText('🔕');
+  await expect(bell).toHaveAttribute('data-muted', 'true');
   await expect(roomButton(page, room.name)).toHaveAttribute('data-muted', 'true');
   // Sound is only for "every message"; the hangout alert goes with muting.
   await expect(page.getByLabel('Her mesajda ses çal')).toBeDisabled();

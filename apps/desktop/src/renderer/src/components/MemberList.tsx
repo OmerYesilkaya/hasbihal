@@ -6,6 +6,8 @@ import { api } from '../api.ts';
 import { useChat, useHangout } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
 import { Avatar } from './Avatar.tsx';
+import { Hand } from 'lucide-react';
+import { Icon } from './Icon.tsx';
 
 export const PRESENCE_LABEL: Record<PresenceStatus, MessageKey> = {
   available: 'presence.available',
@@ -89,7 +91,7 @@ function NudgeButton({ member, roomId }: { member: User; roomId: string | null }
       aria-label={t('nudge.action')}
       onClick={() => void nudge()}
     >
-      👋
+      <Icon icon={Hand} />
     </button>
   );
 }

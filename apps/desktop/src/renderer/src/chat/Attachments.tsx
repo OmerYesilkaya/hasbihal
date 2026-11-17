@@ -3,6 +3,9 @@ import type { Attachment } from '@hasbihal/protocol';
 import { formatDuration, formatSize, useFileAddresses } from '../files.ts';
 import { locale, useT } from '../i18n.tsx';
 import { useChat } from './context.tsx';
+import { rangeFill } from '../components/range.ts';
+import { FileText, Pause, Play, X } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /** Photos and videos lay out within this box; the viewer shows them full size. */
 const BOX = { width: 360, height: 300 };
@@ -97,7 +100,8 @@ function MediaThumb({
       )}
       {attachment.kind === 'video' && (
         <span className="media-thumb__play" aria-hidden>
-          ▶{attachment.durationMs !== null && <span>{formatDuration(attachment.durationMs)}</span>}
+          <Icon icon={Play} fill="currentColor" />
+          {attachment.durationMs !== null && <span>{formatDuration(attachment.durationMs)}</span>}
         </span>
       )}
       <span className="visually-hidden">
@@ -131,7 +135,7 @@ function VoicePlayer({ attachment }: { attachment: Attachment }) {
           else el.pause();
         }}
       >
-        {playing ? '❚❚' : '▶'}
+        <Icon icon={playing ? Pause : Play} fill="currentColor" />
       </button>
       <input
         className="voice__seek"
@@ -140,6 +144,7 @@ function VoicePlayer({ attachment }: { attachment: Attachment }) {
         max={Math.max(total, 1)}
         step={100}
         value={Math.min(position, total)}
+        style={rangeFill(Math.min(position, total), 0, Math.max(total, 1))}
         aria-label={t('voice.message')}
         onChange={(e) => {
           const el = audio.current;
@@ -191,7 +196,7 @@ function FileCard({ attachment }: { attachment: Attachment }) {
   return (
     <div className="file-card" data-testid="attachment-file">
       <span className="file-card__icon" aria-hidden>
-        📄
+        <Icon icon={FileText} />
       </span>
       <span className="file-card__text">
         <span className="file-card__name">{attachment.name}</span>
@@ -264,7 +269,7 @@ function MediaViewer({
           onClick={() => dialog.current?.close()}
           aria-label={t('attachment.close')}
         >
-          ✕
+          <Icon icon={X} />
         </button>
       </div>
       {addresses &&

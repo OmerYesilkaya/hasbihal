@@ -6,6 +6,20 @@ import { useT } from '../i18n.tsx';
 import { screenVolumeKey, type ParticipantView, type ShareView } from './session.ts';
 import { SharePicker } from './SharePicker.tsx';
 import { VoiceSettingsPanel } from './VoiceSettings.tsx';
+import { rangeFill } from '../components/range.ts';
+import {
+  HeadphoneOff,
+  Headphones,
+  Mic,
+  MicOff,
+  PhoneOff,
+  ScreenShare,
+  ScreenShareOff,
+  Settings,
+  Video,
+  VideoOff,
+} from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /**
  * The voice and video half of a combined room (A11): a bar to join, showing who is there, or,
@@ -38,7 +52,7 @@ export function HangoutPanel({ roomId }: { roomId: string }) {
           disabled={call.status === 'connecting'}
           onClick={() => void hangout.join(roomId)}
         >
-          🎙 {t('hangout.join')}
+          <Icon icon={Headphones} /> {t('hangout.join')}
         </button>
         {call.notice === 'hangout.joinFailed' && (
           <span className="field__error">{t(call.notice)}</span>
@@ -119,7 +133,9 @@ function Tile({ participant, member }: { participant: ParticipantView; member: U
         member && <Avatar user={member} large />
       )}
       <div className="tile__label">
-        {participant.micMuted && <span aria-label={t('hangout.unmute')}>🔇</span>}
+        {participant.micMuted && (
+          <Icon icon={MicOff} label={t('hangout.muted')} data-testid="tile-muted" />
+        )}
         <span>{name}</span>
       </div>
       {!participant.isLocal && (
@@ -131,6 +147,7 @@ function Tile({ participant, member }: { participant: ParticipantView; member: U
           max={2}
           step={0.05}
           value={volume}
+          style={rangeFill(volume, 0, 2)}
           aria-label={t('settings.volume', { name })}
           onChange={(e) => {
             hangout.setVolume(participant.userId, Number(e.target.value));
@@ -241,6 +258,7 @@ function ShareTile({
           max={2}
           step={0.05}
           value={volume}
+          style={rangeFill(volume, 0, 2)}
           aria-label={t('share.volume', { name })}
           onChange={(e) => {
             hangout.setVolume(screenVolumeKey(share.userId), Number(e.target.value));
@@ -268,7 +286,7 @@ function Controls() {
         title={call.micMuted ? t('hangout.unmute') : t('hangout.mute')}
         onClick={() => void hangout.toggleMute()}
       >
-        {call.micMuted ? '🔇' : '🎙'}
+        <Icon icon={call.micMuted ? MicOff : Mic} />
       </button>
       <button
         type="button"
@@ -278,7 +296,7 @@ function Controls() {
         title={call.deafened ? t('hangout.undeafen') : t('hangout.deafen')}
         onClick={() => void hangout.toggleDeafen()}
       >
-        {call.deafened ? '🔕' : '🎧'}
+        <Icon icon={call.deafened ? HeadphoneOff : Headphones} />
       </button>
       <button
         type="button"
@@ -288,7 +306,7 @@ function Controls() {
         title={call.cameraOn ? t('hangout.cameraOff') : t('hangout.cameraOn')}
         onClick={() => void hangout.toggleCamera()}
       >
-        📷
+        <Icon icon={call.cameraOn ? Video : VideoOff} />
       </button>
       <button
         type="button"
@@ -301,7 +319,7 @@ function Controls() {
           else setPicking(true);
         }}
       >
-        🖥
+        <Icon icon={call.sharing ? ScreenShareOff : ScreenShare} />
       </button>
       <button
         type="button"
@@ -313,7 +331,7 @@ function Controls() {
           setSettingsOpen((open) => !open);
         }}
       >
-        ⚙
+        <Icon icon={Settings} />
       </button>
       <button
         type="button"
@@ -322,7 +340,7 @@ function Controls() {
         title={t('hangout.leave')}
         onClick={() => void hangout.leave()}
       >
-        ✕
+        <Icon icon={PhoneOff} />
       </button>
       {picking && (
         <SharePicker

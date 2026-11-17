@@ -17,6 +17,8 @@ import { locale } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { useUploads } from './useUploads.ts';
 import { VoiceRecorder, type Recording } from './VoiceRecorder.tsx';
+import { FileText, Mic, Paperclip, X } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /** Typing notices go out at most this often while typing (the server throttles too). */
 const TYPING_EVERY_MS = 3_000;
@@ -298,7 +300,7 @@ export function Composer({
                 <img className="upload__preview" src={u.preview} alt="" />
               ) : (
                 <span className="upload__preview upload__preview--file" aria-hidden>
-                  📄
+                  <Icon icon={FileText} />
                 </span>
               )}
               <span className="upload__text">
@@ -329,7 +331,7 @@ export function Composer({
                   remove(u.key);
                 }}
               >
-                ✕
+                <Icon icon={X} />
               </button>
             </li>
           ))}
@@ -359,7 +361,7 @@ export function Composer({
                 title={t('composer.attach')}
                 onClick={() => picker.current?.click()}
               >
-                📎
+                <Icon icon={Paperclip} />
               </button>
               <input
                 ref={picker}
@@ -452,7 +454,7 @@ export function Composer({
                 setRecording(true);
               }}
             >
-              🎤
+              <Icon icon={Mic} />
             </button>
           )}
         </div>

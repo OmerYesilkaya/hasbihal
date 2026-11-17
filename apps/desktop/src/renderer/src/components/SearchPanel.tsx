@@ -5,6 +5,8 @@ import { api } from '../api.ts';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
 import { EmptyState } from './EmptyState.tsx';
+import { Paperclip } from 'lucide-react';
+import { Icon } from './Icon.tsx';
 
 /** Searching starts from this many characters; one letter matches half the archive. */
 const MIN_LENGTH = 2;
@@ -175,7 +177,7 @@ function Result({
       <span className="search-result__text">{highlighted(excerpt(text, words), words)}</span>
       {message.attachments.length > 0 && (
         <span className="search-result__files">
-          📎 {t('search.files', { count: message.attachments.length })}
+          <Icon icon={Paperclip} /> {t('search.files', { count: message.attachments.length })}
         </span>
       )}
     </button>

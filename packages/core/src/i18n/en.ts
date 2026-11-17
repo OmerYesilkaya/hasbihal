@@ -239,6 +239,7 @@ export const en: Record<MessageKey, string> = {
   'hangout.leave': 'Leave',
   'hangout.mute': 'Mute microphone',
   'hangout.unmute': 'Unmute microphone',
+  'hangout.muted': 'Microphone muted',
   'hangout.deafen': 'Deafen',
   'hangout.undeafen': 'Undeafen',
   'hangout.cameraOn': 'Turn camera on',

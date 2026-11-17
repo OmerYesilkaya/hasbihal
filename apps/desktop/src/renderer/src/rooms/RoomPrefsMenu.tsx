@@ -3,6 +3,8 @@ import { RoomPrefs } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
+import { Bell, BellOff } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /**
  * How this member hears about a room (A28): mentions only (the default), every message (with or
@@ -28,8 +30,9 @@ export function RoomPrefsMenu({ roomId }: { roomId: string }) {
         aria-label={t('prefs.heading')}
         title={t('prefs.heading')}
         data-testid="room-prefs"
+        data-muted={prefs.notify === 'muted' ? true : undefined}
       >
-        {prefs.notify === 'muted' ? '🔕' : '🔔'}
+        <Icon icon={prefs.notify === 'muted' ? BellOff : Bell} />
       </summary>
       <div className="room-prefs__menu">
         <fieldset>

@@ -8,6 +8,8 @@ import { useChat, useChatState } from './context.tsx';
 import { Attachments } from './Attachments.tsx';
 import { LinkPreviews } from './LinkPreviews.tsx';
 import { MarkdownView } from './Markdown.tsx';
+import { CornerDownRight, Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /** A small, fixed set; no picker library and no emoji search (A23-style simplicity). */
 export const QUICK_REACTIONS = [
@@ -104,7 +106,8 @@ export const MessageItem = memo(function MessageItem({
         {message.replyTo && (
           <div className="message__reply">
             <span className="message__reply-author">
-              ↪ {replyAuthor?.displayName ?? t('message.unknownAuthor')}
+              <Icon icon={CornerDownRight} />{' '}
+              {replyAuthor?.displayName ?? t('message.unknownAuthor')}
             </span>{' '}
             {message.replyTo.deleted ? (
               <em>{t('message.deleted')}</em>
@@ -167,7 +170,7 @@ export const MessageItem = memo(function MessageItem({
               setPicking((p) => !p);
             }}
           >
-            ☺
+            <Icon icon={SmilePlus} />
           </button>
           <button
             type="button"
@@ -178,7 +181,7 @@ export const MessageItem = memo(function MessageItem({
               onReply(message);
             }}
           >
-            ↩
+            <Icon icon={Reply} />
           </button>
           {mine && (
             <>
@@ -191,7 +194,7 @@ export const MessageItem = memo(function MessageItem({
                   onEdit(message);
                 }}
               >
-                ✎
+                <Icon icon={Pencil} />
               </button>
               <button
                 type="button"
@@ -200,7 +203,7 @@ export const MessageItem = memo(function MessageItem({
                 aria-label={t('message.delete')}
                 onClick={remove}
               >
-                🗑
+                <Icon icon={Trash2} />
               </button>
             </>
           )}

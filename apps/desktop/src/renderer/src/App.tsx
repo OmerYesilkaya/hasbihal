@@ -31,6 +31,8 @@ import { formatTime, I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
 import { playChime } from './sound.ts';
 import { useGateway } from './useGateway.ts';
+import { Shield, X } from 'lucide-react';
+import { Icon } from './components/Icon.tsx';
 
 export function App({ info }: { info: AppInfo }) {
   return (
@@ -278,7 +280,7 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
                 setAdminOpen(true);
               }}
             >
-              ⚙ {t('admin.heading')}
+              <Icon icon={Shield} /> {t('admin.heading')}
             </button>
           )}
           <UserPanel
@@ -300,7 +302,7 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
             <div className="banner" role="status">
               <span>{t('auth.linkWhileSignedIn')}</span>
               <button type="button" className="link" onClick={onDismissLink} aria-label="×">
-                ×
+                <Icon icon={X} />
               </button>
             </div>
           )}

@@ -69,6 +69,11 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
+  // Windows and Linux put Electron's default menu (File, Edit, View…) inside the window; macOS
+  // shows it in the system menu bar. Hide it so the window looks the same everywhere. The menu
+  // stays set, so its shortcuts (copy, paste, reload, developer tools) keep working.
+  if (process.platform !== 'darwin') window.setMenuBarVisibility(false);
+
   window.once('ready-to-show', () => {
     // Started with the computer (A39): stay in the tray until wanted.
     if (!background.startedHidden) window.show();

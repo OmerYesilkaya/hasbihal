@@ -26,7 +26,7 @@ test('plans a weekly event: create, RSVP, skip one (A15, A16)', async ({ desktop
     'aria-pressed',
     'true',
   );
-  await expect(occurrences.first()).toContainText('✓ Emre Test');
+  await expect(occurrences.first().getByTestId('rsvp-coming')).toHaveText('Emre Test');
 
   const second = occurrences.nth(1);
   await second.getByLabel('Etkinliği yönet').click();

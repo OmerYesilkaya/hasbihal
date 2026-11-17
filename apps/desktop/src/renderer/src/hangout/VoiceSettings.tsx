@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useChat, useHangout } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
+import { rangeFill } from '../components/range.ts';
 
 const isMac = navigator.userAgent.includes('Mac');
 /** How the global shortcuts (main/shortcuts.ts) read on this platform. */
@@ -144,6 +145,7 @@ export function VoiceSettingsPanel({ onClose }: { onClose: () => void }) {
             max={-10}
             step={1}
             value={settings.thresholdDb}
+            style={rangeFill(settings.thresholdDb, -80, -10)}
             onChange={(e) => {
               hangout.updateSettings({ thresholdDb: Number(e.target.value) });
             }}

@@ -6,6 +6,8 @@ import { Avatar } from '../components/Avatar.tsx';
 import { nextOccurrence, useEvents } from '../events/useEvents.ts';
 import { dayKey, formatTime, useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
+import { Calendar } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /** The sidebar's rooms (A36), with unread badges (A28); admins can add one (A12). */
 export function RoomList({
@@ -110,7 +112,7 @@ export function RoomList({
                   const next = nextOccurrence(events, room.id);
                   return next && dayKey(next.startsAt) === today ? (
                     <span className="room__event" data-testid="room-event">
-                      📅 {formatTime(next.startsAt)}
+                      <Icon icon={Calendar} /> {formatTime(next.startsAt)}
                     </span>
                   ) : null;
                 })()}

@@ -1,5 +1,7 @@
 import { useT, formatWhen } from '../i18n.tsx';
 import { nextOccurrence, useNow, type EventsView } from './useEvents.ts';
+import { Calendar } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /**
  * The room's next event, in its header (A16): "📅 Ders · Bugün 09:00", or "şimdi" while it's on.
@@ -27,7 +29,7 @@ export function EventChip({
       data-testid="event-chip"
       onClick={onOpen}
     >
-      📅{' '}
+      <Icon icon={Calendar} />{' '}
       {event && next
         ? `${event.title} · ${
             running

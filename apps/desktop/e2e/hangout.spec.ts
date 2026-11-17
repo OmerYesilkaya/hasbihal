@@ -31,7 +31,9 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
 
   // Ömer mutes; Zeynep sees it.
   await omer.getByRole('button', { name: 'Mikrofonu kapat' }).click();
-  await expect(zeynep.getByTestId('tile').filter({ hasText: 'Ömer Faruk' })).toContainText('🔇');
+  await expect(
+    zeynep.getByTestId('tile').filter({ hasText: 'Ömer Faruk' }).getByTestId('tile-muted'),
+  ).toBeVisible();
 
   // Zeynep turns her camera on; Ömer gets video.
   await zeynep.getByRole('button', { name: 'Kamerayı aç' }).click();

@@ -7,6 +7,8 @@ import { useChat, useChatState } from '../chat/context.tsx';
 import { formatWhen, formatTime, useT } from '../i18n.tsx';
 import { EventForm, fromInputs, toInputs } from './EventForm.tsx';
 import type { EventsView } from './useEvents.ts';
+import { Check, Ellipsis, X } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 
 /**
  * A room's events (A15, A16): what's coming up for four weeks, with RSVPs per occurrence for
@@ -163,9 +165,15 @@ function OccurrenceRow({
         {event.description && <span className="occurrence__description">{event.description}</span>}
         {!occurrence.skipped && (
           <span className="occurrence__rsvps">
-            {coming.length > 0 && <span title={coming.join(', ')}>✓ {coming.join(', ')}</span>}
+            {coming.length > 0 && (
+              <span title={coming.join(', ')} data-testid="rsvp-coming">
+                <Icon icon={Check} /> {coming.join(', ')}
+              </span>
+            )}
             {notComing.length > 0 && (
-              <span title={notComing.join(', ')}>✗ {notComing.join(', ')}</span>
+              <span title={notComing.join(', ')} data-testid="rsvp-not-coming">
+                <Icon icon={X} /> {notComing.join(', ')}
+              </span>
             )}
           </span>
         )}
@@ -227,7 +235,9 @@ function OccurrenceRow({
         )}
         {isAdmin && (
           <details className="occurrence__admin">
-            <summary aria-label={t('events.manage')}>⋯</summary>
+            <summary aria-label={t('events.manage')}>
+              <Icon icon={Ellipsis} />
+            </summary>
             <div
               className="occurrence__menu"
               // Any choice closes the menu.
