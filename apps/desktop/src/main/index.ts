@@ -37,6 +37,11 @@ if (userDataDir) app.setPath('userData', path.resolve(userDataDir));
 app.enableSandbox();
 registerAppSchemePrivileges();
 
+// Windows names notifications and groups taskbar buttons by this ID, which must match the
+// installer's shortcut (appId in electron-builder.yml) to show as "Hasbihal". Unpackaged runs
+// have no such shortcut and keep Electron's own ID, under which notifications still show.
+if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId('com.hasbihal.desktop');
+
 const deepLinks = new DeepLinkRouter();
 const idleWatcher = new IdleWatcher();
 const shortcuts = new HangoutShortcuts();
