@@ -6,7 +6,6 @@ test('chats in a room: formatting, mentions, replies, reactions, edits, deletes'
   const mehmet = await createPerson('Mehmet Test', 'admin');
   const kerem = await createPerson('Kerem Test');
   const host = await desktop.signedIn(mehmet);
-  host.on('dialog', (dialog) => void dialog.accept()); // "Bu mesaj silinsin mi?"
   const guest = await desktop.signedIn(kerem);
 
   // Mehmet (an admin) opens a room; Kerem sees it appear.
@@ -78,6 +77,8 @@ test('chats in a room: formatting, mentions, replies, reactions, edits, deletes'
   const own = host.getByTestId('message').filter({ hasText: 'herkese' });
   await own.hover();
   await own.getByRole('button', { name: 'Sil' }).click();
+  // The app's own "are you sure?", not the system's.
+  await host.getByTestId('confirm').getByRole('button', { name: 'Sil' }).click();
   await expect(guest.getByText('Bu mesaj silindi.').first()).toBeVisible();
 
   // A message in another room shows up as an unread badge, marked as a mention.

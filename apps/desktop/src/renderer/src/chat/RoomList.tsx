@@ -9,6 +9,7 @@ import { useChat, useChatState } from './context.tsx';
 import { BellOff, Calendar } from 'lucide-react';
 import { RoomMenu } from '../rooms/RoomMenu.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { Tip } from '../components/Tip.tsx';
 
 /**
  * The sidebar's rooms (A36): this member's favourites first, unread badges (A28), and a menu per
@@ -129,17 +130,18 @@ export function RoomList({
       <div className="room-list__heading">
         <h2 className="section-label">{t('rooms.heading')}</h2>
         {state.me?.role === 'admin' && (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={t('rooms.create')}
-            title={t('rooms.create')}
-            onClick={() => {
-              setCreating(true);
-            }}
-          >
-            +
-          </button>
+          <Tip label={t('rooms.create')}>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={t('rooms.create')}
+              onClick={() => {
+                setCreating(true);
+              }}
+            >
+              +
+            </button>
+          </Tip>
         )}
       </div>
       {creating && (

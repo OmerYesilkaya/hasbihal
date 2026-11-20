@@ -20,6 +20,7 @@ import {
   type EmojiEntry,
   type EmojiGroup,
 } from './emoji-data.ts';
+import { Tip } from '../components/Tip.tsx';
 
 const GROUP_ICONS: Record<EmojiGroup, LucideIcon> = {
   0: Smile,
@@ -42,6 +43,8 @@ export function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
   const { locale } = useLanguage();
   const [all, setAll] = useState<EmojiEntry[] | null>(null);
   const [query, setQuery] = useState('');
+  /** Named in the footer, as a tooltip on each of ~1800 emoji would be heavy. */
+  const [hovered, setHovered] = useState<EmojiEntry | null>(null);
   const sections = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,8 +65,13 @@ export function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
       key={e.emoji}
       type="button"
       className="emoji-picker__emoji"
-      title={e.name[locale]}
       aria-label={e.name[locale]}
+      onMouseEnter={() => {
+        setHovered(e);
+      }}
+      onFocus={() => {
+        setHovered(e);
+      }}
       onClick={() => {
         onPick(e.emoji);
       }}
@@ -92,20 +100,20 @@ export function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
       {!words.length && (
         <div className="emoji-picker__groups" role="toolbar" aria-label={t('emoji.groups')}>
           {EMOJI_GROUPS.map((group) => (
-            <button
-              key={group}
-              type="button"
-              className="icon-button"
-              title={t(`emoji.group.${group}`)}
-              aria-label={t(`emoji.group.${group}`)}
-              onClick={() => {
-                sections.current
-                  ?.querySelector(`[data-group="${String(group)}"]`)
-                  ?.scrollIntoView({ block: 'start' });
-              }}
-            >
-              <Icon icon={GROUP_ICONS[group]} />
-            </button>
+            <Tip label={t(`emoji.group.${group}`)} key={group}>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={t(`emoji.group.${group}`)}
+                onClick={() => {
+                  sections.current
+                    ?.querySelector(`[data-group="${String(group)}"]`)
+                    ?.scrollIntoView({ block: 'start' });
+                }}
+              >
+                <Icon icon={GROUP_ICONS[group]} />
+              </button>
+            </Tip>
           ))}
         </div>
       )}
@@ -127,6 +135,14 @@ export function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
               </div>
             </section>
           ))
+        )}
+      </div>
+      <div className="emoji-picker__footer" aria-hidden>
+        {hovered && (
+          <>
+            <span className="emoji-picker__preview">{hovered.emoji}</span>
+            <span>{hovered.name[locale]}</span>
+          </>
         )}
       </div>
     </div>

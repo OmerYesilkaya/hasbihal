@@ -7,7 +7,6 @@ import { screenVolumeKey, type ParticipantView, type ShareView } from './session
 import { SharePicker } from './SharePicker.tsx';
 import { VoiceSettingsFields } from './VoiceSettings.tsx';
 import { Popover } from '../components/Popover.tsx';
-import { rangeFill } from '../components/range.ts';
 import {
   HeadphoneOff,
   Headphones,
@@ -21,6 +20,8 @@ import {
   VideoOff,
 } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
+import { Slider } from '../components/controls.tsx';
+import { Tip } from '../components/Tip.tsx';
 
 /**
  * The voice and video half of a combined room (A11): a bar to join, showing who is there, or,
@@ -55,9 +56,6 @@ export function HangoutPanel({ roomId }: { roomId: string }) {
         >
           <Icon icon={Headphones} /> {t('hangout.join')}
         </button>
-        {call.notice === 'hangout.joinFailed' && (
-          <span className="field__error">{t(call.notice)}</span>
-        )}
       </div>
     );
   }
@@ -90,9 +88,6 @@ export function HangoutPanel({ roomId }: { roomId: string }) {
           <Tile key={p.userId} participant={p} member={state.members.get(p.userId)} />
         ))}
       </div>
-      {call.notice && call.notice !== 'hangout.joinFailed' && (
-        <p className="stage__notice">{t(call.notice)}</p>
-      )}
       <Controls />
     </section>
   );
@@ -141,17 +136,15 @@ function Tile({ participant, member }: { participant: ParticipantView; member: U
       </div>
       {!participant.isLocal && (
         // A29: a volume per person, remembered.
-        <input
+        <Slider
           className="tile__volume"
-          type="range"
+          label={t('settings.volume', { name })}
           min={0}
           max={2}
           step={0.05}
           value={volume}
-          style={rangeFill(volume, 0, 2)}
-          aria-label={t('settings.volume', { name })}
-          onChange={(e) => {
-            hangout.setVolume(participant.userId, Number(e.target.value));
+          onChange={(value) => {
+            hangout.setVolume(participant.userId, value);
           }}
         />
       )}
@@ -252,17 +245,15 @@ function ShareTile({
         </div>
       )}
       {track && !share.isLocal && share.hasAudio && (
-        <input
+        <Slider
           className="tile__volume"
-          type="range"
+          label={t('share.volume', { name })}
           min={0}
           max={2}
           step={0.05}
           value={volume}
-          style={rangeFill(volume, 0, 2)}
-          aria-label={t('share.volume', { name })}
-          onChange={(e) => {
-            hangout.setVolume(screenVolumeKey(share.userId), Number(e.target.value));
+          onChange={(value) => {
+            hangout.setVolume(screenVolumeKey(share.userId), value);
           }}
         />
       )}
@@ -277,77 +268,78 @@ function Controls() {
   const [picking, setPicking] = useState(false);
   return (
     <div className="stage__controls">
-      <button
-        type="button"
-        className="round-button"
-        data-off={call.micMuted || call.micUnavailable ? true : undefined}
-        disabled={call.micUnavailable}
-        aria-label={call.micMuted ? t('hangout.unmute') : t('hangout.mute')}
-        title={call.micMuted ? t('hangout.unmute') : t('hangout.mute')}
-        onClick={() => void hangout.toggleMute()}
-      >
-        <Icon icon={call.micMuted ? MicOff : Mic} />
-      </button>
-      <button
-        type="button"
-        className="round-button"
-        data-off={call.deafened ? true : undefined}
-        aria-label={call.deafened ? t('hangout.undeafen') : t('hangout.deafen')}
-        title={call.deafened ? t('hangout.undeafen') : t('hangout.deafen')}
-        onClick={() => void hangout.toggleDeafen()}
-      >
-        <Icon icon={call.deafened ? HeadphoneOff : Headphones} />
-      </button>
-      <button
-        type="button"
-        className="round-button"
-        data-on={call.cameraOn ? true : undefined}
-        aria-label={call.cameraOn ? t('hangout.cameraOff') : t('hangout.cameraOn')}
-        title={call.cameraOn ? t('hangout.cameraOff') : t('hangout.cameraOn')}
-        onClick={() => void hangout.toggleCamera()}
-      >
-        <Icon icon={call.cameraOn ? Video : VideoOff} />
-      </button>
-      <button
-        type="button"
-        className="round-button"
-        data-on={call.sharing ? true : undefined}
-        aria-label={call.sharing ? t('hangout.stopShare') : t('hangout.share')}
-        title={call.sharing ? t('hangout.stopShare') : t('hangout.share')}
-        onClick={() => {
-          if (call.sharing) void hangout.stopScreenShare();
-          else setPicking(true);
-        }}
-      >
-        <Icon icon={call.sharing ? ScreenShareOff : ScreenShare} />
-      </button>
+      <Tip label={call.micMuted ? t('hangout.unmute') : t('hangout.mute')}>
+        <button
+          type="button"
+          className="round-button"
+          data-off={call.micMuted || call.micUnavailable ? true : undefined}
+          disabled={call.micUnavailable}
+          aria-label={call.micMuted ? t('hangout.unmute') : t('hangout.mute')}
+          onClick={() => void hangout.toggleMute()}
+        >
+          <Icon icon={call.micMuted ? MicOff : Mic} />
+        </button>
+      </Tip>
+      <Tip label={call.deafened ? t('hangout.undeafen') : t('hangout.deafen')}>
+        <button
+          type="button"
+          className="round-button"
+          data-off={call.deafened ? true : undefined}
+          aria-label={call.deafened ? t('hangout.undeafen') : t('hangout.deafen')}
+          onClick={() => void hangout.toggleDeafen()}
+        >
+          <Icon icon={call.deafened ? HeadphoneOff : Headphones} />
+        </button>
+      </Tip>
+      <Tip label={call.cameraOn ? t('hangout.cameraOff') : t('hangout.cameraOn')}>
+        <button
+          type="button"
+          className="round-button"
+          data-on={call.cameraOn ? true : undefined}
+          aria-label={call.cameraOn ? t('hangout.cameraOff') : t('hangout.cameraOn')}
+          onClick={() => void hangout.toggleCamera()}
+        >
+          <Icon icon={call.cameraOn ? Video : VideoOff} />
+        </button>
+      </Tip>
+      <Tip label={call.sharing ? t('hangout.stopShare') : t('hangout.share')}>
+        <button
+          type="button"
+          className="round-button"
+          data-on={call.sharing ? true : undefined}
+          aria-label={call.sharing ? t('hangout.stopShare') : t('hangout.share')}
+          onClick={() => {
+            if (call.sharing) void hangout.stopScreenShare();
+            else setPicking(true);
+          }}
+        >
+          <Icon icon={call.sharing ? ScreenShareOff : ScreenShare} />
+        </button>
+      </Tip>
       <Popover
         label={t('hangout.settings')}
         placement="above"
         className="voice-settings__popover"
-        trigger={(props) => (
-          <button
-            type="button"
-            className="round-button"
-            aria-label={t('hangout.settings')}
-            title={t('hangout.settings')}
-            {...props}
-          >
-            <Icon icon={Settings} />
-          </button>
-        )}
+        trigger={
+          <Tip label={t('hangout.settings')}>
+            <button type="button" className="round-button" aria-label={t('hangout.settings')}>
+              <Icon icon={Settings} />
+            </button>
+          </Tip>
+        }
       >
         {() => <VoiceSettingsFields />}
       </Popover>
-      <button
-        type="button"
-        className="round-button round-button--leave"
-        aria-label={t('hangout.leave')}
-        title={t('hangout.leave')}
-        onClick={() => void hangout.leave()}
-      >
-        <Icon icon={PhoneOff} />
-      </button>
+      <Tip label={t('hangout.leave')}>
+        <button
+          type="button"
+          className="round-button round-button--leave"
+          aria-label={t('hangout.leave')}
+          onClick={() => void hangout.leave()}
+        >
+          <Icon icon={PhoneOff} />
+        </button>
+      </Tip>
       {picking && (
         <SharePicker
           onClose={() => {

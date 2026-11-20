@@ -1,9 +1,12 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { LOCALES, type Locale } from '@hasbihal/core';
+import { useEffect, useState } from 'react';
+import { LOCALES } from '@hasbihal/core';
 import { X } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
 import { VoiceSettingsFields } from '../hangout/VoiceSettings.tsx';
 import { systemLocale, useLanguage, useT } from '../i18n.tsx';
+import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
+import { Tabs } from '../components/Tabs.tsx';
+import { RadioGroup, Switch } from '../components/controls.tsx';
 
 type Tab = 'general' | 'voice';
 
@@ -13,51 +16,25 @@ type Tab = 'general' | 'voice';
  */
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
-  const dialog = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>('general');
 
-  // A native modal: focus stays inside, and Esc or a click outside (closedby) closes it.
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
-
   return (
-    <dialog
-      ref={dialog}
-      closedby="any"
-      className="profile settings"
-      aria-label={t('settings.title')}
-      data-testid="settings"
-      onClose={onClose}
-    >
+    <Modal className="profile settings" testId="settings" onClose={onClose}>
       <header className="profile__header">
-        <h1>{t('settings.title')}</h1>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={t('settings.close')}
-          onClick={onClose}
-        >
+        <ModalTitle>{t('settings.title')}</ModalTitle>
+        <ModalClose className="icon-button" aria-label={t('settings.close')}>
           <Icon icon={X} />
-        </button>
+        </ModalClose>
       </header>
-      <div className="share-picker__tabs" role="tablist">
-        {(['general', 'voice'] as const).map((name) => (
-          <button
-            key={name}
-            type="button"
-            role="tab"
-            className="share-picker__tab"
-            aria-selected={tab === name}
-            onClick={() => {
-              setTab(name);
-            }}
-          >
-            {t(`settings.tab.${name}`)}
-          </button>
-        ))}
-      </div>
-      <div className="settings__body" role="tabpanel">
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={(['general', 'voice'] as const).map((value) => ({
+          value,
+          label: t(`settings.tab.${value}`),
+        }))}
+        panelClassName="settings__body"
+      >
         {tab === 'general' ? (
           <>
             <LanguageSection />
@@ -69,37 +46,31 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             <p className="field__hint">{t('settings.voiceHint')}</p>
           </section>
         )}
-      </div>
-    </dialog>
+      </Tabs>
+    </Modal>
   );
 }
 
 /** A18: Turkish first, English too; by default the computer's language. */
 function LanguageSection() {
   const t = useT();
-  const id = useId();
   const { choice, setChoice } = useLanguage();
-  const options: (Locale | null)[] = [null, ...LOCALES];
   return (
     <section className="profile__section">
-      <fieldset className="option-group">
-        <legend className="field__label">{t('settings.language')}</legend>
-        {options.map((option) => (
-          <label key={option ?? 'system'} className="voice-settings__check">
-            <input
-              type="radio"
-              name={`${id}-language`}
-              checked={choice === option}
-              onChange={() => {
-                setChoice(option);
-              }}
-            />
-            {option
-              ? t(`settings.language.${option}`)
-              : `${t('settings.language.system')} · ${t(`settings.language.${systemLocale()}`)}`}
-          </label>
-        ))}
-      </fieldset>
+      <RadioGroup
+        label={t('settings.language')}
+        value={choice ?? 'system'}
+        onChange={(value) => {
+          setChoice(value === 'system' ? null : value);
+        }}
+        options={[
+          {
+            value: 'system' as const,
+            label: `${t('settings.language.system')} · ${t(`settings.language.${systemLocale()}`)}`,
+          },
+          ...LOCALES.map((locale) => ({ value: locale, label: t(`settings.language.${locale}`) })),
+        ]}
+      />
       <p className="field__hint">{t('settings.languageHint')}</p>
     </section>
   );
@@ -121,18 +92,15 @@ function StartupSection() {
   if (on === null) return null;
   return (
     <section className="profile__section">
-      <label className="voice-settings__check">
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={(e) => {
-            const value = e.target.checked;
-            setOn(value);
-            void window.hasbihal.system.setLaunchAtStartup(value);
-          }}
-        />
+      <Switch
+        checked={on}
+        onChange={(value) => {
+          setOn(value);
+          void window.hasbihal.system.setLaunchAtStartup(value);
+        }}
+      >
         {t('settings.launchAtStartup')}
-      </label>
+      </Switch>
       <p className="field__hint">{t('settings.launchAtStartupHint')}</p>
     </section>
   );

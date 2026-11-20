@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { MessageKey } from '@hasbihal/core';
 import {
   InviteList,
@@ -11,6 +11,10 @@ import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
+import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
+import { Tabs } from '../components/Tabs.tsx';
+import { confirm } from '../components/confirm.tsx';
+import { Select } from '../components/controls.tsx';
 
 type Tab = 'invites' | 'members' | 'rooms';
 
@@ -20,46 +24,25 @@ type Tab = 'invites' | 'members' | 'rooms';
  */
 export function AdminDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
-  const dialog = useRef<HTMLDialogElement>(null);
   const [tab, setTab] = useState<Tab>('invites');
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
   return (
-    <dialog
-      ref={dialog}
-      closedby="any"
-      className="profile admin"
-      aria-label={t('admin.heading')}
-      data-testid="admin"
-      onClose={onClose}
-    >
+    <Modal className="profile admin" testId="admin" onClose={onClose}>
       <header className="profile__header">
-        <h1>{t('admin.heading')}</h1>
-        <button type="button" className="link" onClick={() => dialog.current?.close()}>
-          {t('attachment.close')}
-        </button>
+        <ModalTitle>{t('admin.heading')}</ModalTitle>
+        <ModalClose className="link">{t('attachment.close')}</ModalClose>
       </header>
-      <div className="share-picker__tabs" role="tablist">
-        {(['invites', 'members', 'rooms'] as const).map((name) => (
-          <button
-            key={name}
-            type="button"
-            role="tab"
-            className="share-picker__tab"
-            aria-selected={tab === name}
-            onClick={() => {
-              setTab(name);
-            }}
-          >
-            {t(`admin.tab.${name}`)}
-          </button>
-        ))}
-      </div>
-      <section className="profile__section admin__body">
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={(['invites', 'members', 'rooms'] as const).map((value) => ({
+          value,
+          label: t(`admin.tab.${value}`),
+        }))}
+        panelClassName="profile__section admin__body"
+      >
         {tab === 'invites' ? <Invites /> : tab === 'members' ? <Members /> : <Rooms />}
-      </section>
-    </dialog>
+      </Tabs>
+    </Modal>
   );
 }
 
@@ -127,17 +110,16 @@ function Invites() {
   return (
     <>
       <div className="admin__row">
-        <select
-          className="field__input"
-          aria-label={t('admin.inviteRole')}
+        <Select
+          label={t('admin.inviteRole')}
+          hideLabel
           value={role}
-          onChange={(e) => {
-            setRole(e.target.value as Role);
-          }}
-        >
-          <option value="member">{t('admin.role.member')}</option>
-          <option value="admin">{t('admin.role.admin')}</option>
-        </select>
+          onChange={setRole}
+          options={(['member', 'admin'] as const).map((r) => ({
+            value: r,
+            label: t(`admin.role.${r}`),
+          }))}
+        />
         <button type="button" className="button button--primary" onClick={() => void create()}>
           {t('admin.createInvite')}
         </button>
@@ -252,10 +234,15 @@ function Members() {
                 <button
                   type="button"
                   className="link link--danger"
-                  onClick={() => {
-                    if (window.confirm(t('admin.removeConfirm', { name: m.displayName })))
-                      void run(api(info.serverUrl, 'POST', `/admin/users/${m.id}/remove`));
-                  }}
+                  onClick={() =>
+                    void confirm({
+                      message: t('admin.removeConfirm', { name: m.displayName }),
+                      action: t('admin.remove'),
+                      danger: true,
+                    }).then((yes) => {
+                      if (yes) void run(api(info.serverUrl, 'POST', `/admin/users/${m.id}/remove`));
+                    })
+                  }
                 >
                   {t('admin.remove')}
                 </button>
@@ -353,10 +340,15 @@ function Rooms() {
               <button
                 type="button"
                 className="link link--danger"
-                onClick={() => {
-                  if (window.confirm(t('admin.deleteRoomConfirm', { name: room.name })))
-                    run(api(info.serverUrl, 'DELETE', `/rooms/${room.id}`));
-                }}
+                onClick={() =>
+                  void confirm({
+                    message: t('admin.deleteRoomConfirm', { name: room.name }),
+                    action: t('admin.deleteRoom'),
+                    danger: true,
+                  }).then((yes) => {
+                    if (yes) run(api(info.serverUrl, 'DELETE', `/rooms/${room.id}`));
+                  })
+                }
               >
                 {t('admin.deleteRoom')}
               </button>

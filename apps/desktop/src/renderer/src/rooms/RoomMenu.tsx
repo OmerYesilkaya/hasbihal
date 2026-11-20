@@ -2,9 +2,12 @@ import { Bell, BellOff, Ellipsis, Star, StarOff, Trash2 } from 'lucide-react';
 import { api } from '../api.ts';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { Icon } from '../components/Icon.tsx';
-import { MenuItem, Popover } from '../components/Popover.tsx';
+import { Menu, MenuItem, MenuSeparator } from '../components/Popover.tsx';
 import { useT } from '../i18n.tsx';
 import { useRoomPrefs } from './useRoomPrefs.ts';
+import { confirm } from '../components/confirm.tsx';
+import { toast } from 'sonner';
+import { Tip } from '../components/Tip.tsx';
 
 /**
  * The "⋯" on a room in the sidebar, shown on hover: favourite and mute for everyone (both only
@@ -19,66 +22,65 @@ export function RoomMenu({ roomId, roomName }: { roomId: string; roomName: strin
   const muted = prefs.notify === 'muted';
 
   const remove = async () => {
-    if (!window.confirm(t('admin.deleteRoomConfirm', { name: roomName }))) return;
+    const yes = await confirm({
+      message: t('admin.deleteRoomConfirm', { name: roomName }),
+      action: t('rooms.delete'),
+      danger: true,
+    });
+    if (!yes) return;
     // The room leaves the list when the server's room_deleted arrives, here and everywhere.
     const result = await api(info.serverUrl, 'DELETE', `/rooms/${roomId}`);
-    if (!result.ok) window.alert(t('error.unexpected'));
+    if (!result.ok) toast.error(t('error.unexpected'));
   };
 
   return (
-    <Popover
+    <Menu
       label={t('rooms.options', { name: roomName })}
-      role="menu"
-      trigger={(props) => (
-        <button
-          type="button"
-          className="icon-button room-row__more"
-          aria-label={t('rooms.options', { name: roomName })}
-          title={t('rooms.optionsShort')}
-          data-testid="room-menu"
-          {...props}
-        >
-          <Icon icon={Ellipsis} />
-        </button>
-      )}
+      trigger={
+        <Tip label={t('rooms.optionsShort')}>
+          <button
+            type="button"
+            className="icon-button room-row__more"
+            aria-label={t('rooms.options', { name: roomName })}
+            data-testid="room-menu"
+          >
+            <Icon icon={Ellipsis} />
+          </button>
+        </Tip>
+      }
     >
-      {(close) => (
-        <>
-          <MenuItem
-            icon={<Icon icon={prefs.favorite ? StarOff : Star} />}
-            close={close}
-            onSelect={() => {
-              save({ favorite: !prefs.favorite });
-            }}
-          >
-            {prefs.favorite ? t('rooms.unfavorite') : t('rooms.favorite')}
-          </MenuItem>
-          <MenuItem
-            icon={<Icon icon={muted ? Bell : BellOff} />}
-            close={close}
-            onSelect={() => {
-              // Unmuting goes back to the default: mentions only (A28).
-              save({ notify: muted ? 'mentions' : 'muted' });
-            }}
-          >
-            {muted ? t('rooms.unmute') : t('rooms.mute')}
-          </MenuItem>
-          {isAdmin && (
-            <>
-              <hr className="menu-separator" />
-              <MenuItem
-                icon={<Icon icon={Trash2} />}
-                danger
-                close={close}
-                testId="room-delete"
-                onSelect={() => void remove()}
-              >
-                {t('rooms.delete')}
-              </MenuItem>
-            </>
-          )}
-        </>
-      )}
-    </Popover>
+      <>
+        <MenuItem
+          icon={<Icon icon={prefs.favorite ? StarOff : Star} />}
+          onSelect={() => {
+            save({ favorite: !prefs.favorite });
+          }}
+        >
+          {prefs.favorite ? t('rooms.unfavorite') : t('rooms.favorite')}
+        </MenuItem>
+        <MenuItem
+          icon={<Icon icon={muted ? Bell : BellOff} />}
+          onSelect={() => {
+            // Unmuting goes back to the default: mentions only (A28).
+            save({ notify: muted ? 'mentions' : 'muted' });
+          }}
+        >
+          {muted ? t('rooms.unmute') : t('rooms.mute')}
+        </MenuItem>
+        {isAdmin && (
+          <>
+            <MenuSeparator />
+            <MenuItem
+              icon={<Icon icon={Trash2} />}
+              danger
+              testId="room-delete"
+              onSelect={() => void remove()}
+            >
+              {t('rooms.delete')}
+            </MenuItem>
+          </>
+        )}
+      </>
+    </Menu>
   );
 }

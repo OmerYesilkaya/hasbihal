@@ -72,7 +72,8 @@ test('shows another member joining and their status, live', async ({ desktop }) 
   await expect(other.getByTestId('current-user')).toHaveText('Ayşe Test');
 
   await expect(memberRow(page, 'Ayşe Test')).toContainText('Müsait');
-  await other.getByLabel('Durum').selectOption('busy');
+  await other.getByRole('combobox', { name: 'Durum' }).click();
+  await other.getByRole('option', { name: 'Meşgul' }).click();
   await expect(memberRow(page, 'Ayşe Test')).toContainText('Meşgul');
   await snap(page, '6-members-live');
 

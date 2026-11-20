@@ -12,6 +12,8 @@ import { CornerDownRight, Pencil, Plus, Reply, SmilePlus, Trash2 } from 'lucide-
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Popover } from '../components/Popover.tsx';
+import { confirm } from '../components/confirm.tsx';
+import { Tip } from '../components/Tip.tsx';
 
 /** The reactions offered first; every other emoji is a click away (EmojiPicker). */
 export const QUICK_REACTIONS = [
@@ -63,8 +65,14 @@ export const MessageItem = memo(function MessageItem({
     );
   };
 
-  const remove = () => {
-    if (window.confirm(t('message.confirmDelete')))
+  const remove = async () => {
+    if (
+      await confirm({
+        message: t('message.confirmDelete'),
+        action: t('message.delete'),
+        danger: true,
+      })
+    )
       void api(info.serverUrl, 'DELETE', `/messages/${message.id}`);
   };
 
@@ -79,13 +87,11 @@ export const MessageItem = memo(function MessageItem({
         {startsGroup && author ? (
           <Avatar user={author} />
         ) : (
-          <time
-            className="message__hover-time"
-            dateTime={message.createdAt}
-            title={formatDateTime(message.createdAt)}
-          >
-            {formatTime(message.createdAt)}
-          </time>
+          <Tip label={formatDateTime(message.createdAt)}>
+            <time className="message__hover-time" dateTime={message.createdAt}>
+              {formatTime(message.createdAt)}
+            </time>
+          </Tip>
         )}
       </div>
       <div className="message__main">
@@ -94,13 +100,11 @@ export const MessageItem = memo(function MessageItem({
             <span className="message__author">
               {author?.displayName ?? t('message.unknownAuthor')}
             </span>
-            <time
-              className="message__time"
-              dateTime={message.createdAt}
-              title={formatDateTime(message.createdAt)}
-            >
-              {formatTime(message.createdAt)}
-            </time>
+            <Tip label={formatDateTime(message.createdAt)}>
+              <time className="message__time" dateTime={message.createdAt}>
+                {formatTime(message.createdAt)}
+              </time>
+            </Tip>
           </header>
         )}
         {message.replyTo && (
@@ -126,9 +130,9 @@ export const MessageItem = memo(function MessageItem({
               <div className="message__body" data-testid="message-body">
                 <MarkdownView source={message.body} />
                 {message.editedAt && (
-                  <span className="message__edited" title={formatDateTime(message.editedAt)}>
-                    ({t('message.edited')})
-                  </span>
+                  <Tip label={formatDateTime(message.editedAt)}>
+                    <span className="message__edited">({t('message.edited')})</span>
+                  </Tip>
                 )}
               </div>
             )}
@@ -142,18 +146,18 @@ export const MessageItem = memo(function MessageItem({
               const mineToo = me !== null && r.userIds.includes(me.id);
               const names = r.userIds.map((id) => members.get(id)?.displayName ?? '?').join(', ');
               return (
-                <button
-                  key={r.emoji}
-                  type="button"
-                  className="reaction"
-                  data-mine={mineToo ? true : undefined}
-                  title={names}
-                  onClick={() => {
-                    react(r.emoji, !mineToo);
-                  }}
-                >
-                  <span>{r.emoji}</span> {r.userIds.length}
-                </button>
+                <Tip label={names} key={r.emoji}>
+                  <button
+                    type="button"
+                    className="reaction"
+                    data-mine={mineToo ? true : undefined}
+                    onClick={() => {
+                      react(r.emoji, !mineToo);
+                    }}
+                  >
+                    <span>{r.emoji}</span> {r.userIds.length}
+                  </button>
+                </Tip>
               );
             })}
           </div>
@@ -164,17 +168,13 @@ export const MessageItem = memo(function MessageItem({
           <Popover
             label={t('message.react')}
             className="reaction-picker"
-            trigger={(props) => (
-              <button
-                type="button"
-                className="icon-button"
-                title={t('message.react')}
-                aria-label={t('message.react')}
-                {...props}
-              >
-                <Icon icon={SmilePlus} />
-              </button>
-            )}
+            trigger={
+              <Tip label={t('message.react')}>
+                <button type="button" className="icon-button" aria-label={t('message.react')}>
+                  <Icon icon={SmilePlus} />
+                </button>
+              </Tip>
+            }
           >
             {(close) => (
               <ReactionPicker
@@ -185,39 +185,42 @@ export const MessageItem = memo(function MessageItem({
               />
             )}
           </Popover>
-          <button
-            type="button"
-            className="icon-button"
-            title={t('message.reply')}
-            aria-label={t('message.reply')}
-            onClick={() => {
-              onReply(message);
-            }}
-          >
-            <Icon icon={Reply} />
-          </button>
+          <Tip label={t('message.reply')}>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={t('message.reply')}
+              onClick={() => {
+                onReply(message);
+              }}
+            >
+              <Icon icon={Reply} />
+            </button>
+          </Tip>
           {mine && (
             <>
-              <button
-                type="button"
-                className="icon-button"
-                title={t('message.edit')}
-                aria-label={t('message.edit')}
-                onClick={() => {
-                  onEdit(message);
-                }}
-              >
-                <Icon icon={Pencil} />
-              </button>
-              <button
-                type="button"
-                className="icon-button"
-                title={t('message.delete')}
-                aria-label={t('message.delete')}
-                onClick={remove}
-              >
-                <Icon icon={Trash2} />
-              </button>
+              <Tip label={t('message.edit')}>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={t('message.edit')}
+                  onClick={() => {
+                    onEdit(message);
+                  }}
+                >
+                  <Icon icon={Pencil} />
+                </button>
+              </Tip>
+              <Tip label={t('message.delete')}>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={t('message.delete')}
+                  onClick={() => void remove()}
+                >
+                  <Icon icon={Trash2} />
+                </button>
+              </Tip>
             </>
           )}
         </div>
@@ -245,18 +248,19 @@ function ReactionPicker({ onPick }: { onPick: (emoji: string) => void }) {
           {emoji}
         </button>
       ))}
-      <button
-        type="button"
-        className="reaction-picker__emoji reaction-picker__more"
-        title={t('emoji.more')}
-        aria-label={t('emoji.more')}
-        data-testid="emoji-more"
-        onClick={() => {
-          setAll(true);
-        }}
-      >
-        <Icon icon={Plus} />
-      </button>
+      <Tip label={t('emoji.more')}>
+        <button
+          type="button"
+          className="reaction-picker__emoji reaction-picker__more"
+          aria-label={t('emoji.more')}
+          data-testid="emoji-more"
+          onClick={() => {
+            setAll(true);
+          }}
+        >
+          <Icon icon={Plus} />
+        </button>
+      </Tip>
     </div>
   );
 }

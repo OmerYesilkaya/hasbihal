@@ -4,6 +4,7 @@ import { REMINDER_CHOICES, RoomEvent, type Recurrence } from '@hasbihal/protocol
 import { api } from '../api.ts';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
+import { Checkbox, Select } from '../components/controls.tsx';
 
 /** Date and time fields hold Istanbul wall time (A17), whatever the computer's zone. */
 export function toInputs(iso: string): { date: string; time: string } {
@@ -153,40 +154,27 @@ export function EventForm({
             }}
           />
         </label>
-        <label>
-          <span className="field__label">{t('events.duration')}</span>
-          <select
-            className="field__input"
-            value={duration}
-            onChange={(e) => {
-              setDuration(Number(e.target.value));
-            }}
-          >
-            {DURATIONS.map((m) => (
-              <option key={m} value={m}>
-                {t('events.minutes', { count: m })}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label={t('events.duration')}
+          value={String(duration)}
+          onChange={(value) => {
+            setDuration(Number(value));
+          }}
+          options={DURATIONS.map((m) => ({
+            value: String(m),
+            label: t('events.minutes', { count: m }),
+          }))}
+        />
       </div>
       <div className="event-form__row">
-        <label>
-          <span className="field__label">{t('events.repeat')}</span>
-          <select
-            className="field__input"
-            value={repeat}
-            onChange={(e) => {
-              setRepeat(e.target.value as Repeat);
-            }}
-          >
-            {REPEATS.map((r) => (
-              <option key={r} value={r}>
-                {t(`events.repeat.${r}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label={t('events.repeat')}
+          value={repeat}
+          onChange={(value) => {
+            setRepeat(value);
+          }}
+          options={REPEATS.map((r) => ({ value: r, label: t(`events.repeat.${r}`) }))}
+        />
         {repeat !== 'none' && (
           <label>
             <span className="field__label">{t('events.until')}</span>
@@ -200,22 +188,17 @@ export function EventForm({
             />
           </label>
         )}
-        <label>
-          <span className="field__label">{t('events.reminder')}</span>
-          <select
-            className="field__input"
-            value={reminder}
-            onChange={(e) => {
-              setReminder(Number(e.target.value));
-            }}
-          >
-            {REMINDER_CHOICES.map((m) => (
-              <option key={m} value={m}>
-                {m === 0 ? t('events.noReminder') : t('events.before', { count: m })}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label={t('events.reminder')}
+          value={String(reminder)}
+          onChange={(value) => {
+            setReminder(Number(value));
+          }}
+          options={REMINDER_CHOICES.map((m) => ({
+            value: String(m),
+            label: m === 0 ? t('events.noReminder') : t('events.before', { count: m }),
+          }))}
+        />
       </div>
       {(repeat === 'weekly' || repeat === 'biweekly') && (
         <fieldset className="event-form__days">
@@ -245,18 +228,15 @@ export function EventForm({
         <legend className="field__label">{t('events.invitees')}</legend>
         <p className="field__hint">{t('events.inviteesHint')}</p>
         {people.map((m) => (
-          <label key={m.id} className="voice-settings__check">
-            <input
-              type="checkbox"
-              checked={invitees.includes(m.id)}
-              onChange={(e) => {
-                setInvitees((list) =>
-                  e.target.checked ? [...list, m.id] : list.filter((x) => x !== m.id),
-                );
-              }}
-            />
+          <Checkbox
+            key={m.id}
+            checked={invitees.includes(m.id)}
+            onChange={(on) => {
+              setInvitees((list) => (on ? [...list, m.id] : list.filter((x) => x !== m.id)));
+            }}
+          >
             {m.displayName}
-          </label>
+          </Checkbox>
         ))}
       </fieldset>
       {error && <p className="field__error">{t(error)}</p>}

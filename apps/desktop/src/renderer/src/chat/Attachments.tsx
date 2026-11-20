@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Attachment } from '@hasbihal/protocol';
 import { formatDuration, formatSize, useFileAddresses } from '../files.ts';
 import { currentLocale, useT } from '../i18n.tsx';
 import { useChat } from './context.tsx';
-import { rangeFill } from '../components/range.ts';
 import { FileText, Pause, Play, X } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
+import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
+import { Slider } from '../components/controls.tsx';
+import { Tip } from '../components/Tip.tsx';
 
 /** Photos and videos lay out within this box; the viewer shows them full size. */
 const BOX = { width: 360, height: 300 };
@@ -81,33 +83,34 @@ function MediaThumb({
     attachment.mime === 'image/gif' ? addresses?.original : (addresses?.thumbnail ?? undefined);
   const size = fitted(attachment, single);
   return (
-    <button
-      type="button"
-      className="media-thumb"
-      style={size}
-      data-testid="attachment-media"
-      aria-label={attachment.name}
-      title={attachment.name}
-      onClick={onOpen}
-    >
-      {src ? (
-        <img src={src} alt="" draggable={false} />
-      ) : attachment.kind === 'video' && addresses ? (
-        // No poster frame (no ffmpeg on the server): the video's own first frame.
-        <video src={`${addresses.original}#t=0.1`} preload="metadata" muted />
-      ) : (
-        <span className="media-thumb__placeholder" />
-      )}
-      {attachment.kind === 'video' && (
-        <span className="media-thumb__play" aria-hidden>
-          <Icon icon={Play} fill="currentColor" />
-          {attachment.durationMs !== null && <span>{formatDuration(attachment.durationMs)}</span>}
+    <Tip label={attachment.name}>
+      <button
+        type="button"
+        className="media-thumb"
+        style={size}
+        data-testid="attachment-media"
+        aria-label={attachment.name}
+        onClick={onOpen}
+      >
+        {src ? (
+          <img src={src} alt="" draggable={false} />
+        ) : attachment.kind === 'video' && addresses ? (
+          // No poster frame (no ffmpeg on the server): the video's own first frame.
+          <video src={`${addresses.original}#t=0.1`} preload="metadata" muted />
+        ) : (
+          <span className="media-thumb__placeholder" />
+        )}
+        {attachment.kind === 'video' && (
+          <span className="media-thumb__play" aria-hidden>
+            <Icon icon={Play} fill="currentColor" />
+            {attachment.durationMs !== null && <span>{formatDuration(attachment.durationMs)}</span>}
+          </span>
+        )}
+        <span className="visually-hidden">
+          {attachment.kind === 'video' ? t('attachment.video') : t('attachment.photo')}
         </span>
-      )}
-      <span className="visually-hidden">
-        {attachment.kind === 'video' ? t('attachment.video') : t('attachment.photo')}
-      </span>
-    </button>
+      </button>
+    </Tip>
   );
 }
 
@@ -137,18 +140,16 @@ function VoicePlayer({ attachment }: { attachment: Attachment }) {
       >
         <Icon icon={playing ? Pause : Play} fill="currentColor" />
       </button>
-      <input
+      <Slider
         className="voice__seek"
-        type="range"
+        label={t('voice.message')}
         min={0}
         max={Math.max(total, 1)}
         step={100}
         value={Math.min(position, total)}
-        style={rangeFill(Math.min(position, total), 0, Math.max(total, 1))}
-        aria-label={t('voice.message')}
-        onChange={(e) => {
+        onChange={(ms) => {
           const el = audio.current;
-          if (el) el.currentTime = Number(e.target.value) / 1000;
+          if (el) el.currentTime = ms / 1000;
         }}
       />
       <span className="voice__time">
@@ -225,53 +226,41 @@ function MediaViewer({
 }) {
   const t = useT();
   const { info } = useChat();
-  const dialog = useRef<HTMLDialogElement>(null);
   const item = items[index];
   const addresses = useFileAddresses(info.serverUrl, item?.id ?? null);
-
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
 
   if (!item) return null;
   const step = (by: number) => {
     onIndex((index + by + items.length) % items.length);
   };
   return (
-    <dialog
-      ref={dialog}
-      closedby="any"
+    <Modal
       className="viewer"
-      aria-label={item.name}
-      data-testid="viewer"
+      testId="viewer"
+      overlayClassName="viewer__overlay"
       onClose={onClose}
       onKeyDown={(e) => {
         if (e.key === 'ArrowRight') step(1);
         else if (e.key === 'ArrowLeft') step(-1);
       }}
-      onClick={(e) => {
+      onClick={(e, close) => {
         // A click on the dark backdrop, not on the picture, closes it.
-        if (e.target === e.currentTarget) dialog.current?.close();
+        if (e.target === e.currentTarget) close();
       }}
     >
       <div className="viewer__bar">
-        <span className="viewer__name">
+        <ModalTitle className="viewer__name">
           {item.name}
           {items.length > 1 && ` · ${String(index + 1)} / ${String(items.length)}`}
-        </span>
+        </ModalTitle>
         {addresses && (
           <a className="viewer__action" href={addresses.original} download={item.name}>
             {t('attachment.download')}
           </a>
         )}
-        <button
-          type="button"
-          className="viewer__action"
-          onClick={() => dialog.current?.close()}
-          aria-label={t('attachment.close')}
-        >
+        <ModalClose className="viewer__action" aria-label={t('attachment.close')}>
           <Icon icon={X} />
-        </button>
+        </ModalClose>
       </div>
       {addresses &&
         (item.kind === 'video' ? (
@@ -309,6 +298,6 @@ function MediaViewer({
           </button>
         </>
       )}
-    </dialog>
+    </Modal>
   );
 }

@@ -142,181 +142,250 @@ input::-webkit-calendar-picker-indicator:hover {
 }
 
 /*
- * <select>: the customizable select (appearance: base-select) is drawn by Chromium in the page
- * on every platform; without it macOS opens a native menu and Windows a plain list.
+ * ---- Form controls (components/controls.tsx, Radix) ----
+ *
+ * Checkboxes, switches, radio buttons, selects, sliders and progress bars are Radix primitives
+ * drawn entirely here, so they match the app and look the same on macOS and Windows.
  */
 
-:where(select) {
-  appearance: base-select;
+/* A control with its label beside it; the whole row is clickable. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.check[data-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.check--switch {
+  justify-content: space-between;
+}
+
+.checkbox,
+.radio {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
-select::picker-icon {
-  content: '';
-  width: 10px;
-  height: 10px;
-  background: currentColor;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5l3 3 3-3' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-  opacity: 0.7;
-  transition: rotate 120ms;
-}
-
-select:open::picker-icon {
-  rotate: 180deg;
-}
-
-::picker(select) {
-  appearance: base-select;
-  margin-block: 4px;
-  padding: 4px;
-  border: 1px solid var(--hb-border);
-  border-radius: 8px;
-  background: var(--hb-bg);
-  color: var(--hb-text);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
-}
-
-select option {
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 400;
-  cursor: pointer;
-}
-
-select option:hover,
-select option:focus-visible {
-  outline: none;
-  background: var(--hb-selected);
-}
-
-select option:checked {
-  font-weight: 600;
-}
-
-select option::checkmark {
-  color: var(--hb-primary);
-}
-
-/* Checkboxes and radio buttons. */
-
-:where(input[type='checkbox'], input[type='radio']) {
-  appearance: none;
-  flex: none;
-  display: inline-grid;
-  place-content: center;
-  width: 16px;
-  height: 16px;
-  margin: 0;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
   border: 1.5px solid var(--hb-text-muted);
-  border-radius: 4px;
   background: var(--hb-input);
-  cursor: pointer;
+  color: var(--hb-on-primary);
+  cursor: inherit;
   transition:
-    background-color 100ms,
+    background 100ms,
     border-color 100ms;
 }
 
-:where(input[type='radio']) {
+.checkbox {
+  border-radius: 5px;
+}
+
+.radio {
   border-radius: 50%;
 }
 
-input[type='checkbox']:checked {
-  border-color: var(--hb-primary);
-  background: var(--hb-primary);
+.checkbox:hover:not(:disabled),
+.radio:hover:not(:disabled) {
+  border-color: var(--hb-accent);
 }
 
-input[type='checkbox']:checked::before {
-  content: '';
-  width: 10px;
-  height: 10px;
-  background: var(--hb-on-primary);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 5.2l2.3 2.3 4.7-5' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    center / contain no-repeat;
+.checkbox[data-state='checked'],
+.radio[data-state='checked'] {
+  border-color: var(--hb-accent);
 }
 
-input[type='radio']:checked {
-  border-color: var(--hb-primary);
+.checkbox[data-state='checked'] {
+  background: var(--hb-accent);
 }
 
-input[type='radio']:checked::before {
-  content: '';
+.checkbox__mark {
+  display: inline-flex;
+  font-size: 11px;
+}
+
+.radio__dot {
+  display: block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--hb-primary);
+  background: var(--hb-accent);
 }
 
-:where(input[type='checkbox'], input[type='radio']):disabled {
-  opacity: 0.5;
-  cursor: default;
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/*
- * Range sliders. Chromium has no pseudo-element for the filled part, so components set
- * --range-fill (components/range.ts); --range-color picks the colour.
- */
+.option-group__items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
-:where(input[type='range']) {
-  --range-color: var(--hb-accent);
-  appearance: none;
+.switch {
+  flex: none;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: var(--hb-border);
+  cursor: inherit;
+  transition: background 120ms;
+}
+
+.switch[data-state='checked'] {
+  background: var(--hb-accent);
+}
+
+.switch__thumb {
+  display: block;
+  width: 16px;
   height: 16px;
-  margin: 0;
-  background: transparent;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  translate: 2px 0;
+  transition: translate 120ms;
+}
+
+.switch__thumb[data-state='checked'] {
+  translate: 16px 0;
+}
+
+.select-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.select {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px 8px 11px;
+  border: 1px solid var(--hb-border);
+  border-radius: 8px;
+  background: var(--hb-input);
+  color: var(--hb-text);
+  text-align: left;
   cursor: pointer;
 }
 
-input[type='range']::-webkit-slider-runnable-track {
+.select > span:first-child {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.select:hover {
+  border-color: var(--hb-text-muted);
+}
+
+.select[data-state='open'] {
+  border-color: var(--hb-accent);
+}
+
+.select__icon {
+  display: inline-flex;
+  color: var(--hb-text-muted);
+}
+
+.popover.select__menu {
+  min-width: var(--radix-select-trigger-width);
+  max-height: min(320px, var(--radix-select-content-available-height));
+  padding: 4px;
+}
+
+.select__item {
+  justify-content: space-between;
+  user-select: none;
+}
+
+.select__item[data-highlighted] {
+  background: var(--hb-selected);
+  outline: none;
+}
+
+.select__item[data-state='checked'] {
+  font-weight: 600;
+}
+
+.select__check {
+  display: inline-flex;
+  color: var(--hb-accent);
+}
+
+/* --slider-color picks the filled part's colour. */
+.slider {
+  --slider-color: var(--hb-accent);
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 18px;
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+
+.slider__track {
+  position: relative;
+  flex: 1;
   height: 4px;
   border-radius: 2px;
-  background: linear-gradient(
-    to right,
-    var(--range-color) var(--range-fill, 0%),
-    var(--hb-border) var(--range-fill, 0%)
-  );
+  background: var(--hb-border);
 }
 
-input[type='range']::-webkit-slider-thumb {
-  appearance: none;
+.slider__range {
+  position: absolute;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--slider-color);
+}
+
+.slider__thumb {
+  display: block;
   width: 14px;
   height: 14px;
-  margin-top: -5px;
-  border: none;
   border-radius: 50%;
-  background: var(--range-color);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.15),
+    0 1px 3px rgb(0 0 0 / 0.25);
 }
 
-input[type='range']:disabled {
-  opacity: 0.5;
-  cursor: default;
+.slider__thumb:focus-visible {
+  outline: 2px solid var(--hb-accent);
+  outline-offset: 2px;
 }
 
-/* Progress bars. */
-
-:where(progress) {
-  appearance: none;
+.progress {
+  position: relative;
   height: 6px;
-  border: none;
   border-radius: 3px;
   overflow: hidden;
   background: var(--hb-border);
 }
 
-progress::-webkit-progress-bar {
-  border-radius: inherit;
-  background: var(--hb-border);
-}
-
-progress::-webkit-progress-value {
-  border-radius: inherit;
+.progress__fill {
+  height: 100%;
   background: var(--hb-accent);
-  transition: width 120ms;
+  transition: translate 120ms;
 }
 
 .shell {
@@ -921,16 +990,16 @@ progress::-webkit-progress-value {
 
 .room-row:hover .room-row__more,
 .room-row__more:focus-visible,
-.room-row__more[data-open] {
+.room-row__more[data-state='open'] {
   visibility: visible;
 }
 
 .room-row__more:hover,
-.room-row__more[data-open] {
+.room-row__more[data-state='open'] {
   background: var(--hb-chip);
 }
 
-.room-row:is(:hover, :has(.room-row__more[data-open], .room-row__more:focus-visible))
+.room-row:is(:hover, :has(.room-row__more[data-state='open'], .room-row__more:focus-visible))
   > .room
   > :is(.badge, .room__event, .room__muted) {
   visibility: hidden;
@@ -1165,7 +1234,7 @@ progress::-webkit-progress-value {
 .message:hover .message__toolbar,
 .message:focus-within .message__toolbar,
 /* Its popovers (reactions) live inside it: it stays while one is open. */
-.message__toolbar:has([data-open]) {
+.message__toolbar:has([data-state='open']) {
   display: flex;
 }
 
@@ -1256,6 +1325,21 @@ progress::-webkit-progress-value {
   border-radius: 6px;
   background: none;
   cursor: pointer;
+}
+
+.emoji-picker__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 4px 4px 0;
+  border-top: 1px solid var(--hb-border);
+  font-size: 13px;
+  color: var(--hb-text-secondary);
+}
+
+.emoji-picker__preview {
+  font-size: 22px;
 }
 
 .emoji-picker__emoji:hover,
@@ -1649,10 +1733,6 @@ progress::-webkit-progress-value {
   box-shadow: 0 16px 48px rgb(0 0 0 / 0.2);
 }
 
-.profile::backdrop {
-  background: rgb(0 0 0 / 0.35);
-}
-
 .profile__header {
   display: flex;
   align-items: center;
@@ -1777,17 +1857,6 @@ progress::-webkit-progress-value {
 }
 
 .stage__status,
-.stage__notice {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: var(--hb-text-secondary);
-  text-align: center;
-}
-
-.stage__notice {
-  color: var(--hb-primary);
-}
-
 .stage__grid {
   flex: 1;
   min-height: 0;
@@ -1858,7 +1927,7 @@ progress::-webkit-progress-value {
 }
 
 .tile:hover .tile__volume,
-.tile__volume:focus-visible {
+.tile__volume:focus-within {
   opacity: 1;
 }
 
@@ -1913,30 +1982,6 @@ progress::-webkit-progress-value {
 
 .voice-settings > .field__label {
   margin-top: 4px;
-}
-
-.voice-settings__check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 24px;
-  font-size: 13px;
-}
-
-/* A group of radio buttons or checkboxes, one per line, with room between them. */
-.voice-settings__mode,
-.option-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 4px 0 0;
-  padding: 0;
-  border: none;
-}
-
-.voice-settings__mode > legend,
-.option-group > legend {
-  margin-bottom: 4px;
 }
 
 .voice-settings__ptt {
@@ -2470,11 +2515,18 @@ progress::-webkit-progress-value {
   color: #fff;
 }
 
-.viewer::backdrop {
+.modal.viewer {
+  top: 0;
+  left: 0;
+  max-width: none;
+  translate: none;
+}
+
+.viewer__overlay {
   background: transparent;
 }
 
-.viewer[open] {
+.viewer {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2635,7 +2687,7 @@ progress::-webkit-progress-value {
 }
 
 .voice__seek {
-  --range-color: var(--hb-secondary);
+  --slider-color: var(--hb-secondary);
   flex: 1;
 }
 
@@ -3116,15 +3168,13 @@ progress::-webkit-progress-value {
 }
 
 /*
- * Popovers (components/Popover.tsx): the browser's own, so they close on an outside click or Esc
- * and sit in the top layer; anchor positioning puts them next to their button.
+ * Popovers and menus (components/Popover.tsx, Radix): Radix places them next to their button,
+ * in a layer above everything; these only draw them.
  */
 .popover {
-  position: fixed;
-  inset: auto;
-  margin: 6px 0;
+  z-index: 60;
   min-width: 180px;
-  max-height: calc(100vh - 24px);
+  max-height: var(--radix-popper-available-height, 80vh);
   overflow: auto;
   padding: 12px 14px;
   border: 1px solid var(--hb-border);
@@ -3134,27 +3184,104 @@ progress::-webkit-progress-value {
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
 }
 
-.popover--below-end {
-  position-area: bottom span-left;
-  position-try-fallbacks: flip-block, flip-inline;
-}
-
-.popover--above {
-  margin: 0 0 10px;
-  position-area: top center;
-  position-try-fallbacks: flip-block;
-}
-
-/* A component's own `display` must never show a closed popover. */
-.popover:not(:popover-open) {
-  display: none;
-}
-
-.popover[role='menu']:popover-open {
+.popover.menu {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 4px;
+}
+
+/*
+ * Modals (components/Modal.tsx and the confirm dialog, Radix): a dimmed layer, and the window
+ * centred above it.
+ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgb(0 0 0 / 0.35);
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 41;
+  translate: -50% -50%;
+  max-width: calc(100vw - 32px);
+  overflow: auto;
+}
+
+.modal:focus {
+  outline: none;
+}
+
+/* "Are you sure?" (components/confirm.tsx). */
+.confirm {
+  width: 400px;
+  padding: 20px;
+  border: 1px solid var(--hb-border);
+  border-top: 3px solid var(--hb-accent);
+  border-radius: 14px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.2);
+}
+
+.confirm__title {
+  margin: 0 0 18px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Tooltips (components/Tip.tsx, Radix). */
+.tooltip {
+  z-index: 70;
+  max-width: 280px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--hb-text);
+  color: var(--hb-bg);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.18);
+  user-select: none;
+}
+
+/* In-app toasts (sonner, unstyled): small notes in the corner that go away by themselves. */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 340px;
+  padding: 12px 14px;
+  border: 1px solid var(--hb-border);
+  border-left: 3px solid var(--hb-secondary);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+  font-size: 13px;
+}
+
+.toast--success {
+  border-left-color: var(--hb-status-online);
+}
+
+.toast--error {
+  border-left-color: var(--hb-primary);
+}
+
+.toast__title {
+  font-weight: 500;
 }
 
 .menu-item {
@@ -3213,15 +3340,6 @@ progress::-webkit-progress-value {
   flex-direction: column;
   gap: 8px;
   width: 280px;
-}
-
-.room-prefs__menu fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  border: none;
 }
 
 .room-prefs__menu .field__hint {

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
 import { useT } from '../i18n.tsx';
+import { Tip } from '../components/Tip.tsx';
 
 /** Which side columns (A36) are showing; hiding them gives the chat the whole window. */
 export interface Panels {
@@ -61,17 +62,18 @@ export function PanelToggle({ side }: { side: Side }) {
         ? PanelRightClose
         : PanelRightOpen;
   return (
-    <button
-      type="button"
-      className="icon-button panel-toggle"
-      aria-label={label}
-      title={label}
-      data-testid={`toggle-${side}`}
-      onClick={() => {
-        context.toggle(side);
-      }}
-    >
-      <Icon icon={glyph} />
-    </button>
+    <Tip label={label}>
+      <button
+        type="button"
+        className="icon-button panel-toggle"
+        aria-label={label}
+        data-testid={`toggle-${side}`}
+        onClick={() => {
+          context.toggle(side);
+        }}
+      >
+        <Icon icon={glyph} />
+      </button>
+    </Tip>
   );
 }

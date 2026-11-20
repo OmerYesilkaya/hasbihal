@@ -6,6 +6,8 @@ import '@fontsource/inter/700.css';
 import '@fontsource/cormorant-garamond/700.css';
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/400-italic.css';
+// Sonner's layout (where toasts stack), as a file: the CSP blocks the <style> it would inject.
+import 'sonner/dist/styles.css';
 import './global.css';
 
 import { StrictMode } from 'react';

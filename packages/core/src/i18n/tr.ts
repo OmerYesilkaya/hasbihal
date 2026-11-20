@@ -301,10 +301,10 @@ export const tr = {
   'settings.shortcuts': 'Her yerde çalışan kısayollar: {mute} mikrofon, {deafen} ses.',
   'settings.volume': 'Ses düzeyi · {name}',
   'nudge.action': 'Sohbete çağır',
-  'nudge.sent': 'Çağrıldı',
-  'nudge.busy': 'Şu an meşgul',
-  'nudge.offline': 'Çevrimdışı; çağrı ulaşmadı',
-  'nudge.tooSoon': 'Az önce çağırdın',
+  'nudge.sent': 'Çağrıldı · {name}',
+  'nudge.busy': 'Şu an meşgul · {name}',
+  'nudge.offline': 'Çevrimdışı; çağrı ulaşmadı · {name}',
+  'nudge.tooSoon': 'Az önce çağırdın · {name}',
   'nudge.notificationTitle': '{name} seni çağırıyor',
   'nudge.notificationBody': 'Sesli sohbet · {room}',
   'hangoutStarted.title': '{name} sesli sohbete katıldı',
@@ -348,6 +348,7 @@ export const tr = {
   'emoji.group.7': 'Nesneler',
   'emoji.group.8': 'Semboller',
   'emoji.group.9': 'Bayraklar',
+  'confirm.cancel': 'Vazgeç',
 } as const;
 
 export type MessageKey = keyof typeof tr;

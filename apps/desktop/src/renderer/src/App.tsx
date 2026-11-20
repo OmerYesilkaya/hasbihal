@@ -34,12 +34,32 @@ import { useGateway } from './useGateway.ts';
 import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
 import { SettingsDialog } from './settings/SettingsDialog.tsx';
 import { Settings, Shield, X } from 'lucide-react';
+import { Toaster, toast } from 'sonner';
+import { ConfirmHost } from './components/confirm.tsx';
 import { Icon } from './components/Icon.tsx';
+import { Select } from './components/controls.tsx';
+import { Tip, TipProvider } from './components/Tip.tsx';
 
 export function App({ info }: { info: AppInfo }) {
   return (
     <I18nProvider>
-      <Root info={info} />
+      <TipProvider>
+        <Root info={info} />
+      </TipProvider>
+      <ConfirmHost />
+      <Toaster
+        position="bottom-right"
+        offset={16}
+        toastOptions={{
+          unstyled: true,
+          classNames: {
+            toast: 'toast',
+            title: 'toast__title',
+            error: 'toast--error',
+            success: 'toast--success',
+          },
+        }}
+      />
     </I18nProvider>
   );
 }
@@ -200,6 +220,14 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
       void hangout.leave();
     },
     [hangout],
+  );
+  // Call problems (couldn't join, no microphone, …) as toasts, wherever the person is looking.
+  useEffect(
+    () =>
+      hangout.onNotice((notice) => {
+        toast.error(t(notice));
+      }),
+    [hangout, t],
   );
   // A37: mute and deafen from anywhere, but only while in a call.
   const inCall = hangoutState.roomId !== null;
@@ -406,14 +434,11 @@ function UserPanel({
   const t = useT();
   return (
     <div className="user-panel">
-      <button
-        type="button"
-        className="user-panel__profile"
-        title={t('profile.open')}
-        onClick={onOpenProfile}
-      >
-        <Avatar user={user} presence={presence} />
-      </button>
+      <Tip label={t('profile.open')}>
+        <button type="button" className="user-panel__profile" onClick={onOpenProfile}>
+          <Avatar user={user} presence={presence} />
+        </button>
+      </Tip>
       <div className="user-panel__names">
         <button
           type="button"
@@ -424,28 +449,29 @@ function UserPanel({
           {user.displayName}
         </button>
         {/* Müsait or Meşgul (A21); Uzakta and Çevrimdışı follow from activity. */}
-        <select
+        <Select
           className="user-panel__presence"
-          aria-label={t('presence.choose')}
+          label={t('presence.choose')}
+          hideLabel
           value={presence === 'busy' ? 'busy' : 'available'}
-          onChange={(e) => {
-            onSetPresence(e.target.value === 'busy' ? 'busy' : 'available');
-          }}
-        >
-          <option value="available">{t(PRESENCE_LABEL.available)}</option>
-          <option value="busy">{t(PRESENCE_LABEL.busy)}</option>
-        </select>
+          onChange={onSetPresence}
+          options={(['available', 'busy'] as const).map((mode) => ({
+            value: mode,
+            label: t(PRESENCE_LABEL[mode]),
+          }))}
+        />
       </div>
-      <button
-        type="button"
-        className="icon-button user-panel__settings"
-        aria-label={t('settings.open')}
-        title={t('settings.open')}
-        data-testid="open-settings"
-        onClick={onOpenSettings}
-      >
-        <Icon icon={Settings} />
-      </button>
+      <Tip label={t('settings.open')}>
+        <button
+          type="button"
+          className="icon-button user-panel__settings"
+          aria-label={t('settings.open')}
+          data-testid="open-settings"
+          onClick={onOpenSettings}
+        >
+          <Icon icon={Settings} />
+        </button>
+      </Tip>
       <button type="button" className="link user-panel__sign-out" onClick={onSignOut}>
         {t('auth.signOut')}
       </button>

@@ -1,134 +1,109 @@
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
-
-/** What the opening button needs: spread it onto a `<button type="button">`. */
-export interface PopoverTriggerProps {
-  popoverTarget: string;
-  'aria-expanded': boolean;
-  'aria-haspopup': 'dialog' | 'menu';
-  'data-open': true | undefined;
-  style: CSSProperties;
-}
+import { useState, type ReactElement, type ReactNode } from 'react';
+import { DropdownMenu, Popover as RadixPopover } from 'radix-ui';
 
 interface PopoverProps {
   /** The accessible name of the panel. */
   label: string;
-  /** `menu` for a list of actions (`MenuItem`s), `dialog` for a small form. */
-  role?: 'dialog' | 'menu';
   /** Below the button, lined up with its right edge; or above it, centred. */
   placement?: 'below-end' | 'above';
   className?: string;
-  trigger: (props: PopoverTriggerProps) => ReactNode;
-  /** Rendered only while open, so nothing in it runs while it's closed. */
+  /** The button that opens it. */
+  trigger: ReactElement;
+  /** Rendered only while open; `close` closes it. */
   children: (close: () => void) => ReactNode;
 }
 
 /**
- * A panel anchored to the button that opens it. It is the browser's own popover, so a click
- * anywhere outside or Esc closes it, it sits above everything (even an open dialog), and CSS
- * anchor positioning keeps it next to its button, flipping when there's no room.
+ * A small panel next to the button that opens it (Radix Popover): it sits above everything,
+ * closes on a click outside or Esc, keeps focus sensible, and moves to stay on screen.
  */
 export function Popover({
   label,
-  role = 'dialog',
   placement = 'below-end',
   className,
   trigger,
   children,
 }: PopoverProps) {
-  const reactId = useId();
-  const id = `popover-${reactId.replace(/[^\w-]/g, '')}`;
-  const anchor = `--${id}`;
-  const panel = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-
-  // Keyboard users land inside it, as they would in a menu.
-  useEffect(() => {
-    if (open)
-      panel.current
-        ?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), select')
-        ?.focus();
-  }, [open]);
-
-  const close = () => {
-    document.getElementById(id)?.hidePopover();
-  };
-
   return (
-    <>
-      {trigger({
-        popoverTarget: id,
-        'aria-expanded': open,
-        'aria-haspopup': role,
-        'data-open': open ? true : undefined,
-        style: { anchorName: anchor },
-      })}
-      <div
-        ref={panel}
-        id={id}
-        popover="auto"
-        role={role}
-        aria-label={label}
-        className={['popover', `popover--${placement}`, className].filter(Boolean).join(' ')}
-        style={{ positionAnchor: anchor }}
-        onToggle={(e) => {
-          setOpen(e.newState === 'open');
-        }}
-        onKeyDown={role === 'menu' ? moveFocus : undefined}
-      >
-        {open && children(close)}
-      </div>
-    </>
+    <RadixPopover.Root open={open} onOpenChange={setOpen}>
+      <RadixPopover.Trigger asChild>{trigger}</RadixPopover.Trigger>
+      <RadixPopover.Portal>
+        <RadixPopover.Content
+          aria-label={label}
+          className={['popover', className].filter(Boolean).join(' ')}
+          side={placement === 'above' ? 'top' : 'bottom'}
+          align={placement === 'above' ? 'center' : 'end'}
+          sideOffset={6}
+          collisionPadding={8}
+        >
+          {children(() => {
+            setOpen(false);
+          })}
+        </RadixPopover.Content>
+      </RadixPopover.Portal>
+    </RadixPopover.Root>
   );
 }
 
-/** Arrow keys move between a menu's items, wrapping around. */
-function moveFocus(e: KeyboardEvent<HTMLDivElement>) {
-  const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
-  if (!step) return;
-  e.preventDefault();
-  const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-  const at = items.indexOf(document.activeElement as HTMLElement);
-  items[(at + step + items.length) % items.length]?.focus();
+/**
+ * A menu of actions (Radix DropdownMenu): arrow keys, typeahead, Esc and outside clicks, and
+ * focus back on its button afterwards.
+ */
+export function Menu({
+  label,
+  trigger,
+  children,
+}: {
+  label: string;
+  trigger: ReactElement;
+  children: ReactNode;
+}) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          aria-label={label}
+          className="popover menu"
+          align="end"
+          sideOffset={6}
+          collisionPadding={8}
+        >
+          {children}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
 }
 
-/** One action in a `role="menu"` popover; choosing it closes the menu. */
+/** One action in a `Menu`; choosing it closes the menu. */
 export function MenuItem({
   icon,
   danger,
   onSelect,
-  close,
   children,
   testId,
 }: {
   icon?: ReactNode;
   danger?: boolean;
   onSelect: () => void;
-  close: () => void;
   children: ReactNode;
   testId?: string;
 }) {
   return (
-    <button
-      type="button"
-      role="menuitem"
+    <DropdownMenu.Item
       className="menu-item"
       data-danger={danger ? true : undefined}
       data-testid={testId}
-      onClick={() => {
-        close();
-        onSelect();
-      }}
+      onSelect={onSelect}
     >
       {icon}
       <span>{children}</span>
-    </button>
+    </DropdownMenu.Item>
   );
+}
+
+export function MenuSeparator() {
+  return <DropdownMenu.Separator className="menu-separator" />;
 }
