@@ -25,10 +25,10 @@ Allow only what Hasbihal uses:
 - LiveKit media on 7881/tcp and 50000–60000/udp;
 - TURN on 3478/udp.
 
-LiveKit's own port 7880 must stay closed, because it's reached only through Caddy.
+LiveKit's own port 7880 must stay closed to the internet, because it's reached only through Caddy. The containers still need it: Caddy forwards signaling to it, and the server calls LiveKit's API there. They reach it through Docker's bridge networks (172.16.0.0/12), which ufw would otherwise block, and then joining a voice chat times out.
 
 ```bash
-ufw allow OpenSSH && ufw allow 80,443/tcp && ufw allow 7881/tcp && ufw allow 3478/udp && ufw allow 50000:60000/udp && ufw --force enable
+ufw allow OpenSSH && ufw allow 80,443/tcp && ufw allow 7881/tcp && ufw allow 3478/udp && ufw allow 50000:60000/udp && ufw allow from 172.16.0.0/12 to any port 7880 proto tcp && ufw --force enable
 ```
 
 ## 3. Install Hasbihal
