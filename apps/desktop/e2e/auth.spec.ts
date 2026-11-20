@@ -44,7 +44,8 @@ test('signs up from a hasbihal:// invite link, and stays signed in after a resta
 test('signs out, refuses a wrong password, and signs back in', async ({ desktop }) => {
   const selin = await createPerson('Selin Test');
   const page = await desktop.signedIn(selin);
-  await page.getByRole('button', { name: 'Çıkış yap' }).click();
+  await page.getByTestId('current-user').click();
+  await page.getByRole('menuitem', { name: 'Çıkış yap' }).click();
   await expect(page.getByRole('heading', { name: 'Giriş yap' })).toBeVisible();
 
   await page.getByLabel('Kullanıcı adı').fill(selin.username);
@@ -72,8 +73,11 @@ test('shows another member joining and their status, live', async ({ desktop }) 
   await expect(other.getByTestId('current-user')).toHaveText('Ayşe Test');
 
   await expect(memberRow(page, 'Ayşe Test')).toContainText('Müsait');
-  await other.getByRole('combobox', { name: 'Durum' }).click();
-  await other.getByRole('option', { name: 'Meşgul' }).click();
+  // Your status is under your name; a click on it changes it.
+  await other.getByTestId('current-user').click();
+  await other.getByRole('menuitemradio', { name: 'Meşgul' }).click();
+  await other.keyboard.press('Escape');
+  await expect(other.getByTestId('current-status')).toHaveText('Meşgul');
   await expect(memberRow(page, 'Ayşe Test')).toContainText('Meşgul');
   await snap(page, '6-members-live');
 
@@ -91,7 +95,8 @@ test('explains that a used invite no longer works', async ({ desktop }) => {
   await page.getByRole('button', { name: 'Hesabı oluştur' }).click();
   await expect(page.getByTestId('current-user')).toHaveText('Tuba Test');
 
-  await page.getByRole('button', { name: 'Çıkış yap' }).click();
+  await page.getByTestId('current-user').click();
+  await page.getByRole('menuitem', { name: 'Çıkış yap' }).click();
   await page.getByRole('button', { name: 'Davet bağlantın mı var? Hesap oluştur' }).click();
   await page.getByLabel('Davet bağlantısı veya kodu').fill(invite.url);
   await expect(page.getByText(/Bu davet geçersiz, kullanılmış ya da süresi dolmuş/)).toBeVisible();

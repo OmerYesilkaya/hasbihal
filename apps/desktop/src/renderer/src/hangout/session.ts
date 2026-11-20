@@ -79,6 +79,8 @@ export interface HangoutState {
   settings: VoiceSettings;
   /** Something the user should know, e.g. "noise suppression was switched off". */
   notice: MessageKey | null;
+  /** Hearing yourself outside a call, to try the microphone and its settings. */
+  micTest: boolean;
 }
 
 const SETTINGS_KEY = 'hasbihal.voice';
@@ -123,12 +125,17 @@ export class HangoutSession {
     shares: [],
     settings: loadSettings(),
     notice: null,
+    micTest: false,
   };
   readonly #listeners = new Set<() => void>();
   readonly #noticeListeners = new Set<(notice: MessageKey) => void>();
   readonly #serverUrl: string;
   #room: Room | null = null;
   #mic: Microphone | null = null;
+  /** The microphone test (`startMicTest`) and what plays it back. */
+  #testMic: { mic: Microphone; audio: HTMLAudioElement } | null = null;
+  /** Counts starts and stops, so a test that finishes opening after a stop closes itself. */
+  #testAttempt = 0;
   #micPublication: LocalTrackPublication | null = null;
   #camera: LocalVideoTrack | null = null;
   #screen: { video: LocalVideoTrack; audio: LocalAudioTrack | null } | null = null;
@@ -156,11 +163,51 @@ export class HangoutSession {
 
   /** The microphone's level before the gate, for the sensitivity meter. */
   micLevelDb(): number {
-    return this.#mic?.levelDb ?? -100;
+    return (this.#mic ?? this.#testMic?.mic)?.levelDb ?? -100;
+  }
+
+  /**
+   * Plays the microphone back, exactly as a call would send it (noise suppression, the voice or
+   * push-to-talk gate), so people can try it and set the sensitivity by ear. Only outside a call;
+   * joining one ends it.
+   */
+  async startMicTest(): Promise<void> {
+    if (this.#state.roomId !== null || this.#state.micTest) return;
+    const attempt = ++this.#testAttempt;
+    this.#set({ micTest: true });
+    try {
+      const mic = await Microphone.open(this.#state.settings, () => {
+        mic.dropNoiseSuppression();
+      });
+      // Stopped (or restarted, or a call started) while it opened.
+      if (attempt !== this.#testAttempt) {
+        mic.close();
+        return;
+      }
+      const audio = new Audio();
+      audio.srcObject = new MediaStream([mic.track]);
+      this.#testMic = { mic, audio };
+      await audio.play();
+    } catch {
+      this.stopMicTest();
+      this.#set({ notice: 'hangout.micTestFailed' });
+    }
+  }
+
+  stopMicTest(): void {
+    this.#testAttempt++;
+    if (this.#testMic) {
+      this.#testMic.audio.pause();
+      this.#testMic.audio.srcObject = null;
+      this.#testMic.mic.close();
+      this.#testMic = null;
+    }
+    if (this.#state.micTest) this.#set({ micTest: false });
   }
 
   async join(roomId: string): Promise<void> {
     if (this.#state.roomId === roomId) return;
+    this.stopMicTest(); // one microphone at a time
     await this.leave();
     this.#set({ roomId, status: 'connecting', notice: null });
 
@@ -425,7 +472,13 @@ export class HangoutSession {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     this.#set({ settings });
     this.#mic?.update(settings);
+    this.#testMic?.mic.update(settings);
     if (change.volumes) this.#applyVolumes();
+    // A test hears the chosen microphone.
+    if (change.deviceId !== undefined && this.#testMic) {
+      this.stopMicTest();
+      void this.startMicTest();
+    }
     // A different microphone means reopening it.
     if (change.deviceId !== undefined && this.#room) void this.#reopenMic();
   }

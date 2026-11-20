@@ -324,7 +324,7 @@ export const en: Record<MessageKey, string> = {
   'settings.language.tr': 'Türkçe',
   'settings.language.en': 'English',
   'settings.languageHint': 'Changes apply right away.',
-  'settings.voiceHint': 'These apply to every call. The level meter moves while you’re in a call.',
+  'settings.voiceHint': 'These apply to every call.',
   'emoji.more': 'All emoji',
   'emoji.search': 'Search emoji',
   'emoji.groups': 'Emoji groups',
@@ -340,4 +340,14 @@ export const en: Record<MessageKey, string> = {
   'emoji.group.8': 'Symbols',
   'emoji.group.9': 'Flags',
   'confirm.cancel': 'Cancel',
+  'user.menu': 'Status and account',
+  'profile.edit': 'Edit profile',
+  'settings.micTest': 'Test microphone',
+  'settings.micTestStop': 'Stop test',
+  'settings.micTestHint':
+    'You’ll hear yourself the way a call sends you. Use headphones, so it doesn’t echo.',
+  'settings.cameraPreview': 'Preview camera',
+  'settings.cameraPreviewStop': 'Stop preview',
+  'hangout.micTestFailed':
+    'Couldn’t open the microphone. Check permissions and the chosen microphone.',
 };
