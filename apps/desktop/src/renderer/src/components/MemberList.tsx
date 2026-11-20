@@ -8,6 +8,7 @@ import { useT } from '../i18n.tsx';
 import { Avatar } from './Avatar.tsx';
 import { Hand } from 'lucide-react';
 import { toast } from 'sonner';
+import { toastError } from './toast.ts';
 import { Icon } from './Icon.tsx';
 import { Tip } from './Tip.tsx';
 
@@ -71,7 +72,7 @@ function NudgeButton({ member, roomId }: { member: User; roomId: string | null }
     if (res.ok) toast(t(res.value?.delivered ? 'nudge.sent' : 'nudge.offline', { name }));
     else if (busy) toast(t('nudge.busy', { name }));
     else if (res.error.code === 'rate_limited') toast(t('nudge.tooSoon', { name }));
-    else toast.error(t('error.unexpected'));
+    else toastError(t('error.unexpected'));
   };
   return (
     <Tip label={t('nudge.action')}>
