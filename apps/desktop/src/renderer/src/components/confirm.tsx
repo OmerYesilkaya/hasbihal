@@ -24,30 +24,34 @@ export function confirm(request: Request): Promise<boolean> {
 /** Mounted once, near the root. */
 export function ConfirmHost() {
   const t = useT();
-  const [pending, setPending] = useState<(Request & { answer: (yes: boolean) => void }) | null>(
+  // The question stays after answering, so the dialog fades out with its words still in it.
+  const [request, setRequest] = useState<(Request & { answer: (yes: boolean) => void }) | null>(
     null,
   );
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    ask = (request) =>
+    ask = (next) =>
       new Promise<boolean>((resolve) => {
-        setPending({ ...request, answer: resolve });
+        setRequest({ ...next, answer: resolve });
+        setOpen(true);
       });
     return () => {
       ask = null;
     };
   }, []);
 
+  // A promise settles once, so answering again (Action, then the close it causes) is harmless.
   const answer = (yes: boolean) => {
-    pending?.answer(yes);
-    setPending(null);
+    request?.answer(yes);
+    setOpen(false);
   };
 
   return (
     <AlertDialog.Root
-      open={pending !== null}
-      onOpenChange={(open) => {
-        if (!open) answer(false);
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) answer(false);
       }}
     >
       <AlertDialog.Portal>
@@ -57,19 +61,17 @@ export function ConfirmHost() {
           data-testid="confirm"
           aria-describedby={undefined}
         >
-          <AlertDialog.Title className="confirm__title">{pending?.message}</AlertDialog.Title>
+          <AlertDialog.Title className="confirm__title">{request?.message}</AlertDialog.Title>
           <div className="confirm__actions">
-            <AlertDialog.Cancel className="button button--secondary">
-              {t('confirm.cancel')}
-            </AlertDialog.Cancel>
+            <AlertDialog.Cancel className="button">{t('confirm.cancel')}</AlertDialog.Cancel>
             <AlertDialog.Action
-              className="button"
-              data-danger={pending?.danger ? true : undefined}
+              className="button button--primary"
+              data-danger={request?.danger ? true : undefined}
               onClick={() => {
                 answer(true);
               }}
             >
-              {pending?.action}
+              {request?.action}
             </AlertDialog.Action>
           </div>
         </AlertDialog.Content>

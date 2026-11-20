@@ -1,7 +1,6 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useState,
   type KeyboardEvent,
   type MouseEvent,
@@ -13,9 +12,9 @@ const CloseContext = createContext<() => void>(() => undefined);
 
 /**
  * A modal window (Radix Dialog): shown while mounted; focus stays inside, and Esc or a click
- * outside closes it. It always closes through Radix first, then calls `onClose` for the parent
- * to unmount it: unmounting an open dialog leaves the page unclickable (`pointer-events: none`
- * on the body). So close it from inside (`ModalClose`, `useCloseModal()`), never by unmounting it.
+ * outside closes it. It always closes through Radix first (animating out), then calls `onClose`
+ * for the parent to unmount it: unmounting an open dialog leaves the page unclickable
+ * (`pointer-events: none` on the body), and would cut the animation off. So close it from inside (`ModalClose`, `useCloseModal()`), never by unmounting it.
  * Give it a `ModalTitle`, which also names it.
  */
 export function Modal({
@@ -37,9 +36,6 @@ export function Modal({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(true);
-  useEffect(() => {
-    if (!open) onClose();
-  }, [open, onClose]);
   const close = () => {
     setOpen(false);
   };
@@ -52,6 +48,11 @@ export function Modal({
           data-testid={testId}
           aria-describedby={undefined}
           onKeyDown={onKeyDown}
+          // Radix calls this once the closing animation has finished and focus is back where
+          // it was: only then may the parent unmount the modal.
+          onCloseAutoFocus={() => {
+            onClose();
+          }}
           onClick={
             onClick &&
             ((e) => {
