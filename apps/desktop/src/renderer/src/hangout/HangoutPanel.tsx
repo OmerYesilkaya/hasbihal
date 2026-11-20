@@ -170,6 +170,22 @@ function ShareTile({
   const tile = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const { track } = share;
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Esc, or the system's own controls, can leave full screen too: follow the document.
+  useEffect(() => {
+    const follow = () => {
+      setIsFullscreen(document.fullscreenElement === tile.current);
+    };
+    document.addEventListener('fullscreenchange', follow);
+    return () => {
+      document.removeEventListener('fullscreenchange', follow);
+    };
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void tile.current?.requestFullscreen();
+  };
 
   useEffect(() => {
     const el = video.current;
@@ -189,8 +205,9 @@ function ShareTile({
       className="tile tile--share"
       data-focused={focused ? true : undefined}
       data-testid="share-tile"
+      data-fullscreen={isFullscreen ? true : undefined}
       onDoubleClick={() => {
-        if (track) void tile.current?.requestFullscreen();
+        if (track) toggleFullscreen();
       }}
     >
       {track ? (
@@ -223,12 +240,8 @@ function ShareTile({
           >
             {focused ? t('share.shrink') : t('share.enlarge')}
           </button>
-          <button
-            type="button"
-            className="tile__action"
-            onClick={() => void tile.current?.requestFullscreen()}
-          >
-            {t('share.fullscreen')}
+          <button type="button" className="tile__action" onClick={toggleFullscreen}>
+            {isFullscreen ? t('share.exitFullscreen') : t('share.fullscreen')}
           </button>
           {!share.isLocal && (
             <button

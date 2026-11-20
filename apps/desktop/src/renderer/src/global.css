@@ -2258,6 +2258,16 @@ input::-webkit-calendar-picker-indicator:hover {
   font-size: 13px;
 }
 
+/* Full screen (#34): the whole picture, on black, nothing cropped or rounded. */
+.tile--share:fullscreen {
+  border-radius: 0;
+  background: #000;
+}
+
+.tile--share:fullscreen .tile__video {
+  object-fit: contain;
+}
+
 .tile__actions {
   position: absolute;
   top: 8px;

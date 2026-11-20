@@ -66,6 +66,22 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
   await share.getByRole('button', { name: 'Büyüt' }).click();
   await expect(omer.locator('.stage--focused')).toBeVisible();
   await snap(omer, '11-screen-share');
+  // Full screen (#34): the share fills the display.
+  const fullscreen = () =>
+    omer.evaluate(
+      () =>
+        (
+          globalThis as unknown as {
+            document: { fullscreenElement: { getAttribute(name: string): string | null } | null };
+          }
+        ).document.fullscreenElement?.getAttribute('data-testid') ?? null,
+    );
+  await share.hover();
+  await share.getByRole('button', { name: 'Tam ekran' }).click();
+  await expect.poll(fullscreen).toBe('share-tile');
+  // Leaving is left to a person: under automation the window never finishes going full screen at
+  // the system level, so Electron's exitFullscreen() waits forever. Stopping the share below
+  // removes the tile, which ends full screen anyway.
   await zeynep.getByRole('button', { name: 'Paylaşımı durdur' }).click();
   await expect(share).toHaveCount(0);
   await expect(omer.locator('.room__voice')).not.toContainText('CANLI');

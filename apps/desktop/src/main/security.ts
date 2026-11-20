@@ -58,6 +58,8 @@ const ALLOWED_PERMISSIONS = new Set([
   'display-capture',
   'notifications',
   'clipboard-sanitized-write',
+  // A screen share shown full screen (Element.requestFullscreen).
+  'fullscreen',
 ]);
 
 /**
