@@ -17,7 +17,9 @@ import { currentLocale } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { useUploads } from './useUploads.ts';
 import { VoiceRecorder, type Recording } from './VoiceRecorder.tsx';
-import { FileText, Mic, Paperclip, X } from 'lucide-react';
+import { CircleEllipsis, FileText, Mic, Paperclip, X } from 'lucide-react';
+import { Popover } from '../components/Popover.tsx';
+import { EmojiPicker } from './EmojiPicker.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Progress } from '../components/controls.tsx';
 import { Tip } from '../components/Tip.tsx';
@@ -160,6 +162,14 @@ export function Composer({
       ? [...people, 'everyone' as const].slice(0, MAX_SUGGESTIONS)
       : people;
   }, [token, query, members, me, dismissedAt, caret]);
+
+  /** Puts `piece` where the caret is, and the caret after it. */
+  const insertText = (piece: string) => {
+    const position = caret + piece.length;
+    caretAfterRender.current = position;
+    setText(`${text.slice(0, caret)}${piece}${text.slice(caret)}`);
+    setCaret(position);
+  };
 
   const insertMention = (choice: User | 'everyone') => {
     const name = choice === 'everyone' ? 'everyone' : choice.username;
@@ -358,16 +368,6 @@ export function Composer({
         <div className="composer__field">
           {!editing && (
             <>
-              <Tip label={t('composer.attach')}>
-                <button
-                  type="button"
-                  className="composer__attach"
-                  aria-label={t('composer.attach')}
-                  onClick={() => picker.current?.click()}
-                >
-                  <Icon icon={Paperclip} />
-                </button>
-              </Tip>
               <input
                 ref={picker}
                 type="file"
@@ -448,21 +448,64 @@ export function Composer({
               ))}
             </ul>
           )}
-          {!editing && !text && uploads.length === 0 && (
-            <Tip label={t('voice.record')}>
-              <button
-                type="button"
-                className="composer__voice"
-                aria-label={t('voice.record')}
-                onClick={() => {
-                  setError(null);
-                  setRecording(true);
-                }}
-              >
-                <Icon icon={Mic} />
-              </button>
-            </Tip>
-          )}
+          {/* #36: files, a voice message and emoji, behind one button on the right. */}
+          <Popover
+            label={t('composer.more')}
+            className="composer__more-panel"
+            placement="above-end"
+            onCloseFocus={() => input.current?.focus()}
+            trigger={
+              <Tip label={t('composer.more')}>
+                <button
+                  type="button"
+                  className="composer__more"
+                  aria-label={t('composer.more')}
+                  data-testid="composer-more"
+                >
+                  <Icon icon={CircleEllipsis} />
+                </button>
+              </Tip>
+            }
+          >
+            {(close) => (
+              <>
+                {!editing && (
+                  <div className="composer__actions">
+                    <button
+                      type="button"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        picker.current?.click();
+                      }}
+                    >
+                      <Icon icon={Paperclip} /> {t('composer.attach')}
+                    </button>
+                    {/* A voice message replaces what's typed, so only with nothing typed. */}
+                    {!text && uploads.length === 0 && (
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() => {
+                          close();
+                          setError(null);
+                          setRecording(true);
+                        }}
+                      >
+                        <Icon icon={Mic} /> {t('voice.record')}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <EmojiPicker
+                  onPick={(emoji) => {
+                    insertText(emoji);
+                    close();
+                  }}
+                />
+              </>
+            )}
+          </Popover>
         </div>
       )}
       {text.length > MESSAGE_BODY_MAX - 500 && (

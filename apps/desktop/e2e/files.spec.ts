@@ -54,7 +54,19 @@ test('shares a photo, a file, a voice message, and a link with a preview', async
   await page.keyboard.press('Escape');
   await expect(viewer).toBeHidden();
 
+  // An emoji from the composer's panel (#36) goes in where the caret is.
+  await composer.fill('Merhaba ');
+  await page.getByTestId('composer-more').click();
+  await page.getByLabel('Emoji ara').fill('kaplumbağa');
+  await expect(page.getByRole('button', { name: 'kaplumbağa' })).toBeVisible();
+  await snap(page, '13b-composer-more');
+  await page.getByLabel('Emoji ara').press('Enter');
+  await expect(composer).toHaveValue('Merhaba 🐢');
+  await expect(composer).toBeFocused();
+  await composer.fill('');
+
   // A voice message (A22): record a couple of seconds of the fake mic, send, play it back.
+  await page.getByTestId('composer-more').click();
   await page.getByRole('button', { name: 'Sesli mesaj kaydet' }).click();
   await expect(page.getByTestId('recorder-time')).toHaveText('0:02', { timeout: 5_000 });
   await page.getByTestId('recorder').getByRole('button', { name: 'Gönder' }).click();

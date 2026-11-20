@@ -351,4 +351,5 @@ export const en: Record<MessageKey, string> = {
   'hangout.micTestFailed':
     'Couldn’t open the microphone. Check permissions and the chosen microphone.',
   'share.exitFullscreen': 'Exit full screen',
+  'composer.more': 'Add: file, voice message, emoji',
 };

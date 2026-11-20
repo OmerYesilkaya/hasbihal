@@ -2371,33 +2371,6 @@ input::-webkit-calendar-picker-indicator:hover {
   pointer-events: none;
 }
 
-.composer__attach {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: absolute;
-  left: 6px;
-  bottom: 5px;
-  z-index: 1;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.composer__attach:hover {
-  background: var(--hb-chip);
-}
-
-/* Room for the 📎 button; both layers move together, so the caret stays aligned. */
-.composer__field:has(.composer__attach) .composer__mirror,
-.composer__field:has(.composer__attach) .composer__input {
-  padding-left: 42px;
-}
-
 .uploads {
   display: flex;
   flex-wrap: wrap;
@@ -2692,7 +2665,7 @@ input::-webkit-calendar-picker-indicator:hover {
 
 /* Voice messages (A22) */
 
-.composer__voice {
+.composer__more {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2705,12 +2678,39 @@ input::-webkit-calendar-picker-indicator:hover {
   border: none;
   border-radius: 8px;
   background: none;
+  color: var(--hb-text-secondary);
   font-size: 16px;
   cursor: pointer;
 }
 
-.composer__voice:hover {
+.composer__more:hover,
+.composer__more[data-state='open'] {
   background: var(--hb-chip);
+  color: var(--hb-text);
+}
+
+/* Room for that button; both layers move together, so the caret stays aligned. */
+.composer__field .composer__mirror,
+.composer__field .composer__input {
+  padding-right: 42px;
+}
+
+.popover.composer__more-panel {
+  padding: 8px;
+}
+
+/* File and voice message above the emoji, in one row. */
+.composer__actions {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.composer__actions .menu-item {
+  width: auto;
+  flex: 1;
 }
 
 .recorder {
