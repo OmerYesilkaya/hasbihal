@@ -76,7 +76,7 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
   const zeynepRow = omer.getByTestId('member').filter({ hasText: 'Zeynep Test' });
   await zeynepRow.hover();
   await zeynepRow.getByRole('button', { name: 'Sohbete çağır' }).click();
-  await expect(zeynepRow).toContainText('Çağrıldı');
+  await expect(omer.getByText('Çağrıldı · Zeynep Test')).toBeVisible();
 
   await omer.getByRole('button', { name: 'Ayrıl' }).click();
   await expect(zeynep.locator('.room__voice')).toHaveCount(0);

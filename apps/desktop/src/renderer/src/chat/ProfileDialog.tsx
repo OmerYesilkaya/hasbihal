@@ -13,39 +13,29 @@ import { Avatar } from '../components/Avatar.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Icon } from '../components/Icon.tsx';
+import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
 
 /** The profile view (A41): photo (A40), display name, password, and this member's devices. */
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
-  const dialog = useRef<HTMLDialogElement>(null);
   const { me } = useChatState();
-
-  // A native modal: focus stays inside, and Esc closes it.
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
 
   if (!me) return null;
   return (
-    <dialog ref={dialog} className="profile" aria-label={t('profile.title')} onClose={onClose}>
+    <Modal className="profile" onClose={onClose}>
       <header className="profile__header">
-        <h1>{t('profile.title')}</h1>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={t('profile.close')}
-          onClick={onClose}
-        >
+        <ModalTitle>{t('profile.title')}</ModalTitle>
+        <ModalClose className="icon-button" aria-label={t('profile.close')}>
           <Icon icon={X} />
-        </button>
+        </ModalClose>
       </header>
       <PhotoSection me={me} />
       <NameSection me={me} />
       <PasswordSection />
-      <StartupSection />
       <SessionsSection />
-    </dialog>
+    </Modal>
   );
 }
 
@@ -125,7 +115,7 @@ function NameSection({ me }: { me: User }) {
   const id = useId();
   const { info, store } = useChat();
   const [name, setName] = useState(me.displayName);
-  const [state, setState] = useState<'idle' | 'saved' | 'invalid' | 'failed'>('idle');
+  const [state, setState] = useState<'idle' | 'invalid' | 'failed'>('idle');
 
   const save = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -139,7 +129,8 @@ function NameSection({ me }: { me: User }) {
     });
     if (result.ok && result.value) {
       store.apply({ type: 'member_updated', user: result.value });
-      setState('saved');
+      setState('idle');
+      toast.success(t('profile.saved'));
     } else {
       setState('failed');
     }
@@ -166,13 +157,11 @@ function NameSection({ me }: { me: User }) {
         </button>
       </div>
       <p className="field__hint">
-        {state === 'saved'
-          ? t('profile.saved')
-          : state === 'invalid'
-            ? t('error.displayNameRequired')
-            : state === 'failed'
-              ? t('error.unexpected')
-              : `@${me.username}`}
+        {state === 'invalid'
+          ? t('error.displayNameRequired')
+          : state === 'failed'
+            ? t('error.unexpected')
+            : `@${me.username}`}
       </p>
     </form>
   );
@@ -293,39 +282,6 @@ function SessionsSection() {
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-/** A39: starting with the computer, on by default; shown only where the build manages it. */
-function StartupSection() {
-  const t = useT();
-  const [on, setOn] = useState<boolean | null>(null);
-  useEffect(() => {
-    let current = true;
-    void window.hasbihal.system.launchAtStartup().then((value) => {
-      if (current) setOn(value);
-    });
-    return () => {
-      current = false;
-    };
-  }, []);
-  if (on === null) return null;
-  return (
-    <section className="profile__section">
-      <label className="voice-settings__check">
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={(e) => {
-            const value = e.target.checked;
-            setOn(value);
-            void window.hasbihal.system.setLaunchAtStartup(value);
-          }}
-        />
-        {t('profile.launchAtStartup')}
-      </label>
-      <p className="field__hint">{t('profile.launchAtStartupHint')}</p>
     </section>
   );
 }

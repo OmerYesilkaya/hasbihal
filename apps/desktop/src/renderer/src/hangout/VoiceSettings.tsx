@@ -1,7 +1,7 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useChat, useHangout } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
-import { rangeFill } from '../components/range.ts';
+import { RadioGroup, Select, Slider, Switch } from '../components/controls.tsx';
 
 const isMac = navigator.userAgent.includes('Mac');
 /** How the global shortcuts (main/shortcuts.ts) read on this platform. */
@@ -16,10 +16,12 @@ const keyLabel = (code: string) =>
     .replace(/^Digit/, '')
     .replace(/(Left|Right)$/, ' $1');
 
-/** Devices, noise suppression, and how the mic opens (A29, A37). */
-export function VoiceSettingsPanel({ onClose }: { onClose: () => void }) {
+/**
+ * Devices, noise suppression, and how the mic opens (A29, A37): in the call's settings popover
+ * and on the Settings page.
+ */
+export function VoiceSettingsFields() {
   const t = useT();
-  const id = useId();
   const { hangout } = useChat();
   const call = useHangout();
   const { settings } = call;
@@ -54,82 +56,62 @@ export function VoiceSettingsPanel({ onClose }: { onClose: () => void }) {
     };
   }, [capturingKey, hangout]);
 
-  const select = (
+  const deviceSelect = (
     kind: 'audioinput' | 'videoinput',
+    label: string,
     value: string | null,
     onChange: (id: string | null) => void,
   ) => (
-    <select
-      className="field__input"
+    <Select
+      label={label}
       value={value ?? ''}
-      onChange={(e) => {
-        onChange(e.target.value || null);
+      onChange={(next) => {
+        onChange(next || null);
       }}
-    >
-      <option value="">{t('settings.default')}</option>
-      {devices
-        .filter((d) => d.kind === kind && d.deviceId && d.deviceId !== 'default')
-        .map((d) => (
-          <option key={d.deviceId} value={d.deviceId}>
-            {d.label || d.deviceId.slice(0, 8)}
-          </option>
-        ))}
-    </select>
+      options={[
+        { value: '', label: t('settings.default') },
+        ...devices
+          .filter((d) => d.kind === kind && d.deviceId && d.deviceId !== 'default')
+          .map((d) => ({ value: d.deviceId, label: d.label || d.deviceId.slice(0, 8) })),
+      ]}
+    />
   );
 
   const meter = Math.max(0, Math.min(100, ((level + 80) / 70) * 100));
   const line = Math.max(0, Math.min(100, ((settings.thresholdDb + 80) / 70) * 100));
   return (
-    <div
-      className="voice-settings"
-      role="dialog"
-      aria-label={t('hangout.settings')}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && !capturingKey) onClose();
-      }}
-    >
-      <label className="field__label">{t('settings.microphone')}</label>
-      {select('audioinput', settings.deviceId, (deviceId) => {
+    <div className="voice-settings">
+      {deviceSelect('audioinput', t('settings.microphone'), settings.deviceId, (deviceId) => {
         hangout.updateSettings({ deviceId });
       })}
-      <label className="field__label">{t('settings.camera')}</label>
-      {select('videoinput', settings.cameraId, (cameraId) => {
+      {deviceSelect('videoinput', t('settings.camera'), settings.cameraId, (cameraId) => {
         hangout.updateSettings({ cameraId });
       })}
-      <label className="voice-settings__check">
-        <input
-          type="checkbox"
-          checked={settings.noiseSuppression && call.noiseSuppressionAvailable}
-          disabled={!call.noiseSuppressionAvailable}
-          onChange={(e) => {
-            hangout.updateSettings({ noiseSuppression: e.target.checked });
-          }}
-        />
+      <Switch
+        checked={settings.noiseSuppression && call.noiseSuppressionAvailable}
+        disabled={!call.noiseSuppressionAvailable}
+        onChange={(noiseSuppression) => {
+          hangout.updateSettings({ noiseSuppression });
+        }}
+      >
         {t('settings.noiseSuppression')}
-      </label>
+      </Switch>
 
-      <fieldset className="voice-settings__mode">
-        <legend className="field__label">{t('settings.inputMode')}</legend>
-        {(['voice', 'ptt'] as const).map((mode) => (
-          <label key={mode} className="voice-settings__check">
-            <input
-              type="radio"
-              name={`${id}-mode`}
-              checked={settings.mode === mode}
-              onChange={() => {
-                hangout.updateSettings({ mode });
-              }}
-            />
-            {mode === 'voice' ? t('settings.voiceActivation') : t('settings.pushToTalk')}
-          </label>
-        ))}
-      </fieldset>
+      <RadioGroup
+        label={t('settings.inputMode')}
+        value={settings.mode}
+        onChange={(mode) => {
+          hangout.updateSettings({ mode });
+        }}
+        options={[
+          { value: 'voice', label: t('settings.voiceActivation') },
+          { value: 'ptt', label: t('settings.pushToTalk') },
+        ]}
+      />
 
       {settings.mode === 'voice' ? (
         <>
-          <label className="field__label" htmlFor={`${id}-sensitivity`}>
-            {t('settings.sensitivity')}
-          </label>
+          <span className="field__label">{t('settings.sensitivity')}</span>
           <div className="level">
             <div
               className="level__fill"
@@ -138,16 +120,13 @@ export function VoiceSettingsPanel({ onClose }: { onClose: () => void }) {
             />
             <div className="level__line" style={{ left: `${String(line)}%` }} />
           </div>
-          <input
-            id={`${id}-sensitivity`}
-            type="range"
+          <Slider
+            label={t('settings.sensitivity')}
             min={-80}
             max={-10}
-            step={1}
             value={settings.thresholdDb}
-            style={rangeFill(settings.thresholdDb, -80, -10)}
-            onChange={(e) => {
-              hangout.updateSettings({ thresholdDb: Number(e.target.value) });
+            onChange={(thresholdDb) => {
+              hangout.updateSettings({ thresholdDb });
             }}
           />
         </>

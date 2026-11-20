@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 import { hangoutOf, sortMembers, type ChatStore } from '@hasbihal/core';
 import type { MessageKey } from '@hasbihal/core';
 import { NudgeResult, type PresenceStatus, type User } from '@hasbihal/protocol';
@@ -7,7 +7,9 @@ import { useChat, useHangout } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
 import { Avatar } from './Avatar.tsx';
 import { Hand } from 'lucide-react';
+import { toast } from 'sonner';
 import { Icon } from './Icon.tsx';
+import { Tip } from './Tip.tsx';
 
 export const PRESENCE_LABEL: Record<PresenceStatus, MessageKey> = {
   available: 'presence.available',
@@ -54,11 +56,10 @@ export function MemberList({ store }: { store: ChatStore }) {
   );
 }
 
-/** "Sohbete çağır" (A13): a nudge into the call you're in, with the answer shown briefly. */
+/** "Sohbete çağır" (A13): a nudge into the call you're in; the answer comes as a toast. */
 function NudgeButton({ member, roomId }: { member: User; roomId: string | null }) {
   const t = useT();
   const { info } = useChat();
-  const [result, setResult] = useState<MessageKey | null>(null);
   const nudge = async () => {
     if (!roomId) return;
     const res = await api(info.serverUrl, 'POST', '/nudges', {
@@ -66,32 +67,22 @@ function NudgeButton({ member, roomId }: { member: User; roomId: string | null }
       schema: NudgeResult,
     });
     const busy = !res.ok && res.error.issues?.[0]?.code === 'recipient_busy';
-    setResult(
-      res.ok
-        ? res.value?.delivered
-          ? 'nudge.sent'
-          : 'nudge.offline'
-        : busy
-          ? 'nudge.busy'
-          : res.error.code === 'rate_limited'
-            ? 'nudge.tooSoon'
-            : 'error.unexpected',
-    );
-    setTimeout(() => {
-      setResult(null);
-    }, 3000);
+    const name = member.displayName;
+    if (res.ok) toast(t(res.value?.delivered ? 'nudge.sent' : 'nudge.offline', { name }));
+    else if (busy) toast(t('nudge.busy', { name }));
+    else if (res.error.code === 'rate_limited') toast(t('nudge.tooSoon', { name }));
+    else toast.error(t('error.unexpected'));
   };
-  return result ? (
-    <span className="member__nudge-result">{t(result)}</span>
-  ) : (
-    <button
-      type="button"
-      className="icon-button member__nudge"
-      title={t('nudge.action')}
-      aria-label={t('nudge.action')}
-      onClick={() => void nudge()}
-    >
-      <Icon icon={Hand} />
-    </button>
+  return (
+    <Tip label={t('nudge.action')}>
+      <button
+        type="button"
+        className="icon-button member__nudge"
+        aria-label={t('nudge.action')}
+        onClick={() => void nudge()}
+      >
+        <Icon icon={Hand} />
+      </button>
+    </Tip>
   );
 }

@@ -132,6 +132,7 @@ export interface RoomUserPrefsTable {
   notify_level: Generated<'mentions' | 'all' | 'muted'>;
   sound_on_message: Generated<boolean>;
   hangout_start_alerts: Generated<boolean>;
+  favorite: Generated<boolean>;
   last_read_message_id: ColumnType<string | null, string | null | undefined, string | null>;
 }
 

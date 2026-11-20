@@ -3,6 +3,7 @@ import { parseMarkdown, type Block, type Inline } from '@hasbihal/core';
 import { useT } from '../i18n.tsx';
 import { useChatState, useMembersByUsername } from './context.tsx';
 import { highlight } from './highlight.tsx';
+import { Tip } from '../components/Tip.tsx';
 
 /**
  * A message body (A47, A48). Each AST node becomes one fixed element; there is no path from a
@@ -115,13 +116,11 @@ function Mention({ username }: { username: string }) {
   const member = members.get(username);
   if (!member) return `@${username}`;
   return (
-    <span
-      className="mention"
-      data-me={member.id === me?.id ? true : undefined}
-      title={`@${username}`}
-    >
-      @{member.displayName}
-    </span>
+    <Tip label={`@${username}`}>
+      <span className="mention" data-me={member.id === me?.id ? true : undefined}>
+        @{member.displayName}
+      </span>
+    </Tip>
   );
 }
 

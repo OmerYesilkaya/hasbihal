@@ -200,11 +200,12 @@ export async function roomsWithState(
     notify_level: 'mentions' | 'all' | 'muted' | null;
     sound_on_message: boolean | null;
     hangout_start_alerts: boolean | null;
+    favorite: boolean | null;
     unread: string;
     unread_mentions: string;
   }>`
     select r.id, r.name, r.topic, r.position, r.created_at, r.archived_at, p.last_read_message_id,
-      p.notify_level, p.sound_on_message, p.hangout_start_alerts,
+      p.notify_level, p.sound_on_message, p.hangout_start_alerts, p.favorite,
       count(m.id) as unread,
       count(m.id) filter (
         where m.mentions_everyone
@@ -232,6 +233,7 @@ export async function roomsWithState(
       notify: row.notify_level ?? DEFAULT_ROOM_PREFS.notify,
       sound: row.sound_on_message ?? DEFAULT_ROOM_PREFS.sound,
       hangoutAlerts: row.hangout_start_alerts ?? DEFAULT_ROOM_PREFS.hangoutAlerts,
+      favorite: row.favorite ?? DEFAULT_ROOM_PREFS.favorite,
     },
     unreadCount: Number(row.unread),
     unreadMentionCount: Number(row.unread_mentions),

@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { app, Menu, nativeImage, Tray, type BrowserWindow } from 'electron';
-import { createTranslator, resolveLocale } from '@hasbihal/core';
+import { createTranslator, LOCALES, resolveLocale, type Locale } from '@hasbihal/core';
 import trayPng from '../../resources/tray.png?asset';
 import tray2xPng from '../../resources/tray@2x.png?asset';
 import templatePng from '../../resources/trayTemplate.png?asset';
@@ -22,6 +22,8 @@ interface Settings {
   launchAtStartup?: boolean;
   /** The "still running in the tray" note has been shown once (Windows). */
   trayNoteShown?: boolean;
+  /** Chosen in Settings (A18); unset follows the computer's language. */
+  language?: Locale;
 }
 
 /**
@@ -33,7 +35,7 @@ export class Background {
   readonly #settingsFile: string;
   /** Packaged builds only: development and test runs never touch login items. */
   readonly #manageStartup: boolean;
-  readonly #t = createTranslator(resolveLocale([app.getLocale()]));
+  #t = createTranslator(resolveLocale([app.getLocale()]));
   #settings: Settings = {};
   #tray: Tray | null = null;
   #window: BrowserWindow | null = null;
@@ -60,6 +62,7 @@ export class Background {
       .catch(() => ({}));
     if (this.#manageStartup && this.#settings.launchAtStartup === undefined)
       await this.setLaunchAtStartup(true); // A39: on by default
+    this.#useLanguage();
     this.#createTray();
   }
 
@@ -92,6 +95,22 @@ export class Background {
     app.setLoginItemSettings({ openAtLogin: on, args: [HIDDEN_ARG] });
     await this.#save({ launchAtStartup: on });
     this.#updateMenu();
+  }
+
+  /** The language chosen in Settings, or null when it follows the computer. */
+  language(): Locale | null {
+    return LOCALES.find((l) => l === this.#settings.language) ?? null;
+  }
+
+  async setLanguage(language: Locale | null): Promise<void> {
+    await this.#save({ language: language ?? undefined });
+    this.#useLanguage();
+    this.#updateMenu();
+    this.setMentions(this.#mentions);
+  }
+
+  #useLanguage(): void {
+    this.#t = createTranslator(this.language() ?? resolveLocale([app.getLocale()]));
   }
 
   /** Unread mentions: on the macOS dock and in the tray's tooltip. */

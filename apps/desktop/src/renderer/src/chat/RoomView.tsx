@@ -7,6 +7,7 @@ import { EventChip } from '../events/EventChip.tsx';
 import { EventsDialog } from '../events/EventsDialog.tsx';
 import { nextOccurrence, useEvents } from '../events/useEvents.ts';
 import { HangoutPanel } from '../hangout/HangoutPanel.tsx';
+import { PanelToggle } from '../layout/panels.tsx';
 import { RoomPrefsMenu } from '../rooms/RoomPrefsMenu.tsx';
 import { Composer, type ComposerHandle } from './Composer.tsx';
 import { useChat, useChatState } from './context.tsx';
@@ -96,6 +97,7 @@ export function RoomView({ roomId }: { roomId: string }) {
       }}
     >
       <header className="content__header room-view__header">
+        <PanelToggle side="rooms" />
         <h1 className="room-view__name">
           <span aria-hidden>#</span> {room.name}
         </h1>
@@ -112,6 +114,7 @@ export function RoomView({ roomId }: { roomId: string }) {
             />
           )}
           <RoomPrefsMenu roomId={roomId} />
+          <PanelToggle side="members" />
         </div>
       </header>
       {eventsOpen && (

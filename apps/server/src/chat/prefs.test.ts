@@ -27,7 +27,7 @@ describe('notification settings per room (A28)', () => {
 
     const otherDevice = await h.connect(as(ayse));
     await otherDevice.waitFor('welcome');
-    const muted = { notify: 'muted', sound: false, hangoutAlerts: false } as const;
+    const muted = { notify: 'muted', sound: false, hangoutAlerts: false, favorite: true } as const;
     const res = await h.request('PUT', `/rooms/${room.id}/prefs`, as(ayse), muted);
     expect(res.statusCode, res.body).toBe(200);
 
@@ -55,6 +55,22 @@ describe('notification settings per room (A28)', () => {
     await h.request('POST', `/rooms/${room.id}/read`, as(kerem), {
       messageId: Message.parse(sent.json()).id,
     });
-    expect(await prefsIn(kerem)).toEqual({ notify: 'all', sound: true, hangoutAlerts: true });
+    expect(await prefsIn(kerem)).toEqual({
+      notify: 'all',
+      sound: true,
+      hangoutAlerts: true,
+      favorite: false,
+    });
+  });
+
+  it('accepts prefs without `favorite` from older apps, as not a favourite', async () => {
+    const zeynep = await h.signUp();
+    const res = await h.request('PUT', `/rooms/${room.id}/prefs`, as(zeynep), {
+      notify: 'muted',
+      sound: false,
+      hangoutAlerts: true,
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(await prefsIn(zeynep)).toEqual({ ...DEFAULT_ROOM_PREFS, notify: 'muted' });
   });
 });

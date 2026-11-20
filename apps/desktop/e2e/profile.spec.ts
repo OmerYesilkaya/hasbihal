@@ -23,7 +23,7 @@ test('edits the profile: photo, display name, devices', async ({ desktop }, test
 
   await dialog.getByLabel('Görünen ad').fill('Hatice Yılmaz');
   await dialog.getByRole('button', { name: 'Kaydet' }).click();
-  await expect(dialog.getByText('Kaydedildi.')).toBeVisible();
+  await expect(page.getByText('Kaydedildi.')).toBeVisible();
   await snap(page, '9-profile');
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();

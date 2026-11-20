@@ -6,7 +6,6 @@ test('chats in a room: formatting, mentions, replies, reactions, edits, deletes'
   const mehmet = await createPerson('Mehmet Test', 'admin');
   const kerem = await createPerson('Kerem Test');
   const host = await desktop.signedIn(mehmet);
-  host.on('dialog', (dialog) => void dialog.accept()); // "Bu mesaj silinsin mi?"
   const guest = await desktop.signedIn(kerem);
 
   // Mehmet (an admin) opens a room; Kerem sees it appear.
@@ -55,9 +54,17 @@ test('chats in a room: formatting, mentions, replies, reactions, edits, deletes'
   // Kerem reacts; Mehmet sees it live.
   await fromHost.hover();
   await fromHost.getByRole('button', { name: 'Tepki ver' }).click();
-  await guest.getByRole('menuitem', { name: '🌷' }).click();
+  await guest.getByRole('button', { name: '🌷', exact: true }).click();
   await expect(fromHost.getByRole('button', { name: /🌷 1/ })).toBeVisible();
   await expect(hostsOwn.getByRole('button', { name: /🌷 1/ })).toBeVisible();
+  // Any emoji, found by its Turkish name.
+  await fromHost.hover();
+  await fromHost.getByRole('button', { name: 'Tepki ver' }).click();
+  await guest.getByTestId('emoji-more').click();
+  await guest.getByLabel('Emoji ara').fill('kaplumbağa');
+  await expect(guest.getByRole('button', { name: 'kaplumbağa' })).toBeVisible();
+  await guest.getByLabel('Emoji ara').press('Enter');
+  await expect(fromHost.getByRole('button', { name: /🐢 1/ })).toBeVisible();
 
   // Mehmet edits his last message with ↑, then deletes it.
   await composer.press('ArrowUp');
@@ -70,6 +77,8 @@ test('chats in a room: formatting, mentions, replies, reactions, edits, deletes'
   const own = host.getByTestId('message').filter({ hasText: 'herkese' });
   await own.hover();
   await own.getByRole('button', { name: 'Sil' }).click();
+  // The app's own "are you sure?", not the system's.
+  await host.getByTestId('confirm').getByRole('button', { name: 'Sil' }).click();
   await expect(guest.getByText('Bu mesaj silindi.').first()).toBeVisible();
 
   // A message in another room shows up as an unread badge, marked as a mention.

@@ -92,12 +92,15 @@ export const RoomPrefs = z.object({
   sound: z.boolean(),
   /** Say when someone starts a hangout here (A28). */
   hangoutAlerts: z.boolean(),
+  /** Listed first, under Favourites. Optional on input, so older apps can still save prefs. */
+  favorite: z.boolean().default(false),
 });
 export type RoomPrefs = z.infer<typeof RoomPrefs>;
 export const DEFAULT_ROOM_PREFS: RoomPrefs = {
   notify: 'mentions',
   sound: false,
   hangoutAlerts: true,
+  favorite: false,
 };
 
 export const RoomWithState = Room.extend({

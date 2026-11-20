@@ -125,6 +125,7 @@ export class HangoutSession {
     notice: null,
   };
   readonly #listeners = new Set<() => void>();
+  readonly #noticeListeners = new Set<(notice: MessageKey) => void>();
   readonly #serverUrl: string;
   #room: Room | null = null;
   #mic: Microphone | null = null;
@@ -145,6 +146,12 @@ export class HangoutSession {
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
+  };
+
+  /** Problems worth telling the person about once (a toast), as they happen. */
+  onNotice = (listener: (notice: MessageKey) => void): (() => void) => {
+    this.#noticeListeners.add(listener);
+    return () => this.#noticeListeners.delete(listener);
   };
 
   /** The microphone's level before the gate, for the sensitivity meter. */
@@ -578,6 +585,8 @@ export class HangoutSession {
   #set(change: Partial<HangoutState>): void {
     this.#state = { ...this.#state, ...change };
     for (const listener of this.#listeners) listener();
+    const { notice } = change;
+    if (notice) for (const listener of this.#noticeListeners) listener(notice);
   }
 }
 

@@ -13,12 +13,14 @@ import { Message, MESSAGE_BODY_MAX, type User } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useT } from '../i18n.tsx';
 import { formatSize, uploadFile } from '../files.ts';
-import { locale } from '../i18n.tsx';
+import { currentLocale } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { useUploads } from './useUploads.ts';
 import { VoiceRecorder, type Recording } from './VoiceRecorder.tsx';
 import { FileText, Mic, Paperclip, X } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
+import { Progress } from '../components/controls.tsx';
+import { Tip } from '../components/Tip.tsx';
 
 /** Typing notices go out at most this often while typing (the server throttles too). */
 const TYPING_EVERY_MS = 3_000;
@@ -306,11 +308,13 @@ export function Composer({
               <span className="upload__text">
                 <span className="upload__name">{u.file.name}</span>
                 <span className="upload__size">
-                  {u.status === 'failed' && u.error ? t(u.error) : formatSize(u.file.size, locale)}
+                  {u.status === 'failed' && u.error
+                    ? t(u.error)
+                    : formatSize(u.file.size, currentLocale())}
                 </span>
               </span>
               {u.status === 'uploading' && (
-                <progress className="upload__progress" value={u.progress} max={1} />
+                <Progress className="upload__progress" value={u.progress} />
               )}
               {u.status === 'failed' && (
                 <button
@@ -348,21 +352,22 @@ export function Composer({
       ) : voiceProgress !== null ? (
         <div className="recorder">
           <span className="recorder__hint">{t('voice.sending')}</span>
-          <progress className="recorder__progress" value={voiceProgress} max={1} />
+          <Progress className="recorder__progress" value={voiceProgress} />
         </div>
       ) : (
         <div className="composer__field">
           {!editing && (
             <>
-              <button
-                type="button"
-                className="composer__attach"
-                aria-label={t('composer.attach')}
-                title={t('composer.attach')}
-                onClick={() => picker.current?.click()}
-              >
-                <Icon icon={Paperclip} />
-              </button>
+              <Tip label={t('composer.attach')}>
+                <button
+                  type="button"
+                  className="composer__attach"
+                  aria-label={t('composer.attach')}
+                  onClick={() => picker.current?.click()}
+                >
+                  <Icon icon={Paperclip} />
+                </button>
+              </Tip>
               <input
                 ref={picker}
                 type="file"
@@ -444,18 +449,19 @@ export function Composer({
             </ul>
           )}
           {!editing && !text && uploads.length === 0 && (
-            <button
-              type="button"
-              className="composer__voice"
-              aria-label={t('voice.record')}
-              title={t('voice.record')}
-              onClick={() => {
-                setError(null);
-                setRecording(true);
-              }}
-            >
-              <Icon icon={Mic} />
-            </button>
+            <Tip label={t('voice.record')}>
+              <button
+                type="button"
+                className="composer__voice"
+                aria-label={t('voice.record')}
+                onClick={() => {
+                  setError(null);
+                  setRecording(true);
+                }}
+              >
+                <Icon icon={Mic} />
+              </button>
+            </Tip>
           )}
         </div>
       )}

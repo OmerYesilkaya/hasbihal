@@ -31,13 +31,35 @@ import { formatTime, I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
 import { playChime } from './sound.ts';
 import { useGateway } from './useGateway.ts';
-import { Shield, X } from 'lucide-react';
+import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
+import { SettingsDialog } from './settings/SettingsDialog.tsx';
+import { Settings, Shield, X } from 'lucide-react';
+import { Toaster, toast } from 'sonner';
+import { ConfirmHost } from './components/confirm.tsx';
 import { Icon } from './components/Icon.tsx';
+import { Select } from './components/controls.tsx';
+import { Tip, TipProvider } from './components/Tip.tsx';
 
 export function App({ info }: { info: AppInfo }) {
   return (
     <I18nProvider>
-      <Root info={info} />
+      <TipProvider>
+        <Root info={info} />
+      </TipProvider>
+      <ConfirmHost />
+      <Toaster
+        position="bottom-right"
+        offset={16}
+        toastOptions={{
+          unstyled: true,
+          classNames: {
+            toast: 'toast',
+            title: 'toast__title',
+            error: 'toast--error',
+            success: 'toast--success',
+          },
+        }}
+      />
     </I18nProvider>
   );
 }
@@ -199,6 +221,14 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
     },
     [hangout],
   );
+  // Call problems (couldn't join, no microphone, …) as toasts, wherever the person is looking.
+  useEffect(
+    () =>
+      hangout.onNotice((notice) => {
+        toast.error(t(notice));
+      }),
+    [hangout, t],
+  );
   // A37: mute and deafen from anywhere, but only while in a call.
   const inCall = hangoutState.roomId !== null;
   useEffect(() => {
@@ -239,6 +269,21 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   // The chosen room, or the first one; a deleted or archived choice falls back the same way.
   const [profileOpen, setProfileOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // ⌘, (Ctrl+, on Windows) opens Settings, as in most desktop apps.
+  useEffect(() => {
+    const open = (e: KeyboardEvent) => {
+      if (e.key === ',' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        setSettingsOpen(true);
+      }
+    };
+    window.addEventListener('keydown', open);
+    return () => {
+      window.removeEventListener('keydown', open);
+    };
+  }, []);
+  const panels = usePanelsState();
   const rooms = activeRooms(state);
   const roomId = rooms.some((r) => r.id === chosenRoom) ? chosenRoom : (rooms[0]?.id ?? null);
   useEffect(() => {
@@ -261,71 +306,100 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
 
   return (
     <ChatProvider chat={chat}>
-      <div className="shell">
-        <aside className="sidebar">
-          <div className="brand">
-            <Tulip />
-            <div>
-              <div className="brand__name">{t('app.name')}</div>
-              <div className="brand__tagline">{t('app.tagline')}</div>
+      <PanelsProvider value={panels}>
+        <div
+          className="shell"
+          data-rooms-hidden={panels.panels.rooms ? undefined : true}
+          data-members-hidden={panels.panels.members ? undefined : true}
+        >
+          <aside className="sidebar" inert={!panels.panels.rooms}>
+            <div className="brand">
+              <Tulip />
+              <div>
+                <div className="brand__name">{t('app.name')}</div>
+                <div className="brand__tagline">{t('app.tagline')}</div>
+              </div>
             </div>
-          </div>
-          <hr className="divider" />
-          <RoomList selectedId={roomId} onSelect={setChosenRoom} />
-          {me.role === 'admin' && (
-            <button
-              type="button"
-              className="sidebar__admin"
-              onClick={() => {
-                setAdminOpen(true);
-              }}
-            >
-              <Icon icon={Shield} /> {t('admin.heading')}
-            </button>
-          )}
-          <UserPanel
-            user={me}
-            presence={state.presence.get(me.id) ?? 'offline'}
-            onSetPresence={setPresence}
-            onSignOut={onSignOut}
-            onOpenProfile={() => {
-              setProfileOpen(true);
-            }}
-          />
-        </aside>
-
-        <main className="content">
-          <div className="content__status">
-            <ConnectionBadge status={status} />
-          </div>
-          {linkWhileSignedIn && (
-            <div className="banner" role="status">
-              <span>{t('auth.linkWhileSignedIn')}</span>
-              <button type="button" className="link" onClick={onDismissLink} aria-label="×">
-                <Icon icon={X} />
+            <hr className="divider" />
+            <RoomList selectedId={roomId} onSelect={setChosenRoom} />
+            {me.role === 'admin' && (
+              <button
+                type="button"
+                className="sidebar__admin"
+                onClick={() => {
+                  setAdminOpen(true);
+                }}
+              >
+                <Icon icon={Shield} /> {t('admin.heading')}
               </button>
-            </div>
-          )}
-          {roomId ? (
-            <RoomView key={roomId} roomId={roomId} />
-          ) : (
-            <div className="content__placeholder">
-              <EmptyState>{t(me.role === 'admin' ? 'rooms.noneAdmin' : 'rooms.none')}</EmptyState>
-            </div>
-          )}
-        </main>
+            )}
+            <UserPanel
+              user={me}
+              presence={state.presence.get(me.id) ?? 'offline'}
+              onSetPresence={setPresence}
+              onSignOut={onSignOut}
+              onOpenProfile={() => {
+                setProfileOpen(true);
+              }}
+              onOpenSettings={() => {
+                setSettingsOpen(true);
+              }}
+            />
+          </aside>
 
-        <aside className="members" aria-label={t('members.heading')}>
-          <SearchPanel onOpenRoom={setChosenRoom}>
-            <header className="members__header">{t('members.heading')}</header>
-            <MemberList store={store} />
-          </SearchPanel>
-        </aside>
-      </div>
+          <main className="content">
+            <div className="content__status">
+              <ConnectionBadge status={status} />
+            </div>
+            {linkWhileSignedIn && (
+              <div className="banner" role="status">
+                <span>{t('auth.linkWhileSignedIn')}</span>
+                <button type="button" className="link" onClick={onDismissLink} aria-label="×">
+                  <Icon icon={X} />
+                </button>
+              </div>
+            )}
+            {roomId ? (
+              <RoomView key={roomId} roomId={roomId} />
+            ) : (
+              <>
+                <header className="content__header">
+                  <PanelToggle side="rooms" />
+                  <span className="content__spacer" />
+                  <PanelToggle side="members" />
+                </header>
+                <div className="content__placeholder">
+                  <EmptyState>
+                    {t(me.role === 'admin' ? 'rooms.noneAdmin' : 'rooms.none')}
+                  </EmptyState>
+                </div>
+              </>
+            )}
+          </main>
+
+          <aside
+            className="members"
+            aria-label={t('members.heading')}
+            inert={!panels.panels.members}
+          >
+            <SearchPanel onOpenRoom={setChosenRoom}>
+              <header className="members__header">{t('members.heading')}</header>
+              <MemberList store={store} />
+            </SearchPanel>
+          </aside>
+        </div>
+      </PanelsProvider>
       {adminOpen && (
         <AdminDialog
           onClose={() => {
             setAdminOpen(false);
+          }}
+        />
+      )}
+      {settingsOpen && (
+        <SettingsDialog
+          onClose={() => {
+            setSettingsOpen(false);
           }}
         />
       )}
@@ -346,20 +420,25 @@ interface UserPanelProps {
   onSetPresence: (mode: PresenceMode) => void;
   onSignOut: () => void;
   onOpenProfile: () => void;
+  onOpenSettings: () => void;
 }
 
-function UserPanel({ user, presence, onSetPresence, onSignOut, onOpenProfile }: UserPanelProps) {
+function UserPanel({
+  user,
+  presence,
+  onSetPresence,
+  onSignOut,
+  onOpenProfile,
+  onOpenSettings,
+}: UserPanelProps) {
   const t = useT();
   return (
     <div className="user-panel">
-      <button
-        type="button"
-        className="user-panel__profile"
-        title={t('profile.open')}
-        onClick={onOpenProfile}
-      >
-        <Avatar user={user} presence={presence} />
-      </button>
+      <Tip label={t('profile.open')}>
+        <button type="button" className="user-panel__profile" onClick={onOpenProfile}>
+          <Avatar user={user} presence={presence} />
+        </button>
+      </Tip>
       <div className="user-panel__names">
         <button
           type="button"
@@ -370,18 +449,29 @@ function UserPanel({ user, presence, onSetPresence, onSignOut, onOpenProfile }: 
           {user.displayName}
         </button>
         {/* Müsait or Meşgul (A21); Uzakta and Çevrimdışı follow from activity. */}
-        <select
+        <Select
           className="user-panel__presence"
-          aria-label={t('presence.choose')}
+          label={t('presence.choose')}
+          hideLabel
           value={presence === 'busy' ? 'busy' : 'available'}
-          onChange={(e) => {
-            onSetPresence(e.target.value === 'busy' ? 'busy' : 'available');
-          }}
-        >
-          <option value="available">{t(PRESENCE_LABEL.available)}</option>
-          <option value="busy">{t(PRESENCE_LABEL.busy)}</option>
-        </select>
+          onChange={onSetPresence}
+          options={(['available', 'busy'] as const).map((mode) => ({
+            value: mode,
+            label: t(PRESENCE_LABEL[mode]),
+          }))}
+        />
       </div>
+      <Tip label={t('settings.open')}>
+        <button
+          type="button"
+          className="icon-button user-panel__settings"
+          aria-label={t('settings.open')}
+          data-testid="open-settings"
+          onClick={onOpenSettings}
+        >
+          <Icon icon={Settings} />
+        </button>
+      </Tip>
       <button type="button" className="link user-panel__sign-out" onClick={onSignOut}>
         {t('auth.signOut')}
       </button>

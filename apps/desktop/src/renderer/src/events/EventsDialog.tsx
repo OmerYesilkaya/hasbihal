@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { MessageKey } from '@hasbihal/core';
 import type { Occurrence, RoomEvent, RsvpResponse } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { EmptyState } from '../components/EmptyState.tsx';
+import { Menu, MenuItem, MenuSeparator } from '../components/Popover.tsx';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatWhen, formatTime, useT } from '../i18n.tsx';
 import { EventForm, fromInputs, toInputs } from './EventForm.tsx';
 import type { EventsView } from './useEvents.ts';
-import { Check, Ellipsis, X } from 'lucide-react';
+import { CalendarClock, CalendarX, Check, Ellipsis, Pencil, Trash2, Undo2, X } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
+import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
+import { confirm } from '../components/confirm.tsx';
+import { Tip } from '../components/Tip.tsx';
 
 /**
  * A room's events (A15, A16): what's coming up for four weeks, with RSVPs per occurrence for
@@ -25,30 +29,17 @@ export function EventsDialog({
 }) {
   const t = useT();
   const { me, rooms } = useChatState();
-  const dialog = useRef<HTMLDialogElement>(null);
   const [editing, setEditing] = useState<RoomEvent | 'new' | null>(null);
   const isAdmin = me?.role === 'admin';
   const occurrences = view.occurrences.filter((o) => view.events.get(o.eventId)?.roomId === roomId);
 
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
-
   return (
-    <dialog
-      ref={dialog}
-      className="profile events-dialog"
-      aria-label={t('events.heading')}
-      data-testid="events-dialog"
-      onClose={onClose}
-    >
+    <Modal className="profile events-dialog" testId="events-dialog" onClose={onClose}>
       <header className="profile__header">
-        <h1>
+        <ModalTitle>
           {t('events.heading')} · #{rooms.get(roomId)?.name ?? ''}
-        </h1>
-        <button type="button" className="link" onClick={() => dialog.current?.close()}>
-          {t('attachment.close')}
-        </button>
+        </ModalTitle>
+        <ModalClose className="link">{t('attachment.close')}</ModalClose>
       </header>
       {editing ? (
         <section className="profile__section">
@@ -101,7 +92,7 @@ export function EventsDialog({
           </section>
         </>
       )}
-    </dialog>
+    </Modal>
   );
 }
 
@@ -166,14 +157,18 @@ function OccurrenceRow({
         {!occurrence.skipped && (
           <span className="occurrence__rsvps">
             {coming.length > 0 && (
-              <span title={coming.join(', ')} data-testid="rsvp-coming">
-                <Icon icon={Check} /> {coming.join(', ')}
-              </span>
+              <Tip label={coming.join(', ')}>
+                <span data-testid="rsvp-coming">
+                  <Icon icon={Check} /> {coming.join(', ')}
+                </span>
+              </Tip>
             )}
             {notComing.length > 0 && (
-              <span title={notComing.join(', ')} data-testid="rsvp-not-coming">
-                <Icon icon={X} /> {notComing.join(', ')}
-              </span>
+              <Tip label={notComing.join(', ')}>
+                <span data-testid="rsvp-not-coming">
+                  <Icon icon={X} /> {notComing.join(', ')}
+                </span>
+              </Tip>
             )}
           </span>
         )}
@@ -234,57 +229,60 @@ function OccurrenceRow({
           </>
         )}
         {isAdmin && (
-          <details className="occurrence__admin">
-            <summary aria-label={t('events.manage')}>
-              <Icon icon={Ellipsis} />
-            </summary>
-            <div
-              className="occurrence__menu"
-              // Any choice closes the menu.
-              onClick={(e) => {
-                const details = e.currentTarget.parentElement;
-                if (details instanceof HTMLDetailsElement) details.open = false;
-              }}
-            >
-              {occurrence.skipped || occurrence.moved ? (
-                <button type="button" className="link" onClick={() => void call('DELETE', base)}>
-                  {t('events.restore')}
+          <Menu
+            label={t('events.manage')}
+            trigger={
+              <Tip label={t('events.manage')}>
+                <button type="button" className="icon-button" aria-label={t('events.manage')}>
+                  <Icon icon={Ellipsis} />
                 </button>
+              </Tip>
+            }
+          >
+            <>
+              {occurrence.skipped || occurrence.moved ? (
+                <MenuItem icon={<Icon icon={Undo2} />} onSelect={() => void call('DELETE', base)}>
+                  {t('events.restore')}
+                </MenuItem>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={() => void call('PUT', base, { kind: 'skipped' })}
+                  <MenuItem
+                    icon={<Icon icon={CalendarX} />}
+                    onSelect={() => void call('PUT', base, { kind: 'skipped' })}
                   >
                     {t('events.skip')}
-                  </button>
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={() => {
+                  </MenuItem>
+                  <MenuItem
+                    icon={<Icon icon={CalendarClock} />}
+                    onSelect={() => {
                       setMoving((m) => !m);
                     }}
                   >
                     {t('events.move')}
-                  </button>
+                  </MenuItem>
                 </>
               )}
-              <button type="button" className="link" onClick={onEdit}>
+              <MenuItem icon={<Icon icon={Pencil} />} onSelect={onEdit}>
                 {t('events.edit')}
-              </button>
-              <button
-                type="button"
-                className="link link--danger"
-                onClick={() => {
-                  if (window.confirm(t('events.deleteConfirm', { title: event.title })))
-                    void call('DELETE', `/events/${event.id}`);
-                }}
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem
+                icon={<Icon icon={Trash2} />}
+                danger
+                onSelect={() =>
+                  void confirm({
+                    message: t('events.deleteConfirm', { title: event.title }),
+                    action: t('events.delete'),
+                    danger: true,
+                  }).then((yes) => {
+                    if (yes) void call('DELETE', `/events/${event.id}`);
+                  })
+                }
               >
                 {t('events.delete')}
-              </button>
-            </div>
-          </details>
+              </MenuItem>
+            </>
+          </Menu>
         )}
       </div>
     </li>

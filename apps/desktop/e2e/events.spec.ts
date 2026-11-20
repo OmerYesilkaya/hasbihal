@@ -12,7 +12,8 @@ test('plans a weekly event: create, RSVP, skip one (A15, A16)', async ({ desktop
   await dialog.getByRole('button', { name: 'Etkinlik ekle' }).click();
   await dialog.getByLabel('Başlık').fill('Ders');
   await dialog.getByLabel('Açıklama').fill('Matematik, 5. ünite');
-  await dialog.getByLabel('Tekrar').selectOption({ label: 'Her hafta' });
+  await dialog.getByRole('combobox', { name: 'Tekrar' }).click();
+  await page.getByRole('option', { name: 'Her hafta' }).click();
   await dialog.getByLabel('Ece Test').check();
   await dialog.getByRole('button', { name: 'Kaydet' }).click();
 
@@ -29,8 +30,8 @@ test('plans a weekly event: create, RSVP, skip one (A15, A16)', async ({ desktop
   await expect(occurrences.first().getByTestId('rsvp-coming')).toHaveText('Emre Test');
 
   const second = occurrences.nth(1);
-  await second.getByLabel('Etkinliği yönet').click();
-  await second.getByRole('button', { name: 'Bu seferlik atla' }).click();
+  await second.getByRole('button', { name: 'Etkinliği yönet' }).click();
+  await page.getByRole('menuitem', { name: 'Bu seferlik atla' }).click();
   await expect(second).toHaveAttribute('data-skipped', 'true');
   await expect(second).toContainText('yapılmayacak');
   await snap(page, '17-events');
