@@ -5,13 +5,15 @@ import { Check } from 'lucide-react';
 interface PopoverProps {
   /** The accessible name of the panel. */
   label: string;
-  /** Below the button, lined up with its right edge; or above it, centred. */
-  placement?: 'below-end' | 'above';
+  /** Below the button, lined up with its right edge; above it, centred or lined up right. */
+  placement?: 'below-end' | 'above' | 'above-end';
   className?: string;
   /** The button that opens it. */
   trigger: ReactElement;
   /** Rendered only while open; `close` closes it. */
   children: (close: () => void) => ReactNode;
+  /** Where focus goes on closing, instead of back to the button (e.g. a text field). */
+  onCloseFocus?: () => void;
 }
 
 /**
@@ -24,6 +26,7 @@ export function Popover({
   className,
   trigger,
   children,
+  onCloseFocus,
 }: PopoverProps) {
   const [open, setOpen] = useState(false);
   return (
@@ -33,8 +36,13 @@ export function Popover({
         <RadixPopover.Content
           aria-label={label}
           className={['popover', className].filter(Boolean).join(' ')}
-          side={placement === 'above' ? 'top' : 'bottom'}
+          side={placement === 'below-end' ? 'bottom' : 'top'}
           align={placement === 'above' ? 'center' : 'end'}
+          onCloseAutoFocus={(e) => {
+            if (!onCloseFocus) return;
+            e.preventDefault();
+            onCloseFocus();
+          }}
           sideOffset={6}
           collisionPadding={8}
         >
