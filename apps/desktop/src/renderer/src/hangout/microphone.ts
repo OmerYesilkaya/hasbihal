@@ -40,6 +40,7 @@ export class Microphone {
   #pttHeld = false;
   #lastLoud = 0;
   #levelDb = -100;
+  #open = false;
   /** The processed track to publish. */
   readonly track: MediaStreamTrack;
   /** DeepFilterNet is available on this machine (it loaded and keeps up). */
@@ -126,6 +127,14 @@ export class Microphone {
     return new Microphone({ context, input, raw, clean, gate, analyser, track, dispose, settings });
   }
 
+  /**
+   * Speaking as others hear it: the gate is open (not muted; voice, or the push-to-talk key) and
+   * the voice is above the sensitivity line. Drives one's own speaking ring (#35).
+   */
+  get speaking(): boolean {
+    return this.#open && this.#levelDb >= this.#settings.thresholdDb;
+  }
+
   /** The level before the gate, in dBFS: for the sensitivity meter. */
   get levelDb(): number {
     return this.#levelDb;
@@ -177,6 +186,7 @@ export class Microphone {
     const open =
       !this.#muted &&
       (this.#settings.mode === 'ptt' ? this.#pttHeld : now - this.#lastLoud < HOLD_MS);
+    this.#open = open;
     // A short ramp instead of a jump: no clicks when the gate moves.
     this.#gate.gain.setTargetAtTime(open ? 1 : 0, this.#context.currentTime, 0.01);
   }

@@ -28,6 +28,11 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
     'true',
     { timeout: 15_000 },
   );
+  // Her own ring too, from her microphone's gate (#35).
+  await expect(zeynep.getByTestId('tile').filter({ hasText: 'Sen' })).toHaveAttribute(
+    'data-speaking',
+    'true',
+  );
 
   // Ömer mutes; Zeynep sees it.
   await omer.getByRole('button', { name: 'Mikrofonu kapat' }).click();
@@ -37,9 +42,22 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
 
   // Zeynep turns her camera on; Ömer gets video.
   await zeynep.getByRole('button', { name: 'Kamerayı aç' }).click();
-  await expect(
-    omer.getByTestId('tile').filter({ hasText: 'Zeynep Test' }).locator('video'),
-  ).toBeVisible();
+  const zeynepTile = omer.getByTestId('tile').filter({ hasText: 'Zeynep Test' });
+  await expect(zeynepTile.locator('video')).toBeVisible();
+  // The ring still shows over her video (#35): it's drawn above it, not under.
+  await expect(zeynepTile).toHaveAttribute('data-speaking', 'true');
+  await expect
+    .poll(() =>
+      zeynepTile.evaluate(
+        (el) =>
+          (
+            globalThis as unknown as {
+              getComputedStyle(e: unknown, pseudo: string): { boxShadow: string };
+            }
+          ).getComputedStyle(el, '::after').boxShadow,
+      ),
+    )
+    .toMatch(/rgb\((?!0, 0, 0)/);
   await snap(omer, '10-hangout');
 
   // Zeynep shares her screen. Ömer sees it live everywhere, and watches only when he chooses.
