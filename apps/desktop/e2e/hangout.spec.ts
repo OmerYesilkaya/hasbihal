@@ -33,6 +33,11 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
     'data-speaking',
     'true',
   );
+  // And in the sidebar, around her small avatar under the room (#41).
+  await expect(omer.getByTestId('voice-member').filter({ hasText: 'Zeynep Test' })).toHaveAttribute(
+    'data-speaking',
+    'true',
+  );
 
   // Ömer mutes; Zeynep sees it.
   await omer.getByRole('button', { name: 'Mikrofonu kapat' }).click();

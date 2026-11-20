@@ -2127,6 +2127,17 @@ input::-webkit-calendar-picker-indicator:hover {
   color: var(--hb-text-secondary);
 }
 
+/* #41: in your own call, the same gold ring as the tiles, around the small avatar. */
+.room__voice li .avatar {
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 200ms ease-out;
+}
+
+.room__voice li[data-speaking] .avatar {
+  box-shadow: 0 0 0 2px var(--hb-accent);
+  transition-duration: 60ms;
+}
+
 .room__voice .avatar {
   width: 20px;
   height: 20px;
