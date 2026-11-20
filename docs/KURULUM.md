@@ -23,11 +23,11 @@ Başlamadan önce **davet bağlantın** hazır olsun (`hasbihal://invite/…`). 
 
 1. Davet bağlantına tıkla; Hasbihal açılır ve **Hesap oluştur** ekranı gelir. Bağlantı açılmazsa, bağlantıyı kopyalayıp **Davet bağlantın mı var? Hesap oluştur** ekranındaki kutuya yapıştır.
 2. Adını, bir kullanıcı adını ve en az 10 karakterlik bir parola seç. Uzun, akılda kalan bir cümle en iyisi.
-3. Hepsi bu. İstersen sağ alttaki adına tıklayıp bir fotoğraf ekle.
+3. Hepsi bu. İstersen sol alttaki adına tıklayıp **Profili düzenle**'den bir fotoğraf ekle.
 
 ## Bilmekte fayda var
 
 - **Pencereyi kapatınca Hasbihal kapanmaz:** arka planda açık kalır (Mac'te üst menü çubuğunda, Windows'ta saatin yanındaki simgeler arasında), böylece çağrılar ve hatırlatmalar gelir. Tamamen çıkmak için o simgeye tıklayıp **Hasbihal'dan çık**'ı seç.
-- **Bilgisayar açılınca kendiliğinden başlar.** İstemezsen profilinden ya da o simgenin menüsünden kapatabilirsin.
+- **Bilgisayar açılınca kendiliğinden başlar.** İstemezsen **Ayarlar**'dan ya da o simgenin menüsünden kapatabilirsin.
 - **Yeni sürüm** çıktığında Hasbihal sana söyler. Yeni dosyayı indirip aynı adımlarla kur; hesabın ve mesajların yerinde kalır.
 - **Parolanı unutursan**, Hasbihal'i kuran kişiden bir kurtarma bağlantısı iste.
