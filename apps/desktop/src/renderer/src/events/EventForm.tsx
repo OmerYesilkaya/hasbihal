@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { fromWall, toWall, type MessageKey } from '@hasbihal/core';
-import { REMINDER_CHOICES, RoomEvent, type Recurrence } from '@hasbihal/protocol';
-import { api } from '../api.ts';
+import type { RoomEvent } from '@hasbihal/protocol';
+import { REMINDER_CHOICES, type Recurrence } from '@hasbihal/protocol';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
 import { Checkbox, Select } from '../components/controls.tsx';
@@ -38,7 +38,7 @@ export function EventForm({
 }) {
   const t = useT();
   const id = useId();
-  const { info } = useChat();
+  const { client } = useChat();
   const { members } = useChatState();
   const startInputs = toInputs(event?.startsAt ?? nextHour());
   const [title, setTitle] = useState(event?.title ?? '');
@@ -82,12 +82,9 @@ export function EventForm({
       reminderMin: reminder,
       inviteeIds: invitees,
     };
-    const result = await api(
-      info.serverUrl,
-      event ? 'PUT' : 'POST',
-      event ? `/events/${event.id}` : '/events',
-      { body, schema: RoomEvent },
-    );
+    const result = await (event
+      ? client.events.update(event.id, body)
+      : client.events.create(body));
     setSaving(false);
     if (result.ok) onDone();
     else setError('error.unexpected');

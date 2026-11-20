@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { MessageKey } from '@hasbihal/core';
-import {
-  InviteList,
-  OneTimeLink,
-  type PendingInvite,
-  type Role,
-  type User,
-} from '@hasbihal/protocol';
-import { api } from '../api.ts';
+import type { OneTimeLink } from '@hasbihal/protocol';
+import { type PendingInvite, type Role, type User } from '@hasbihal/protocol';
 import { Avatar } from '../components/Avatar.tsx';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
@@ -71,7 +65,7 @@ function LinkBox({ link, hint }: { link: OneTimeLink; hint: MessageKey }) {
 
 function Invites() {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const { members } = useChatState();
   const [role, setRole] = useState<Role>('member');
   const [created, setCreated] = useState<OneTimeLink | null>(null);
@@ -85,20 +79,17 @@ function Invites() {
   };
   useEffect(() => {
     let current = true;
-    void api(info.serverUrl, 'GET', '/admin/invites', { schema: InviteList }).then((result) => {
-      if (current && result.ok && result.value) setPending(result.value.invites);
+    void client.admin.invites().then((result) => {
+      if (current && result.ok) setPending(result.value.invites);
     });
     return () => {
       current = false;
     };
-  }, [info.serverUrl, revision]);
+  }, [client, revision]);
 
   const create = async () => {
-    const result = await api(info.serverUrl, 'POST', '/invites', {
-      body: { role },
-      schema: OneTimeLink,
-    });
-    if (!result.ok || !result.value) {
+    const result = await client.invites.create({ role });
+    if (!result.ok) {
       setError('error.unexpected');
       return;
     }
@@ -148,9 +139,7 @@ function Invites() {
               <button
                 type="button"
                 className="link link--danger"
-                onClick={() =>
-                  void api(info.serverUrl, 'DELETE', `/admin/invites/${invite.id}`).then(reload)
-                }
+                onClick={() => void client.admin.revokeInvite(invite.id).then(reload)}
               >
                 {t('admin.revoke')}
               </button>
@@ -164,7 +153,7 @@ function Invites() {
 
 function Members() {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const { members, me } = useChatState();
   const [recovery, setRecovery] = useState<{ user: User; link: OneTimeLink } | null>(null);
   const [error, setError] = useState<MessageKey | null>(null);
@@ -208,9 +197,7 @@ function Members() {
                 className="link"
                 onClick={() =>
                   void run(
-                    api(info.serverUrl, 'PUT', `/admin/users/${m.id}/role`, {
-                      body: { role: m.role === 'admin' ? 'member' : 'admin' },
-                    }),
+                    client.admin.setRole(m.id, { role: m.role === 'admin' ? 'member' : 'admin' }),
                   )
                 }
               >
@@ -220,10 +207,8 @@ function Members() {
                 type="button"
                 className="link"
                 onClick={() =>
-                  void api(info.serverUrl, 'POST', `/users/${m.id}/recovery-link`, {
-                    schema: OneTimeLink,
-                  }).then((result) => {
-                    if (result.ok && result.value) setRecovery({ user: m, link: result.value });
+                  void client.admin.recoveryLink(m.id).then((result) => {
+                    if (result.ok) setRecovery({ user: m, link: result.value });
                     else setError('error.unexpected');
                   })
                 }
@@ -240,7 +225,7 @@ function Members() {
                       action: t('admin.remove'),
                       danger: true,
                     }).then((yes) => {
-                      if (yes) void run(api(info.serverUrl, 'POST', `/admin/users/${m.id}/remove`));
+                      if (yes) void run(client.admin.removeUser(m.id));
                     })
                   }
                 >
@@ -257,7 +242,7 @@ function Members() {
 
 function Rooms() {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const { rooms } = useChatState();
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState<MessageKey | null>(null);
@@ -282,9 +267,7 @@ function Rooms() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   run(
-                    api(info.serverUrl, 'PATCH', `/rooms/${room.id}`, {
-                      body: { name: renaming.name },
-                    }).then((r) => {
+                    client.rooms.update(room.id, { name: renaming.name }).then((r) => {
                       if (r.ok) setRenaming(null);
                       return r;
                     }),
@@ -327,11 +310,9 @@ function Rooms() {
                 className="link"
                 onClick={() => {
                   run(
-                    api(
-                      info.serverUrl,
-                      'POST',
-                      `/rooms/${room.id}/${room.archivedAt ? 'unarchive' : 'archive'}`,
-                    ),
+                    room.archivedAt
+                      ? client.rooms.unarchive(room.id)
+                      : client.rooms.archive(room.id),
                   );
                 }}
               >
@@ -346,7 +327,7 @@ function Rooms() {
                     action: t('admin.deleteRoom'),
                     danger: true,
                   }).then((yes) => {
-                    if (yes) run(api(info.serverUrl, 'DELETE', `/rooms/${room.id}`));
+                    if (yes) run(client.rooms.delete(room.id));
                   })
                 }
               >

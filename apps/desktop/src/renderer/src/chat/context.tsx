@@ -2,11 +2,14 @@ import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNod
 import type { ChatState, ChatStore } from '@hasbihal/core';
 import type { User } from '@hasbihal/protocol';
 import type { AppInfo } from '../../../shared/app-info.ts';
+import type { Client } from '../client.ts';
 import type { HangoutSession, HangoutState } from '../hangout/session.ts';
 
 /** What the chat screens share: the store, the server, and the live connection. */
 export interface Chat {
   info: AppInfo;
+  /** The server's HTTP API (#46). */
+  client: Client;
   store: ChatStore;
   /** Tells others this member is typing in a room (throttle at the caller). */
   typing: (roomId: string) => void;

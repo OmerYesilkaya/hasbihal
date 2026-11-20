@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import { roomMessages } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
-import { api } from '../api.ts';
 import { useT } from '../i18n.tsx';
 import { EventChip } from '../events/EventChip.tsx';
 import { EventsDialog } from '../events/EventsDialog.tsx';
@@ -37,7 +36,7 @@ function useWindowFocused(): boolean {
 /** One room's chat: header, history, typing, composer. Keyed by room, so state resets per room. */
 export function RoomView({ roomId }: { roomId: string }) {
   const t = useT();
-  const { info, store } = useChat();
+  const { client, store } = useChat();
   const state = useChatState();
   const room = state.rooms.get(roomId);
   const [readMarkerAtOpen] = useState(() => room?.lastReadMessageId ?? null);
@@ -59,8 +58,8 @@ export function RoomView({ roomId }: { roomId: string }) {
   useEffect(() => {
     if (!latest || !atBottom || !focused || latest.id === marker) return;
     store.setReadMarker(roomId, latest.id); // the badge clears now, not after the round trip
-    void api(info.serverUrl, 'POST', `/rooms/${roomId}/read`, { body: { messageId: latest.id } });
-  }, [latest, atBottom, focused, marker, roomId, store, info.serverUrl]);
+    void client.rooms.markRead(roomId, { messageId: latest.id });
+  }, [latest, atBottom, focused, marker, roomId, store, client]);
 
   const reply = useCallback((message: Message) => {
     setEditing(null);

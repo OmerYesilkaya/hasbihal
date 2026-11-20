@@ -1,7 +1,5 @@
 import { useId, useState } from 'react';
 import { activeRooms } from '@hasbihal/core';
-import { Room } from '@hasbihal/protocol';
-import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { nextOccurrence, useEvents } from '../events/useEvents.ts';
 import { dayKey, formatTime, useT } from '../i18n.tsx';
@@ -26,7 +24,7 @@ export function RoomList({
   // A16: rooms with an event today show its time.
   const events = useEvents(null, 1);
   const today = dayKey(new Date().toISOString());
-  const { info, store } = useChat();
+  const { client, store } = useChat();
   const state = useChatState();
   const rooms = activeRooms(state);
   // #41: in the call you're in, who is speaking (the same as the call's tiles; other rooms'
@@ -41,8 +39,8 @@ export function RoomList({
   const [error, setError] = useState(false);
 
   const create = async () => {
-    const result = await api(info.serverUrl, 'POST', '/rooms', { body: { name }, schema: Room });
-    if (!result.ok || !result.value) {
+    const result = await client.rooms.create({ name });
+    if (!result.ok) {
       setError(true);
       return;
     }

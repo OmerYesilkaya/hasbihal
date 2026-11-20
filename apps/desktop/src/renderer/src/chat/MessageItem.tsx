@@ -1,7 +1,6 @@
 import { memo, useState } from 'react';
 import { parseMarkdown, toPlainText } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
-import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { formatDateTime, formatTime, useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
@@ -50,7 +49,7 @@ export const MessageItem = memo(function MessageItem({
   onEdit,
 }: MessageItemProps) {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const { members, me } = useChatState();
   const author = members.get(message.authorId);
   const mine = message.authorId === me?.id;
@@ -58,11 +57,9 @@ export const MessageItem = memo(function MessageItem({
   const replyAuthor = message.replyTo ? members.get(message.replyTo.authorId) : undefined;
 
   const react = (emoji: string, add: boolean) => {
-    void api(
-      info.serverUrl,
-      add ? 'PUT' : 'DELETE',
-      `/messages/${message.id}/reactions/${encodeURIComponent(emoji)}`,
-    );
+    void (add
+      ? client.messages.react(message.id, emoji)
+      : client.messages.unreact(message.id, emoji));
   };
 
   const remove = async () => {
@@ -73,7 +70,7 @@ export const MessageItem = memo(function MessageItem({
         danger: true,
       })
     )
-      void api(info.serverUrl, 'DELETE', `/messages/${message.id}`);
+      void client.messages.delete(message.id);
   };
 
   return (

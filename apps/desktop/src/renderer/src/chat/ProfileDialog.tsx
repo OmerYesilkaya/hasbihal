@@ -1,14 +1,6 @@
 import { useEffect, useId, useRef, useState, type SubmitEvent } from 'react';
-import {
-  DisplayName,
-  Password,
-  SessionList,
-  User,
-  AVATAR_MAX_BYTES,
-  type Session,
-} from '@hasbihal/protocol';
+import { DisplayName, Password, User, AVATAR_MAX_BYTES, type Session } from '@hasbihal/protocol';
 import type { MessageKey } from '@hasbihal/core';
-import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
@@ -41,7 +33,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
 
 function PhotoSection({ me }: { me: User }) {
   const t = useT();
-  const { info, store } = useChat();
+  const { client, store } = useChat();
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<MessageKey | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,7 +73,7 @@ function PhotoSection({ me }: { me: User }) {
             }
             const form = new FormData();
             form.append('file', file);
-            void apply(api(info.serverUrl, 'PUT', '/me/avatar', { body: form, schema: User }));
+            void apply(client.me.setAvatar(form));
           }}
         />
         <button
@@ -97,9 +89,7 @@ function PhotoSection({ me }: { me: User }) {
             type="button"
             className="link profile__remove"
             disabled={busy}
-            onClick={() =>
-              void apply(api(info.serverUrl, 'DELETE', '/me/avatar', { schema: User }))
-            }
+            onClick={() => void apply(client.me.removeAvatar())}
           >
             {t('profile.removePhoto')}
           </button>
@@ -113,7 +103,7 @@ function PhotoSection({ me }: { me: User }) {
 function NameSection({ me }: { me: User }) {
   const t = useT();
   const id = useId();
-  const { info, store } = useChat();
+  const { client, store } = useChat();
   const [name, setName] = useState(me.displayName);
   const [state, setState] = useState<'idle' | 'invalid' | 'failed'>('idle');
 
@@ -123,11 +113,8 @@ function NameSection({ me }: { me: User }) {
       setState('invalid');
       return;
     }
-    const result = await api(info.serverUrl, 'PATCH', '/me', {
-      body: { displayName: name },
-      schema: User,
-    });
-    if (result.ok && result.value) {
+    const result = await client.me.update({ displayName: name });
+    if (result.ok) {
       store.apply({ type: 'member_updated', user: result.value });
       setState('idle');
       toast.success(t('profile.saved'));
@@ -169,7 +156,7 @@ function NameSection({ me }: { me: User }) {
 
 function PasswordSection() {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [message, setMessage] = useState<{ key: MessageKey; ok: boolean } | null>(null);
@@ -180,9 +167,7 @@ function PasswordSection() {
       setMessage({ key: 'error.passwordTooShort', ok: false });
       return;
     }
-    const result = await api(info.serverUrl, 'POST', '/me/password', {
-      body: { currentPassword: current, newPassword: next },
-    });
+    const result = await client.me.changePassword({ currentPassword: current, newPassword: next });
     if (result.ok) {
       setCurrent('');
       setNext('');
@@ -242,21 +227,21 @@ function PasswordSection() {
 
 function SessionsSection() {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const [sessions, setSessions] = useState<Session[] | null>(null);
 
   useEffect(() => {
     let current = true;
-    void api(info.serverUrl, 'GET', '/me/sessions', { schema: SessionList }).then((result) => {
-      if (current && result.ok && result.value) setSessions(result.value.sessions);
+    void client.me.sessions().then((result) => {
+      if (current && result.ok) setSessions(result.value.sessions);
     });
     return () => {
       current = false;
     };
-  }, [info.serverUrl]);
+  }, [client]);
 
   const revoke = async (id: string) => {
-    const result = await api(info.serverUrl, 'DELETE', `/me/sessions/${id}`);
+    const result = await client.me.revokeSession(id);
     if (result.ok) setSessions((list) => list?.filter((s) => s.id !== id) ?? null);
   };
 
