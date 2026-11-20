@@ -332,8 +332,7 @@ export const tr = {
   'settings.language.tr': 'Türkçe',
   'settings.language.en': 'English',
   'settings.languageHint': 'Değişiklik hemen uygulanır.',
-  'settings.voiceHint':
-    'Bu ayarlar bütün sesli sohbetlerde geçerli. Ses seviyesi göstergesi sohbetteyken hareket eder.',
+  'settings.voiceHint': 'Bu ayarlar bütün sesli sohbetlerde geçerli.',
   'emoji.more': 'Tüm emojiler',
   'emoji.search': 'Emoji ara',
   'emoji.groups': 'Emoji grupları',
@@ -349,6 +348,15 @@ export const tr = {
   'emoji.group.8': 'Semboller',
   'emoji.group.9': 'Bayraklar',
   'confirm.cancel': 'Vazgeç',
+  'user.menu': 'Durum ve hesap',
+  'profile.edit': 'Profili düzenle',
+  'settings.micTest': 'Mikrofonu dene',
+  'settings.micTestStop': 'Denemeyi bitir',
+  'settings.micTestHint':
+    'Kendini sohbette duyulacağın gibi duyarsın. Ses geri dönmesin diye kulaklık tak.',
+  'settings.cameraPreview': 'Kamerayı göster',
+  'settings.cameraPreviewStop': 'Kamerayı kapat',
+  'hangout.micTestFailed': 'Mikrofon açılamadı. İzinleri ve seçili mikrofonu kontrol et.',
 } as const;
 
 export type MessageKey = keyof typeof tr;

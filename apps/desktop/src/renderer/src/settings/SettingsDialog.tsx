@@ -6,7 +6,7 @@ import { VoiceSettingsFields } from '../hangout/VoiceSettings.tsx';
 import { systemLocale, useLanguage, useT } from '../i18n.tsx';
 import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
 import { Tabs } from '../components/Tabs.tsx';
-import { RadioGroup, Switch } from '../components/controls.tsx';
+import { Select, Switch } from '../components/controls.tsx';
 
 type Tab = 'general' | 'voice';
 
@@ -42,7 +42,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <section className="profile__section">
-            <VoiceSettingsFields />
+            <VoiceSettingsFields cameraPreview />
             <p className="field__hint">{t('settings.voiceHint')}</p>
           </section>
         )}
@@ -57,7 +57,8 @@ function LanguageSection() {
   const { choice, setChoice } = useLanguage();
   return (
     <section className="profile__section">
-      <RadioGroup
+      <Select
+        className="settings__language"
         label={t('settings.language')}
         value={choice ?? 'system'}
         onChange={(value) => {

@@ -4,6 +4,7 @@ import { createPerson, expect, memberRow, snap, test } from './support.ts';
 test('edits the profile: photo, display name, devices', async ({ desktop }, testInfo) => {
   const page = await desktop.signedIn(await createPerson('Hatice Test'));
   await page.getByTestId('current-user').click();
+  await page.getByRole('menuitem', { name: 'Profili düzenle' }).click();
   const dialog = page.getByRole('dialog', { name: 'Profil' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('session').filter({ hasText: 'Bu cihaz' })).toHaveCount(1);

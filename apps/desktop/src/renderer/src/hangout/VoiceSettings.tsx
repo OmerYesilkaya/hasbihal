@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Mic, MicOff, Video, VideoOff } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 import { useChat, useHangout } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
 import { RadioGroup, Select, Slider, Switch } from '../components/controls.tsx';
@@ -18,9 +20,10 @@ const keyLabel = (code: string) =>
 
 /**
  * Devices, noise suppression, and how the mic opens (A29, A37): in the call's settings popover
- * and on the Settings page.
+ * and on the Settings page. Outside a call it can play the microphone back; `cameraPreview`
+ * adds a look through the camera (the Settings page has the room for it).
  */
-export function VoiceSettingsFields() {
+export function VoiceSettingsFields({ cameraPreview = false }: { cameraPreview?: boolean }) {
   const t = useT();
   const { hangout } = useChat();
   const call = useHangout();
@@ -84,9 +87,12 @@ export function VoiceSettingsFields() {
       {deviceSelect('audioinput', t('settings.microphone'), settings.deviceId, (deviceId) => {
         hangout.updateSettings({ deviceId });
       })}
+      {/* In a call the meter already shows the real microphone. */}
+      {call.roomId === null && <MicTest />}
       {deviceSelect('videoinput', t('settings.camera'), settings.cameraId, (cameraId) => {
         hangout.updateSettings({ cameraId });
       })}
+      {cameraPreview && <CameraPreview cameraId={settings.cameraId} />}
       <Switch
         checked={settings.noiseSuppression && call.noiseSuppressionAvailable}
         disabled={!call.noiseSuppressionAvailable}
@@ -150,6 +156,93 @@ export function VoiceSettingsFields() {
         </div>
       )}
       <p className="field__hint">{t('settings.shortcuts', SHORTCUT_LABELS)}</p>
+    </div>
+  );
+}
+
+/** "Mikrofonu dene": hear yourself as a call would send you, and see the level move. */
+function MicTest() {
+  const t = useT();
+  const { hangout } = useChat();
+  const { micTest } = useHangout();
+  // Closing the settings ends the test: the microphone never stays open unseen.
+  useEffect(
+    () => () => {
+      hangout.stopMicTest();
+    },
+    [hangout],
+  );
+  return (
+    <div className="device-test">
+      <button
+        type="button"
+        className={micTest ? 'button button--primary' : 'button'}
+        data-testid="mic-test"
+        onClick={() => {
+          if (micTest) hangout.stopMicTest();
+          else void hangout.startMicTest();
+        }}
+      >
+        <Icon icon={micTest ? MicOff : Mic} />{' '}
+        {micTest ? t('settings.micTestStop') : t('settings.micTest')}
+      </button>
+      <p className="field__hint">{t('settings.micTestHint')}</p>
+    </div>
+  );
+}
+
+/** A look through the chosen camera; it's on only while shown and asked for. */
+function CameraPreview({ cameraId }: { cameraId: string | null }) {
+  const t = useT();
+  const [on, setOn] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const video = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!on) return;
+    let stream: MediaStream | null = null;
+    let current = true;
+    void navigator.mediaDevices
+      .getUserMedia({ video: cameraId ? { deviceId: { exact: cameraId } } : true })
+      .then(
+        (s) => {
+          if (!current) {
+            for (const track of s.getTracks()) track.stop();
+            return;
+          }
+          stream = s;
+          if (video.current) video.current.srcObject = s;
+        },
+        () => {
+          if (current) setFailed(true);
+        },
+      );
+    return () => {
+      current = false;
+      for (const track of stream?.getTracks() ?? []) track.stop();
+    };
+  }, [on, cameraId]);
+
+  return (
+    <div className="device-test">
+      <button
+        type="button"
+        className={on ? 'button button--primary' : 'button'}
+        data-testid="camera-preview"
+        onClick={() => {
+          setFailed(false);
+          setOn((v) => !v);
+        }}
+      >
+        <Icon icon={on ? VideoOff : Video} />{' '}
+        {on ? t('settings.cameraPreviewStop') : t('settings.cameraPreview')}
+      </button>
+      {on &&
+        (failed ? (
+          <p className="field__error">{t('hangout.cameraFailed')}</p>
+        ) : (
+          <video ref={video} className="device-test__video" autoPlay muted playsInline />
+        ))}
     </div>
   );
 }

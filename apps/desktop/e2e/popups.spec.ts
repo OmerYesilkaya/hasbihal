@@ -25,6 +25,7 @@ test('popups and dialogs close on a click outside', async ({ desktop }) => {
 
   // A modal dialog.
   await page.getByTestId('current-user').click();
+  await page.getByRole('menuitem', { name: 'Profili düzenle' }).click();
   const profile = page.getByRole('dialog', { name: 'Profil' });
   await expect(profile).toBeVisible();
   await closesOnOutsideClick(profile);

@@ -33,12 +33,12 @@ import { playChime } from './sound.ts';
 import { useGateway } from './useGateway.ts';
 import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
 import { SettingsDialog } from './settings/SettingsDialog.tsx';
-import { Settings, Shield, X } from 'lucide-react';
+import { LogOut, Settings, Shield, UserRound, X } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { ConfirmHost } from './components/confirm.tsx';
 import { Icon } from './components/Icon.tsx';
-import { Select } from './components/controls.tsx';
 import { Tip, TipProvider } from './components/Tip.tsx';
+import { Menu, MenuItem, MenuLabel, MenuRadioGroup, MenuSeparator } from './components/Popover.tsx';
 
 export function App({ info }: { info: AppInfo }) {
   return (
@@ -243,7 +243,9 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   );
   // Push-to-talk while the app is focused (a global one needs a native keyboard hook).
   const pttKey =
-    hangoutState.settings.mode === 'ptt' && inCall ? hangoutState.settings.pttKey : null;
+    hangoutState.settings.mode === 'ptt' && (inCall || hangoutState.micTest)
+      ? hangoutState.settings.pttKey
+      : null;
   useEffect(() => {
     if (!pttKey) return;
     const down = (e: KeyboardEvent) => {
@@ -432,35 +434,56 @@ function UserPanel({
   onOpenSettings,
 }: UserPanelProps) {
   const t = useT();
+  const mode = presence === 'busy' ? 'busy' : 'available';
   return (
     <div className="user-panel">
-      <Tip label={t('profile.open')}>
-        <button type="button" className="user-panel__profile" onClick={onOpenProfile}>
-          <Avatar user={user} presence={presence} />
-        </button>
-      </Tip>
-      <div className="user-panel__names">
-        <button
-          type="button"
-          className="user-panel__display"
-          data-testid="current-user"
-          onClick={onOpenProfile}
-        >
-          {user.displayName}
-        </button>
+      {/* As in Discord: you, your status, and what you can do about it, behind your name. */}
+      <Menu
+        label={t('user.menu')}
+        side="top"
+        align="start"
+        className="user-menu"
+        trigger={
+          <button type="button" className="user-panel__me" aria-label={t('user.menu')}>
+            <Avatar user={user} presence={presence} />
+            <span className="user-panel__names">
+              <span className="user-panel__display" data-testid="current-user">
+                {user.displayName}
+              </span>
+              <span className="user-panel__status" data-testid="current-status">
+                {t(PRESENCE_LABEL[presence])}
+              </span>
+            </span>
+          </button>
+        }
+      >
+        <MenuLabel>
+          <span className="user-menu__name">{user.displayName}</span>
+          <span className="user-menu__username">@{user.username}</span>
+        </MenuLabel>
+        <MenuSeparator />
         {/* Müsait or Meşgul (A21); Uzakta and Çevrimdışı follow from activity. */}
-        <Select
-          className="user-panel__presence"
-          label={t('presence.choose')}
-          hideLabel
-          value={presence === 'busy' ? 'busy' : 'available'}
+        <MenuRadioGroup
+          value={mode}
           onChange={onSetPresence}
-          options={(['available', 'busy'] as const).map((mode) => ({
-            value: mode,
-            label: t(PRESENCE_LABEL[mode]),
+          options={(['available', 'busy'] as const).map((value) => ({
+            value,
+            label: t(PRESENCE_LABEL[value]),
+            icon: <span className="presence-dot" data-presence={value} aria-hidden />,
           }))}
         />
-      </div>
+        <MenuSeparator />
+        <MenuItem icon={<Icon icon={UserRound} />} onSelect={onOpenProfile}>
+          {t('profile.edit')}
+        </MenuItem>
+        <MenuItem icon={<Icon icon={Settings} />} onSelect={onOpenSettings}>
+          {t('settings.open')}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem icon={<Icon icon={LogOut} />} danger onSelect={onSignOut}>
+          {t('auth.signOut')}
+        </MenuItem>
+      </Menu>
       <Tip label={t('settings.open')}>
         <button
           type="button"
@@ -472,9 +495,6 @@ function UserPanel({
           <Icon icon={Settings} />
         </button>
       </Tip>
-      <button type="button" className="link user-panel__sign-out" onClick={onSignOut}>
-        {t('auth.signOut')}
-      </button>
     </div>
   );
 }

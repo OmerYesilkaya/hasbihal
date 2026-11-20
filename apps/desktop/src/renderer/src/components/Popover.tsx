@@ -1,5 +1,6 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { DropdownMenu, Popover as RadixPopover } from 'radix-ui';
+import { Check } from 'lucide-react';
 
 interface PopoverProps {
   /** The accessible name of the panel. */
@@ -53,10 +54,16 @@ export function Popover({
 export function Menu({
   label,
   trigger,
+  side = 'bottom',
+  align = 'end',
+  className,
   children,
 }: {
   label: string;
   trigger: ReactElement;
+  side?: 'top' | 'bottom';
+  align?: 'start' | 'end';
+  className?: string;
   children: ReactNode;
 }) {
   return (
@@ -65,8 +72,9 @@ export function Menu({
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           aria-label={label}
-          className="popover menu"
-          align="end"
+          className={['popover menu', className].filter(Boolean).join(' ')}
+          side={side}
+          align={align}
           sideOffset={6}
           collisionPadding={8}
         >
@@ -106,4 +114,47 @@ export function MenuItem({
 
 export function MenuSeparator() {
   return <DropdownMenu.Separator className="menu-separator" />;
+}
+
+/** A heading inside a `Menu`, e.g. whose menu it is. */
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return <DropdownMenu.Label className="menu-label">{children}</DropdownMenu.Label>;
+}
+
+/** A choice of one, inside a `Menu`; picking one keeps the menu open, so the change shows. */
+export function MenuRadioGroup<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: readonly { value: T; label: ReactNode; icon?: ReactNode }[];
+}) {
+  return (
+    <DropdownMenu.RadioGroup
+      value={value}
+      onValueChange={(next) => {
+        const option = options.find((o) => o.value === next);
+        if (option) onChange(option.value);
+      }}
+    >
+      {options.map((option) => (
+        <DropdownMenu.RadioItem
+          key={option.value}
+          value={option.value}
+          className="menu-item"
+          onSelect={(e) => {
+            e.preventDefault();
+          }}
+        >
+          {option.icon}
+          <span>{option.label}</span>
+          <DropdownMenu.ItemIndicator className="menu-item__check">
+            <Check size="1em" aria-hidden />
+          </DropdownMenu.ItemIndicator>
+        </DropdownMenu.RadioItem>
+      ))}
+    </DropdownMenu.RadioGroup>
+  );
 }
