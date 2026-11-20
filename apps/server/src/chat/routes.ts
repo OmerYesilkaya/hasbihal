@@ -530,6 +530,7 @@ export function registerChat(
       notify_level: prefs.notify,
       sound_on_message: prefs.sound,
       hangout_start_alerts: prefs.hangoutAlerts,
+      favorite: prefs.favorite,
     };
     await db
       .insertInto('room_user_prefs')

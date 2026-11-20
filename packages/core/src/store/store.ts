@@ -332,11 +332,11 @@ export function sortMembers(state: ChatState): User[] {
     .sort((a, b) => present(a) - present(b) || collator.compare(a.displayName, b.displayName));
 }
 
-/** The sidebar: active rooms by position, archived ones left out. */
+/** The sidebar: active rooms, this member's favourites first, each part by position. */
 export function activeRooms(state: ChatState): RoomEntry[] {
   return [...state.rooms.values()]
     .filter((r) => !r.archivedAt)
-    .sort((a, b) => a.position - b.position);
+    .sort((a, b) => Number(b.prefs.favorite) - Number(a.prefs.favorite) || a.position - b.position);
 }
 
 /** The room whose hangout a member is in, if any. */

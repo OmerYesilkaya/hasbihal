@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { Locale } from '@hasbihal/core';
 import type { DeepLink } from '../shared/deep-link.ts';
 import {
   IPC,
@@ -69,6 +70,10 @@ const system: SystemBridge = {
   launchAtStartup: () => ipcRenderer.invoke(IPC.launchAtStartup) as Promise<boolean | null>,
   setLaunchAtStartup: async (on) => {
     await ipcRenderer.invoke(IPC.setLaunchAtStartup, on);
+  },
+  language: () => ipcRenderer.invoke(IPC.language) as Promise<Locale | null>,
+  setLanguage: async (language) => {
+    await ipcRenderer.invoke(IPC.setLanguage, language);
   },
   setMentions: (count) => {
     ipcRenderer.send(IPC.mentions, count);

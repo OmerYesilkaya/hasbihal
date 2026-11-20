@@ -29,8 +29,8 @@ test('plans a weekly event: create, RSVP, skip one (A15, A16)', async ({ desktop
   await expect(occurrences.first().getByTestId('rsvp-coming')).toHaveText('Emre Test');
 
   const second = occurrences.nth(1);
-  await second.getByLabel('Etkinliği yönet').click();
-  await second.getByRole('button', { name: 'Bu seferlik atla' }).click();
+  await second.getByRole('button', { name: 'Etkinliği yönet' }).click();
+  await second.getByRole('menuitem', { name: 'Bu seferlik atla' }).click();
   await expect(second).toHaveAttribute('data-skipped', 'true');
   await expect(second).toContainText('yapılmayacak');
   await snap(page, '17-events');

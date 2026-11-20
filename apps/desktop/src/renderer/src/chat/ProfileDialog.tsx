@@ -21,14 +21,20 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const { me } = useChatState();
 
-  // A native modal: focus stays inside, and Esc closes it.
+  // A native modal: focus stays inside, and Esc or a click outside (closedby) closes it.
   useEffect(() => {
     dialog.current?.showModal();
   }, []);
 
   if (!me) return null;
   return (
-    <dialog ref={dialog} className="profile" aria-label={t('profile.title')} onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className="profile"
+      aria-label={t('profile.title')}
+      closedby="any"
+      onClose={onClose}
+    >
       <header className="profile__header">
         <h1>{t('profile.title')}</h1>
         <button
@@ -43,7 +49,6 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
       <PhotoSection me={me} />
       <NameSection me={me} />
       <PasswordSection />
-      <StartupSection />
       <SessionsSection />
     </dialog>
   );
@@ -293,39 +298,6 @@ function SessionsSection() {
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-/** A39: starting with the computer, on by default; shown only where the build manages it. */
-function StartupSection() {
-  const t = useT();
-  const [on, setOn] = useState<boolean | null>(null);
-  useEffect(() => {
-    let current = true;
-    void window.hasbihal.system.launchAtStartup().then((value) => {
-      if (current) setOn(value);
-    });
-    return () => {
-      current = false;
-    };
-  }, []);
-  if (on === null) return null;
-  return (
-    <section className="profile__section">
-      <label className="voice-settings__check">
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={(e) => {
-            const value = e.target.checked;
-            setOn(value);
-            void window.hasbihal.system.setLaunchAtStartup(value);
-          }}
-        />
-        {t('profile.launchAtStartup')}
-      </label>
-      <p className="field__hint">{t('profile.launchAtStartupHint')}</p>
     </section>
   );
 }

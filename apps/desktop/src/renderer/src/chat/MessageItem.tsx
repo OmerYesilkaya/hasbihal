@@ -8,10 +8,12 @@ import { useChat, useChatState } from './context.tsx';
 import { Attachments } from './Attachments.tsx';
 import { LinkPreviews } from './LinkPreviews.tsx';
 import { MarkdownView } from './Markdown.tsx';
-import { CornerDownRight, Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
+import { CornerDownRight, Pencil, Plus, Reply, SmilePlus, Trash2 } from 'lucide-react';
+import { EmojiPicker } from './EmojiPicker.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { Popover } from '../components/Popover.tsx';
 
-/** A small, fixed set; no picker library and no emoji search (A23-style simplicity). */
+/** The reactions offered first; every other emoji is a click away (EmojiPicker). */
 export const QUICK_REACTIONS = [
   '👍',
   '❤️',
@@ -48,14 +50,12 @@ export const MessageItem = memo(function MessageItem({
   const t = useT();
   const { info } = useChat();
   const { members, me } = useChatState();
-  const [picking, setPicking] = useState(false);
   const author = members.get(message.authorId);
   const mine = message.authorId === me?.id;
   const deleted = message.deletedAt !== null;
   const replyAuthor = message.replyTo ? members.get(message.replyTo.authorId) : undefined;
 
   const react = (emoji: string, add: boolean) => {
-    setPicking(false);
     void api(
       info.serverUrl,
       add ? 'PUT' : 'DELETE',
@@ -161,17 +161,30 @@ export const MessageItem = memo(function MessageItem({
       </div>
       {!deleted && (
         <div className="message__toolbar" role="toolbar" aria-label={t('message.actions')}>
-          <button
-            type="button"
-            className="icon-button"
-            title={t('message.react')}
-            aria-label={t('message.react')}
-            onClick={() => {
-              setPicking((p) => !p);
-            }}
+          <Popover
+            label={t('message.react')}
+            className="reaction-picker"
+            trigger={(props) => (
+              <button
+                type="button"
+                className="icon-button"
+                title={t('message.react')}
+                aria-label={t('message.react')}
+                {...props}
+              >
+                <Icon icon={SmilePlus} />
+              </button>
+            )}
           >
-            <Icon icon={SmilePlus} />
-          </button>
+            {(close) => (
+              <ReactionPicker
+                onPick={(emoji) => {
+                  close();
+                  react(emoji, true);
+                }}
+              />
+            )}
+          </Popover>
           <button
             type="button"
             className="icon-button"
@@ -209,23 +222,41 @@ export const MessageItem = memo(function MessageItem({
           )}
         </div>
       )}
-      {picking && (
-        <div className="reaction-picker" role="menu">
-          {QUICK_REACTIONS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              role="menuitem"
-              className="reaction-picker__emoji"
-              onClick={() => {
-                react(emoji, true);
-              }}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
     </article>
   );
 });
+
+/** The quick reactions; "more" swaps them for every emoji, with search. */
+function ReactionPicker({ onPick }: { onPick: (emoji: string) => void }) {
+  const t = useT();
+  const [all, setAll] = useState(false);
+  if (all) return <EmojiPicker onPick={onPick} />;
+  return (
+    <div className="reaction-picker__quick">
+      {QUICK_REACTIONS.map((emoji) => (
+        <button
+          key={emoji}
+          type="button"
+          className="reaction-picker__emoji"
+          onClick={() => {
+            onPick(emoji);
+          }}
+        >
+          {emoji}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="reaction-picker__emoji reaction-picker__more"
+        title={t('emoji.more')}
+        aria-label={t('emoji.more')}
+        data-testid="emoji-more"
+        onClick={() => {
+          setAll(true);
+        }}
+      >
+        <Icon icon={Plus} />
+      </button>
+    </div>
+  );
+}

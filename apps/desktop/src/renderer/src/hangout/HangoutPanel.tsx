@@ -5,7 +5,8 @@ import { useChat, useChatState, useHangout } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
 import { screenVolumeKey, type ParticipantView, type ShareView } from './session.ts';
 import { SharePicker } from './SharePicker.tsx';
-import { VoiceSettingsPanel } from './VoiceSettings.tsx';
+import { VoiceSettingsFields } from './VoiceSettings.tsx';
+import { Popover } from '../components/Popover.tsx';
 import { rangeFill } from '../components/range.ts';
 import {
   HeadphoneOff,
@@ -273,7 +274,6 @@ function Controls() {
   const t = useT();
   const { hangout } = useChat();
   const call = useHangout();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   return (
     <div className="stage__controls">
@@ -321,18 +321,24 @@ function Controls() {
       >
         <Icon icon={call.sharing ? ScreenShareOff : ScreenShare} />
       </button>
-      <button
-        type="button"
-        className="round-button"
-        aria-label={t('hangout.settings')}
-        title={t('hangout.settings')}
-        aria-expanded={settingsOpen}
-        onClick={() => {
-          setSettingsOpen((open) => !open);
-        }}
+      <Popover
+        label={t('hangout.settings')}
+        placement="above"
+        className="voice-settings__popover"
+        trigger={(props) => (
+          <button
+            type="button"
+            className="round-button"
+            aria-label={t('hangout.settings')}
+            title={t('hangout.settings')}
+            {...props}
+          >
+            <Icon icon={Settings} />
+          </button>
+        )}
       >
-        <Icon icon={Settings} />
-      </button>
+        {() => <VoiceSettingsFields />}
+      </Popover>
       <button
         type="button"
         className="round-button round-button--leave"
@@ -346,13 +352,6 @@ function Controls() {
         <SharePicker
           onClose={() => {
             setPicking(false);
-          }}
-        />
-      )}
-      {settingsOpen && (
-        <VoiceSettingsPanel
-          onClose={() => {
-            setSettingsOpen(false);
           }}
         />
       )}

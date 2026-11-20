@@ -55,9 +55,17 @@ test('chats in a room: formatting, mentions, replies, reactions, edits, deletes'
   // Kerem reacts; Mehmet sees it live.
   await fromHost.hover();
   await fromHost.getByRole('button', { name: 'Tepki ver' }).click();
-  await guest.getByRole('menuitem', { name: '🌷' }).click();
+  await guest.getByRole('button', { name: '🌷', exact: true }).click();
   await expect(fromHost.getByRole('button', { name: /🌷 1/ })).toBeVisible();
   await expect(hostsOwn.getByRole('button', { name: /🌷 1/ })).toBeVisible();
+  // Any emoji, found by its Turkish name.
+  await fromHost.hover();
+  await fromHost.getByRole('button', { name: 'Tepki ver' }).click();
+  await guest.getByTestId('emoji-more').click();
+  await guest.getByLabel('Emoji ara').fill('kaplumbağa');
+  await expect(guest.getByRole('button', { name: 'kaplumbağa' })).toBeVisible();
+  await guest.getByLabel('Emoji ara').press('Enter');
+  await expect(fromHost.getByRole('button', { name: /🐢 1/ })).toBeVisible();
 
   // Mehmet edits his last message with ↑, then deletes it.
   await composer.press('ArrowUp');

@@ -3,11 +3,12 @@ import type { MessageKey } from '@hasbihal/core';
 import type { Occurrence, RoomEvent, RsvpResponse } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { EmptyState } from '../components/EmptyState.tsx';
+import { MenuItem, Popover } from '../components/Popover.tsx';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatWhen, formatTime, useT } from '../i18n.tsx';
 import { EventForm, fromInputs, toInputs } from './EventForm.tsx';
 import type { EventsView } from './useEvents.ts';
-import { Check, Ellipsis, X } from 'lucide-react';
+import { CalendarClock, CalendarX, Check, Ellipsis, Pencil, Trash2, Undo2, X } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
 
 /**
@@ -37,6 +38,7 @@ export function EventsDialog({
   return (
     <dialog
       ref={dialog}
+      closedby="any"
       className="profile events-dialog"
       aria-label={t('events.heading')}
       data-testid="events-dialog"
@@ -234,57 +236,69 @@ function OccurrenceRow({
           </>
         )}
         {isAdmin && (
-          <details className="occurrence__admin">
-            <summary aria-label={t('events.manage')}>
-              <Icon icon={Ellipsis} />
-            </summary>
-            <div
-              className="occurrence__menu"
-              // Any choice closes the menu.
-              onClick={(e) => {
-                const details = e.currentTarget.parentElement;
-                if (details instanceof HTMLDetailsElement) details.open = false;
-              }}
-            >
-              {occurrence.skipped || occurrence.moved ? (
-                <button type="button" className="link" onClick={() => void call('DELETE', base)}>
-                  {t('events.restore')}
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={() => void call('PUT', base, { kind: 'skipped' })}
-                  >
-                    {t('events.skip')}
-                  </button>
-                  <button
-                    type="button"
-                    className="link"
-                    onClick={() => {
-                      setMoving((m) => !m);
-                    }}
-                  >
-                    {t('events.move')}
-                  </button>
-                </>
-              )}
-              <button type="button" className="link" onClick={onEdit}>
-                {t('events.edit')}
-              </button>
+          <Popover
+            label={t('events.manage')}
+            role="menu"
+            trigger={(props) => (
               <button
                 type="button"
-                className="link link--danger"
-                onClick={() => {
-                  if (window.confirm(t('events.deleteConfirm', { title: event.title })))
-                    void call('DELETE', `/events/${event.id}`);
-                }}
+                className="icon-button"
+                aria-label={t('events.manage')}
+                title={t('events.manage')}
+                {...props}
               >
-                {t('events.delete')}
+                <Icon icon={Ellipsis} />
               </button>
-            </div>
-          </details>
+            )}
+          >
+            {(close) => (
+              <>
+                {occurrence.skipped || occurrence.moved ? (
+                  <MenuItem
+                    icon={<Icon icon={Undo2} />}
+                    close={close}
+                    onSelect={() => void call('DELETE', base)}
+                  >
+                    {t('events.restore')}
+                  </MenuItem>
+                ) : (
+                  <>
+                    <MenuItem
+                      icon={<Icon icon={CalendarX} />}
+                      close={close}
+                      onSelect={() => void call('PUT', base, { kind: 'skipped' })}
+                    >
+                      {t('events.skip')}
+                    </MenuItem>
+                    <MenuItem
+                      icon={<Icon icon={CalendarClock} />}
+                      close={close}
+                      onSelect={() => {
+                        setMoving((m) => !m);
+                      }}
+                    >
+                      {t('events.move')}
+                    </MenuItem>
+                  </>
+                )}
+                <MenuItem icon={<Icon icon={Pencil} />} close={close} onSelect={onEdit}>
+                  {t('events.edit')}
+                </MenuItem>
+                <hr className="menu-separator" />
+                <MenuItem
+                  icon={<Icon icon={Trash2} />}
+                  danger
+                  close={close}
+                  onSelect={() => {
+                    if (window.confirm(t('events.deleteConfirm', { title: event.title })))
+                      void call('DELETE', `/events/${event.id}`);
+                  }}
+                >
+                  {t('events.delete')}
+                </MenuItem>
+              </>
+            )}
+          </Popover>
         )}
       </div>
     </li>

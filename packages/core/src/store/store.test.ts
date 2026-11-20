@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Message, User } from '@hasbihal/protocol';
+import { DEFAULT_ROOM_PREFS, type Message, type User } from '@hasbihal/protocol';
 import { activeRooms, ChatStore, hangoutOf, roomMessages, sortMembers, typingIn } from './store.ts';
 
 const user = (id: string, displayName: string): User => ({
@@ -181,6 +181,25 @@ describe('ChatStore rooms and messages', () => {
       earlier.id,
       later.id,
     ]);
+  });
+  it('lists this member’s favourite rooms first, each part by position', () => {
+    const store = setup();
+    const other = (id: string, name: string, position: number) => ({
+      ...room,
+      id: `0192f0c4-7b5e-7c8e-9a3b-0000000000${id}`,
+      name,
+      position,
+    });
+    store.apply({ type: 'room_created', room: other('c1', 'Mutfak', 0) });
+    store.apply({ type: 'room_created', room: other('c2', 'Bahçe', 2) });
+    store.apply({ type: 'room_created', room: other('c3', 'Avlu', 3) });
+    const names = () => activeRooms(store.getSnapshot()).map((r) => r.name);
+    expect(names()).toEqual(['Mutfak', 'Salon', 'Bahçe', 'Avlu']);
+
+    const favorite = { ...DEFAULT_ROOM_PREFS, favorite: true };
+    store.setRoomPrefs('0192f0c4-7b5e-7c8e-9a3b-0000000000c3', favorite);
+    store.setRoomPrefs(roomId, favorite);
+    expect(names()).toEqual(['Salon', 'Avlu', 'Mutfak', 'Bahçe']);
   });
 });
 

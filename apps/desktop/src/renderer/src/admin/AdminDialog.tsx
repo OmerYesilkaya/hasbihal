@@ -28,6 +28,7 @@ export function AdminDialog({ onClose }: { onClose: () => void }) {
   return (
     <dialog
       ref={dialog}
+      closedby="any"
       className="profile admin"
       aria-label={t('admin.heading')}
       data-testid="admin"

@@ -42,6 +42,7 @@ export function SharePicker({ onClose }: { onClose: () => void }) {
   return (
     <dialog
       ref={dialog}
+      closedby="any"
       className="profile share-picker"
       aria-labelledby={`${id}-title`}
       onClose={onClose}

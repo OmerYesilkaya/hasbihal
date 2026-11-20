@@ -422,10 +422,56 @@ progress::-webkit-progress-value {
 }
 
 .members {
-  width: 248px;
+  --members-width: 248px;
+  width: var(--members-width);
   flex-shrink: 0;
   background: var(--hb-members);
   border-left: 1px solid var(--hb-border);
+}
+
+/*
+ * Either side column can be hidden for a bigger chat (layout/panels.tsx). It slides out of the
+ * way; `inert` on it keeps keyboard focus out while it's hidden.
+ */
+.sidebar,
+.members {
+  transition:
+    margin 160ms ease,
+    visibility 0s;
+}
+
+.shell[data-rooms-hidden] .sidebar {
+  margin-left: -264px;
+  visibility: hidden;
+  transition:
+    margin 160ms ease,
+    visibility 0s 160ms;
+}
+
+.shell[data-members-hidden] .members {
+  margin-right: calc(-1 * var(--members-width));
+  visibility: hidden;
+  transition:
+    margin 160ms ease,
+    visibility 0s 160ms;
+}
+
+.shell {
+  overflow: hidden;
+}
+
+/* At the very start of the header, so the room name moves in a little. */
+.content__header > .panel-toggle:first-child {
+  margin-left: -8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .members,
+  .shell[data-rooms-hidden] .sidebar,
+  .shell[data-members-hidden] .members {
+    transition: none;
+  }
 }
 
 .members__header {
@@ -651,8 +697,14 @@ progress::-webkit-progress-value {
   text-overflow: ellipsis;
 }
 
+.user-panel__settings {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .user-panel__sign-out {
   font-size: 12px;
+  flex-shrink: 0;
 }
 
 .banner {
@@ -705,6 +757,9 @@ progress::-webkit-progress-value {
 }
 
 .member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   list-style: none;
   margin: 0;
   padding: 8px;
@@ -797,9 +852,13 @@ progress::-webkit-progress-value {
   padding-right: 14px;
 }
 
-.room-list ul {
+/* A list of rows that highlight on hover: a little air between them, so they never touch. */
+.room-list__rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   list-style: none;
-  margin: 0;
+  margin: 0 0 8px;
   padding: 0 10px;
 }
 
@@ -846,6 +905,39 @@ progress::-webkit-progress-value {
 .room[data-unread] {
   color: var(--hb-text);
   font-weight: 600;
+}
+
+/* A room's "⋯" menu (rooms/RoomMenu.tsx) takes the place of its badges while hovered or open. */
+.room-row {
+  position: relative;
+}
+
+.room-row__more {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  visibility: hidden;
+}
+
+.room-row:hover .room-row__more,
+.room-row__more:focus-visible,
+.room-row__more[data-open] {
+  visibility: visible;
+}
+
+.room-row__more:hover,
+.room-row__more[data-open] {
+  background: var(--hb-chip);
+}
+
+.room-row:is(:hover, :has(.room-row__more[data-open], .room-row__more:focus-visible))
+  > .room
+  > :is(.badge, .room__event, .room__muted) {
+  visibility: hidden;
+}
+
+.room__muted {
+  color: var(--hb-text-muted);
 }
 
 .room__hash {
@@ -1071,7 +1163,9 @@ progress::-webkit-progress-value {
 }
 
 .message:hover .message__toolbar,
-.message:focus-within .message__toolbar {
+.message:focus-within .message__toolbar,
+/* Its popovers (reactions) live inside it: it stays while one is open. */
+.message__toolbar:has([data-open]) {
   display: flex;
 }
 
@@ -1100,18 +1194,74 @@ progress::-webkit-progress-value {
 }
 
 .reaction-picker {
-  position: absolute;
-  top: 18px;
-  right: 20px;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: repeat(8, 32px);
-  gap: 2px;
   padding: 6px;
-  border: 1px solid var(--hb-border);
-  border-radius: 10px;
-  background: var(--hb-bg);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+}
+
+.reaction-picker__quick {
+  display: grid;
+  grid-template-columns: repeat(7, 34px);
+  gap: 2px;
+}
+
+.reaction-picker__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hb-text-secondary);
+}
+
+/* The full emoji picker (chat/EmojiPicker.tsx). */
+.emoji-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 352px;
+}
+
+.emoji-picker__search {
+  padding: 7px 10px;
+}
+
+.emoji-picker__groups {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--hb-border);
+  padding-bottom: 4px;
+}
+
+.emoji-picker__sections {
+  height: 300px;
+  overflow-y: auto;
+}
+
+.emoji-picker__section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}
+
+.emoji-picker__section .section-label {
+  margin: 8px 4px 4px;
+}
+
+.emoji-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 2px;
+}
+
+.emoji-picker__emoji {
+  font-size: 22px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.emoji-picker__emoji:hover,
+.emoji-picker__emoji:focus-visible {
+  background: var(--hb-selected);
+  outline: none;
 }
 
 .reaction-picker__emoji {
@@ -1417,6 +1567,9 @@ progress::-webkit-progress-value {
   right: 0;
   bottom: calc(100% + 6px);
   z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   list-style: none;
   margin: 0;
   padding: 4px;
@@ -1753,33 +1906,37 @@ progress::-webkit-progress-value {
 }
 
 .voice-settings {
-  position: absolute;
-  bottom: 56px;
-  left: 50%;
-  z-index: 4;
-  width: 320px;
-  translate: -50% 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 14px 16px;
-  border: 1px solid var(--hb-border);
-  border-radius: 12px;
-  background: var(--hb-bg);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+  gap: 8px;
+}
+
+.voice-settings > .field__label {
+  margin-top: 4px;
 }
 
 .voice-settings__check {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 24px;
   font-size: 13px;
 }
 
-.voice-settings__mode {
+/* A group of radio buttons or checkboxes, one per line, with room between them. */
+.voice-settings__mode,
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin: 4px 0 0;
   padding: 0;
   border: none;
+}
+
+.voice-settings__mode > legend,
+.option-group > legend {
+  margin-bottom: 4px;
 }
 
 .voice-settings__ptt {
@@ -1819,8 +1976,11 @@ progress::-webkit-progress-value {
 /* ---- Who is in voice: sidebar and members ---- */
 
 .room__voice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   list-style: none;
-  margin: 0 0 4px;
+  margin: 2px 0 4px;
   padding: 0 0 0 30px;
 }
 
@@ -2559,7 +2719,7 @@ progress::-webkit-progress-value {
 /* Search (A27) */
 
 .members:has(.search__results) {
-  width: 340px;
+  --members-width: 340px;
 }
 
 .search {
@@ -2795,45 +2955,6 @@ progress::-webkit-progress-value {
   color: #fff;
 }
 
-.occurrence__admin {
-  position: relative;
-}
-
-.occurrence__admin summary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  border-radius: 6px;
-  list-style: none;
-  cursor: pointer;
-}
-
-.occurrence__admin summary::-webkit-details-marker {
-  display: none;
-}
-
-.occurrence__admin summary:hover {
-  background: var(--hb-chip);
-}
-
-.occurrence__menu {
-  position: absolute;
-  right: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 170px;
-  padding: 10px 12px;
-  border: 1px solid var(--hb-border);
-  border-radius: 10px;
-  background: var(--hb-bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
-  white-space: nowrap;
-}
-
 .link--danger {
   color: var(--hb-primary);
 }
@@ -2900,6 +3021,21 @@ progress::-webkit-progress-value {
 
 .admin {
   width: 680px;
+}
+
+.settings {
+  width: 560px;
+}
+
+/* Every tab keeps the same height, so the dialog doesn't jump between them. */
+.settings__body {
+  min-height: 420px;
+}
+
+/* The call's voice settings (hangout/HangoutPanel.tsx). */
+.voice-settings__popover {
+  width: 320px;
+  padding: 14px 16px;
 }
 
 .admin__body {
@@ -2979,54 +3115,110 @@ progress::-webkit-progress-value {
   margin: 0;
 }
 
+/*
+ * Popovers (components/Popover.tsx): the browser's own, so they close on an outside click or Esc
+ * and sit in the top layer; anchor positioning puts them next to their button.
+ */
+.popover {
+  position: fixed;
+  inset: auto;
+  margin: 6px 0;
+  min-width: 180px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+
+.popover--below-end {
+  position-area: bottom span-left;
+  position-try-fallbacks: flip-block, flip-inline;
+}
+
+.popover--above {
+  margin: 0 0 10px;
+  position-area: top center;
+  position-try-fallbacks: flip-block;
+}
+
+/* A component's own `display` must never show a closed popover. */
+.popover:not(:popover-open) {
+  display: none;
+}
+
+.popover[role='menu']:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+}
+
+.menu-item {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--hb-text);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--hb-selected);
+  outline: none;
+}
+
+.menu-item svg {
+  color: var(--hb-text-secondary);
+}
+
+.menu-item[data-danger] {
+  color: var(--hb-primary);
+}
+
+.menu-item[data-danger] svg {
+  color: inherit;
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 2px 6px;
+  border: none;
+  background: var(--hb-border);
+}
+
 /* Notification settings per room (A28) */
 
 .room[data-muted] .room__name {
   opacity: 0.55;
 }
 
-.room-prefs {
-  position: relative;
-}
-
-.room-prefs__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 8px;
-  border-radius: 8px;
-  list-style: none;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.room-prefs__button::-webkit-details-marker {
-  display: none;
-}
-
-.room-prefs__button:hover {
-  background: var(--hb-chip);
+.room-prefs__button[data-muted] {
+  color: var(--hb-text-muted);
 }
 
 .room-prefs__menu {
-  position: absolute;
-  right: 0;
-  z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   width: 280px;
-  padding: 12px 14px;
-  border: 1px solid var(--hb-border);
-  border-radius: 10px;
-  background: var(--hb-bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
 }
 
 .room-prefs__menu fieldset {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   border: none;

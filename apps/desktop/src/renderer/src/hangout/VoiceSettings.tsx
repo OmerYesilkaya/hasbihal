@@ -16,8 +16,11 @@ const keyLabel = (code: string) =>
     .replace(/^Digit/, '')
     .replace(/(Left|Right)$/, ' $1');
 
-/** Devices, noise suppression, and how the mic opens (A29, A37). */
-export function VoiceSettingsPanel({ onClose }: { onClose: () => void }) {
+/**
+ * Devices, noise suppression, and how the mic opens (A29, A37): in the call's settings popover
+ * and on the Settings page.
+ */
+export function VoiceSettingsFields() {
   const t = useT();
   const id = useId();
   const { hangout } = useChat();
@@ -80,14 +83,7 @@ export function VoiceSettingsPanel({ onClose }: { onClose: () => void }) {
   const meter = Math.max(0, Math.min(100, ((level + 80) / 70) * 100));
   const line = Math.max(0, Math.min(100, ((settings.thresholdDb + 80) / 70) * 100));
   return (
-    <div
-      className="voice-settings"
-      role="dialog"
-      aria-label={t('hangout.settings')}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && !capturingKey) onClose();
-      }}
-    >
+    <div className="voice-settings">
       <label className="field__label">{t('settings.microphone')}</label>
       {select('audioinput', settings.deviceId, (deviceId) => {
         hangout.updateSettings({ deviceId });

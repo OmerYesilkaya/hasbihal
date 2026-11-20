@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme, session } from 'electron';
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
+import { LOCALES } from '@hasbihal/core';
 import { RecoverRequest, SignInRequest, SignUpRequest } from '@hasbihal/protocol';
 import { IPC, type AppInfo, type AuthResult } from '../shared/app-info.ts';
 import { registerAppSchemePrivileges, serveRendererFromAppScheme } from './app-protocol.ts';
@@ -186,6 +187,12 @@ void app.whenReady().then(async () => {
   ipcMain.handle(IPC.setLaunchAtStartup, (_event, on: unknown) =>
     background.setLaunchAtStartup(on === true),
   );
+  ipcMain.handle(IPC.language, () => background.language());
+  ipcMain.handle(IPC.setLanguage, async (_event, language: unknown) => {
+    if (language === null) await background.setLanguage(null);
+    const locale = LOCALES.find((l) => l === language);
+    if (locale) await background.setLanguage(locale);
+  });
   ipcMain.on(IPC.mentions, (_event, count: unknown) => {
     if (typeof count === 'number' && Number.isInteger(count) && count >= 0)
       background.setMentions(count);

@@ -13,7 +13,7 @@ import { Message, MESSAGE_BODY_MAX, type User } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { useT } from '../i18n.tsx';
 import { formatSize, uploadFile } from '../files.ts';
-import { locale } from '../i18n.tsx';
+import { currentLocale } from '../i18n.tsx';
 import { useChat, useChatState } from './context.tsx';
 import { useUploads } from './useUploads.ts';
 import { VoiceRecorder, type Recording } from './VoiceRecorder.tsx';
@@ -306,7 +306,9 @@ export function Composer({
               <span className="upload__text">
                 <span className="upload__name">{u.file.name}</span>
                 <span className="upload__size">
-                  {u.status === 'failed' && u.error ? t(u.error) : formatSize(u.file.size, locale)}
+                  {u.status === 'failed' && u.error
+                    ? t(u.error)
+                    : formatSize(u.file.size, currentLocale())}
                 </span>
               </span>
               {u.status === 'uploading' && (

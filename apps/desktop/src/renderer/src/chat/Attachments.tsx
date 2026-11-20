@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Attachment } from '@hasbihal/protocol';
 import { formatDuration, formatSize, useFileAddresses } from '../files.ts';
-import { locale, useT } from '../i18n.tsx';
+import { currentLocale, useT } from '../i18n.tsx';
 import { useChat } from './context.tsx';
 import { rangeFill } from '../components/range.ts';
 import { FileText, Pause, Play, X } from 'lucide-react';
@@ -200,7 +200,7 @@ function FileCard({ attachment }: { attachment: Attachment }) {
       </span>
       <span className="file-card__text">
         <span className="file-card__name">{attachment.name}</span>
-        <span className="file-card__size">{formatSize(attachment.size, locale)}</span>
+        <span className="file-card__size">{formatSize(attachment.size, currentLocale())}</span>
       </span>
       {addresses && (
         <a className="button" href={addresses.original} download={attachment.name}>
@@ -240,6 +240,7 @@ function MediaViewer({
   return (
     <dialog
       ref={dialog}
+      closedby="any"
       className="viewer"
       aria-label={item.name}
       data-testid="viewer"

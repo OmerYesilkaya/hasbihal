@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { compareMessages, roomMessages } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
-import { dayKey, formatDay, useT } from '../i18n.tsx';
+import { dayKey, formatDay, useLanguage, useT } from '../i18n.tsx';
 import { useChatState } from './context.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { MessageItem } from './MessageItem.tsx';
@@ -40,6 +40,7 @@ export function MessageList({
   onEdit,
 }: MessageListProps) {
   const t = useT();
+  const { locale } = useLanguage();
   const state = useChatState();
   const { loaded, hasMore, loadOlder } = useRoomHistory(roomId);
   const messages = useMemo(() => roomMessages(state, roomId), [state, roomId]);
@@ -105,7 +106,9 @@ export function MessageList({
       previous = message;
     }
     return result;
-  }, [messages, readMarkerAtOpen, state.messages, roomId, meId]);
+    // The day labels are in the current language.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, readMarkerAtOpen, state.messages, roomId, meId, locale]);
 
   // When older items are prepended, lower the index base by as many, so the view doesn't jump.
   const firstKey = items[0]?.key;

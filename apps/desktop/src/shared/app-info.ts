@@ -6,6 +6,7 @@ import type {
   SignUpRequest,
   User,
 } from '@hasbihal/protocol';
+import type { Locale } from '@hasbihal/core';
 import type { DeepLink } from './deep-link.ts';
 
 /** Information the main process hands to the renderer at startup. */
@@ -61,6 +62,10 @@ export interface SystemBridge {
   /** Whether the app starts with the computer (A39); null in builds that don't manage it. */
   launchAtStartup(): Promise<boolean | null>;
   setLaunchAtStartup(on: boolean): Promise<void>;
+  /** The language chosen in Settings (A18), or null to follow the computer's. */
+  language(): Promise<Locale | null>;
+  /** Saved on this computer; the tray menu follows at once. */
+  setLanguage(language: Locale | null): Promise<void>;
   /** Unread mentions, for the macOS dock badge and the tray tooltip. */
   setMentions(count: number): void;
 }
@@ -103,6 +108,8 @@ export const IPC = {
   focusWindow: 'system:focus-window',
   launchAtStartup: 'system:launch-at-startup',
   setLaunchAtStartup: 'system:set-launch-at-startup',
+  language: 'system:language',
+  setLanguage: 'system:set-language',
   mentions: 'system:mentions',
   screenSources: 'screen:sources',
   screenChoose: 'screen:choose',
