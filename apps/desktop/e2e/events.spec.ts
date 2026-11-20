@@ -17,9 +17,13 @@ test('plans a weekly event: create, RSVP, skip one (A15, A16)', async ({ desktop
   await dialog.getByLabel('Ece Test').check();
   await dialog.getByRole('button', { name: 'Kaydet' }).click();
 
-  // Four weeks ahead: four or five Mondays-or-whatever-day, the first one coming up.
+  // Only the next time shows, saying how it repeats (#40); the rest of the four weeks open on
+  // request.
   const occurrences = dialog.getByTestId('occurrence');
+  await expect(occurrences).toHaveCount(1);
   await expect(occurrences.first()).toContainText('Ders');
+  await expect(dialog.getByTestId('event-repeat')).toContainText('Her hafta');
+  await dialog.getByRole('button', { name: /sonraki tarih/ }).click();
   expect(await occurrences.count()).toBeGreaterThanOrEqual(4);
 
   await occurrences.first().getByRole('button', { name: 'Geliyorum' }).click();
