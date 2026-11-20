@@ -18,6 +18,7 @@ import type { MessageKey } from '@hasbihal/core';
 import { HangoutToken } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { Microphone, type InputMode, type MicSettings } from './microphone.ts';
+import { SPEAKING_CHECK_MS, SpeakingDetector } from './speaking.ts';
 
 /** One person in the call, as the grid shows them. */
 export interface ParticipantView {
@@ -132,6 +133,9 @@ export class HangoutSession {
   readonly #serverUrl: string;
   #room: Room | null = null;
   #mic: Microphone | null = null;
+  /** Who is speaking, from audio levels (#35); only while in a call. */
+  #speaking: { detector: SpeakingDetector; timer: ReturnType<typeof setInterval> } | null = null;
+  #speakers = new Set<string>();
   /** The microphone test (`startMicTest`) and what plays it back. */
   #testMic: { mic: Microphone; audio: HTMLAudioElement } | null = null;
   /** Counts starts and stops, so a test that finishes opening after a stop closes itself. */
@@ -270,7 +274,6 @@ export class HangoutSession {
       .on(RoomEvent.TrackUnmuted, refresh)
       .on(RoomEvent.LocalTrackPublished, refresh)
       .on(RoomEvent.LocalTrackUnpublished, refresh)
-      .on(RoomEvent.ActiveSpeakersChanged, refresh)
       .on(RoomEvent.ConnectionStateChanged, (state) => {
         if (state === ConnectionState.Reconnecting || state === ConnectionState.SignalReconnecting)
           this.#set({ status: 'reconnecting' });
@@ -293,6 +296,7 @@ export class HangoutSession {
     this.#set({ status: 'connected' });
     for (const participant of room.remoteParticipants.values())
       this.#syncSubscriptions(participant);
+    this.#startSpeakingCheck();
     this.#refresh(); // show the call at once; the mic can take a moment to load
     await this.#openMic();
     this.#refresh();
@@ -301,6 +305,7 @@ export class HangoutSession {
   async leave(): Promise<void> {
     const room = this.#room;
     this.#room = null;
+    this.#stopSpeakingCheck();
     this.#mic?.close();
     this.#mic = null;
     this.#micPublication = null;
@@ -597,7 +602,7 @@ export class HangoutSession {
       return {
         userId: p.identity,
         isLocal,
-        speaking: p.isSpeaking,
+        speaking: this.#speakers.has(p.identity),
         micMuted: isLocal
           ? this.#state.micMuted || this.#state.micUnavailable
           : (mic?.isMuted ?? true),
@@ -633,6 +638,52 @@ export class HangoutSession {
       shares,
     });
     this.#applyVolumes();
+  }
+
+  #startSpeakingCheck(): void {
+    this.#stopSpeakingCheck();
+    const detector = new SpeakingDetector();
+    this.#speaking = {
+      detector,
+      timer: setInterval(() => {
+        this.#checkSpeaking(detector);
+      }, SPEAKING_CHECK_MS),
+    };
+  }
+
+  #stopSpeakingCheck(): void {
+    if (!this.#speaking) return;
+    clearInterval(this.#speaking.timer);
+    this.#speaking.detector.close();
+    this.#speaking = null;
+    this.#speakers = new Set();
+  }
+
+  /** Re-renders only when someone starts or stops speaking. */
+  #checkSpeaking(detector: SpeakingDetector): void {
+    const room = this.#room;
+    if (!room) return;
+    const now = performance.now();
+    const ids = new Set<string>();
+    const speakers = new Set<string>();
+    const me = room.localParticipant.identity;
+    ids.add(me);
+    if (detector.speaking(me, now, this.#mic?.speaking ?? false)) speakers.add(me);
+    for (const p of room.remoteParticipants.values()) {
+      ids.add(p.identity);
+      const mic = p.getTrackPublication(Track.Source.Microphone);
+      detector.watch(
+        p.identity,
+        mic && !mic.isMuted ? (mic.audioTrack?.mediaStreamTrack ?? null) : null,
+      );
+      if (detector.speaking(p.identity, now)) speakers.add(p.identity);
+    }
+    detector.keepOnly(ids);
+    const changed =
+      speakers.size !== this.#speakers.size || [...speakers].some((id) => !this.#speakers.has(id));
+    if (!changed) return;
+    this.#speakers = speakers;
+    this.#refresh();
   }
 
   #set(change: Partial<HangoutState>): void {

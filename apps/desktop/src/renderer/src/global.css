@@ -1956,14 +1956,27 @@ input::-webkit-calendar-picker-indicator:hover {
   overflow: hidden;
   border-radius: 12px;
   background: var(--hb-tile);
-  outline: 3px solid transparent;
-  outline-offset: -3px;
-  transition: outline-color 120ms;
 }
 
-/* The active speaker gets the gold ring (DECISIONS §5). */
-.tile[data-speaking] {
-  outline-color: var(--hb-accent);
+/*
+ * Whoever is speaking gets the gold ring (DECISIONS §5). It's a layer above the camera video
+ * (an outline on the tile is painted under it, #35), and lets clicks through. Quick to light,
+ * a little slower to fade, so it follows speech without flickering.
+ */
+.tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 3px transparent;
+  pointer-events: none;
+  transition: box-shadow 200ms ease-out;
+}
+
+.tile[data-speaking]::after {
+  box-shadow: inset 0 0 0 3px var(--hb-accent);
+  transition-duration: 60ms;
 }
 
 .tile__video {
