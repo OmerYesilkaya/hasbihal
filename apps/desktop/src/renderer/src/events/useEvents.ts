@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Occurrence, RoomEvent } from '@hasbihal/protocol';
-import { useChat, useChatState } from '../chat/context.tsx';
+import { useChat } from '../chat/context.tsx';
+import { queryKeys, unwrap } from '../queries.ts';
 
 export interface EventsView {
   events: ReadonlyMap<string, RoomEvent>;
@@ -13,46 +15,43 @@ const HOUR = 3_600_000;
 
 /**
  * Occurrences from the last hour (still running) to `days` ahead, for one room or all, reloaded
- * whenever any room's events change (A15). Events are fetched per window, never kept in the store.
+ * whenever any room's events change (A15; the shell marks them stale). Events are fetched per
+ * window, never kept in the store.
  */
 export function useEvents(roomId: string | null, days: number): EventsView {
   const { client } = useChat();
-  const { eventsRevision } = useChatState();
-  const [view, setView] = useState<EventsView>(EMPTY);
-  // Reload hourly too, so "tomorrow" becomes "today" in a window left open.
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTick((n) => n + 1);
-    }, HOUR);
-    return () => {
-      clearInterval(timer);
-    };
-  }, []);
+  const { data } = useQuery({
+    queryKey: queryKeys.eventWindow(roomId, days),
+    queryFn: async (): Promise<EventsView> => {
+      const now = Date.now();
+      const window = await unwrap(
+        client.events.window({
+          from: new Date(now - HOUR).toISOString(),
+          to: new Date(now + days * 24 * HOUR).toISOString(),
+          ...(roomId ? { roomId } : {}),
+        }),
+      );
+      return {
+        events: new Map(window.events.map((e) => [e.id, e])),
+        // What already ended is gone; skipped ones stay listed, marked.
+        occurrences: window.occurrences.filter((o) => Date.parse(o.endsAt) > Date.now()),
+        loaded: true,
+      };
+    },
+    // Hourly too, so "tomorrow" becomes "today" in a window left open.
+    refetchInterval: HOUR,
+    // The window moves with the clock, and the Map isn't plain data to share structure with.
+    structuralSharing: false,
+  });
+  return data ?? EMPTY;
+}
 
-  useEffect(() => {
-    let current = true;
-    const now = Date.now();
-    void client.events
-      .window({
-        from: new Date(now - HOUR).toISOString(),
-        to: new Date(now + days * 24 * HOUR).toISOString(),
-        ...(roomId ? { roomId } : {}),
-      })
-      .then((result) => {
-        if (!current || !result.ok) return;
-        setView({
-          events: new Map(result.value.events.map((e) => [e.id, e])),
-          // What already ended is gone; skipped ones stay listed, marked.
-          occurrences: result.value.occurrences.filter((o) => Date.parse(o.endsAt) > Date.now()),
-          loaded: true,
-        });
-      });
-    return () => {
-      current = false;
-    };
-  }, [client, roomId, days, eventsRevision, tick]);
-  return view;
+/** Marks every event window stale, after a change to an event (also announced by the gateway). */
+export function useRefreshEvents(): () => void {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.events });
+  };
 }
 
 /** The current time, refreshed every half minute: for "now" and "today" labels. */

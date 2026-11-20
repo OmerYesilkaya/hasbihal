@@ -31,6 +31,8 @@ import { formatTime, I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
 import { playSound, ring, stopRing } from './sound.ts';
 import { createClient } from './client.ts';
+import { createQueryClient, queryKeys } from './queries.ts';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useGateway } from './useGateway.ts';
 import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
 import { SettingsDialog } from './settings/SettingsDialog.tsx';
@@ -124,6 +126,7 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   // One store per signed-in session: signing out unmounts the shell and drops it.
   const [store] = useState(() => new ChatStore());
   const [client] = useState(() => createClient(info.serverUrl));
+  const [queryClient] = useState(createQueryClient);
   // One call per signed-in session too; signing out leaves it.
   const [hangout] = useState(() => new HangoutSession(client));
   const hangoutState = useSyncExternalStore(hangout.subscribe, hangout.getSnapshot);
@@ -218,6 +221,15 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
     },
   });
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  // #46: what screens fetched may have changed while the connection was down; refresh it on
+  // every (re)connect. Event windows also when the gateway says events changed.
+  const connected = status.kind === 'connected';
+  useEffect(() => {
+    if (connected) void queryClient.invalidateQueries();
+  }, [connected, queryClient]);
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.events });
+  }, [state.eventsRevision, queryClient]);
   const chat = useMemo(
     (): Chat => ({ info, client, store, typing, hangout }),
     [info, client, store, typing, hangout],
@@ -315,112 +327,114 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   }
 
   return (
-    <ChatProvider chat={chat}>
-      <PanelsProvider value={panels}>
-        <div
-          className="shell"
-          data-rooms-hidden={panels.panels.rooms ? undefined : true}
-          data-members-hidden={panels.panels.members ? undefined : true}
-        >
-          <aside className="sidebar" inert={!panels.panels.rooms}>
-            <div className="brand">
-              <Tulip />
-              <div>
-                <div className="brand__name">{t('app.name')}</div>
-                <div className="brand__tagline">{t('app.tagline')}</div>
-              </div>
-            </div>
-            <hr className="divider" />
-            <RoomList selectedId={roomId} onSelect={setChosenRoom} />
-            {me.role === 'admin' && (
-              <button
-                type="button"
-                className="sidebar__admin"
-                onClick={() => {
-                  setAdminOpen(true);
-                }}
-              >
-                <Icon icon={Shield} /> {t('admin.heading')}
-              </button>
-            )}
-            <UserPanel
-              user={me}
-              presence={state.presence.get(me.id) ?? 'offline'}
-              onSetPresence={setPresence}
-              onSignOut={onSignOut}
-              onOpenProfile={() => {
-                setProfileOpen(true);
-              }}
-              onOpenSettings={() => {
-                setSettingsOpen(true);
-              }}
-            />
-          </aside>
-
-          <main className="content">
-            <div className="content__status">
-              <ConnectionBadge status={status} />
-            </div>
-            {linkWhileSignedIn && (
-              <div className="banner" role="status">
-                <span>{t('auth.linkWhileSignedIn')}</span>
-                <button type="button" className="link" onClick={onDismissLink} aria-label="×">
-                  <Icon icon={X} />
-                </button>
-              </div>
-            )}
-            {roomId ? (
-              <RoomView key={roomId} roomId={roomId} />
-            ) : (
-              <>
-                <header className="content__header">
-                  <PanelToggle side="rooms" />
-                  <span className="content__spacer" />
-                  <PanelToggle side="members" />
-                </header>
-                <div className="content__placeholder">
-                  <EmptyState>
-                    {t(me.role === 'admin' ? 'rooms.noneAdmin' : 'rooms.none')}
-                  </EmptyState>
-                </div>
-              </>
-            )}
-          </main>
-
-          <aside
-            className="members"
-            aria-label={t('members.heading')}
-            inert={!panels.panels.members}
+    <QueryClientProvider client={queryClient}>
+      <ChatProvider chat={chat}>
+        <PanelsProvider value={panels}>
+          <div
+            className="shell"
+            data-rooms-hidden={panels.panels.rooms ? undefined : true}
+            data-members-hidden={panels.panels.members ? undefined : true}
           >
-            <SearchPanel onOpenRoom={setChosenRoom}>
-              <header className="members__header">{t('members.heading')}</header>
-              <MemberList store={store} />
-            </SearchPanel>
-          </aside>
-        </div>
-      </PanelsProvider>
-      {adminOpen && (
-        <AdminDialog
-          onClose={() => {
-            setAdminOpen(false);
-          }}
-        />
-      )}
-      {settingsOpen && (
-        <SettingsDialog
-          onClose={() => {
-            setSettingsOpen(false);
-          }}
-        />
-      )}
-      {profileOpen && (
-        <ProfileDialog
-          onClose={() => {
-            setProfileOpen(false);
-          }}
-        />
-      )}
-    </ChatProvider>
+            <aside className="sidebar" inert={!panels.panels.rooms}>
+              <div className="brand">
+                <Tulip />
+                <div>
+                  <div className="brand__name">{t('app.name')}</div>
+                  <div className="brand__tagline">{t('app.tagline')}</div>
+                </div>
+              </div>
+              <hr className="divider" />
+              <RoomList selectedId={roomId} onSelect={setChosenRoom} />
+              {me.role === 'admin' && (
+                <button
+                  type="button"
+                  className="sidebar__admin"
+                  onClick={() => {
+                    setAdminOpen(true);
+                  }}
+                >
+                  <Icon icon={Shield} /> {t('admin.heading')}
+                </button>
+              )}
+              <UserPanel
+                user={me}
+                presence={state.presence.get(me.id) ?? 'offline'}
+                onSetPresence={setPresence}
+                onSignOut={onSignOut}
+                onOpenProfile={() => {
+                  setProfileOpen(true);
+                }}
+                onOpenSettings={() => {
+                  setSettingsOpen(true);
+                }}
+              />
+            </aside>
+
+            <main className="content">
+              <div className="content__status">
+                <ConnectionBadge status={status} />
+              </div>
+              {linkWhileSignedIn && (
+                <div className="banner" role="status">
+                  <span>{t('auth.linkWhileSignedIn')}</span>
+                  <button type="button" className="link" onClick={onDismissLink} aria-label="×">
+                    <Icon icon={X} />
+                  </button>
+                </div>
+              )}
+              {roomId ? (
+                <RoomView key={roomId} roomId={roomId} />
+              ) : (
+                <>
+                  <header className="content__header">
+                    <PanelToggle side="rooms" />
+                    <span className="content__spacer" />
+                    <PanelToggle side="members" />
+                  </header>
+                  <div className="content__placeholder">
+                    <EmptyState>
+                      {t(me.role === 'admin' ? 'rooms.noneAdmin' : 'rooms.none')}
+                    </EmptyState>
+                  </div>
+                </>
+              )}
+            </main>
+
+            <aside
+              className="members"
+              aria-label={t('members.heading')}
+              inert={!panels.panels.members}
+            >
+              <SearchPanel onOpenRoom={setChosenRoom}>
+                <header className="members__header">{t('members.heading')}</header>
+                <MemberList store={store} />
+              </SearchPanel>
+            </aside>
+          </div>
+        </PanelsProvider>
+        {adminOpen && (
+          <AdminDialog
+            onClose={() => {
+              setAdminOpen(false);
+            }}
+          />
+        )}
+        {settingsOpen && (
+          <SettingsDialog
+            onClose={() => {
+              setSettingsOpen(false);
+            }}
+          />
+        )}
+        {profileOpen && (
+          <ProfileDialog
+            onClose={() => {
+              setProfileOpen(false);
+            }}
+          />
+        )}
+      </ChatProvider>
+    </QueryClientProvider>
   );
 }
 
