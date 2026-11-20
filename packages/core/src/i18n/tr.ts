@@ -357,6 +357,7 @@ export const tr = {
   'settings.cameraPreview': 'Kamerayı göster',
   'settings.cameraPreviewStop': 'Kamerayı kapat',
   'hangout.micTestFailed': 'Mikrofon açılamadı. İzinleri ve seçili mikrofonu kontrol et.',
+  'share.exitFullscreen': 'Tam ekrandan çık',
 } as const;
 
 export type MessageKey = keyof typeof tr;

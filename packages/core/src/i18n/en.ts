@@ -350,4 +350,5 @@ export const en: Record<MessageKey, string> = {
   'settings.cameraPreviewStop': 'Stop preview',
   'hangout.micTestFailed':
     'Couldn’t open the microphone. Check permissions and the chosen microphone.',
+  'share.exitFullscreen': 'Exit full screen',
 };
