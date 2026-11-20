@@ -29,12 +29,13 @@ import { SearchPanel } from './components/SearchPanel.tsx';
 import { Tulip } from './components/Tulip.tsx';
 import { formatTime, I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
-import { playChime } from './sound.ts';
+import { playSound, ring, stopRing } from './sound.ts';
 import { useGateway } from './useGateway.ts';
 import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
 import { SettingsDialog } from './settings/SettingsDialog.tsx';
 import { LogOut, Settings, Shield, UserRound, X } from 'lucide-react';
-import { Toaster, toast } from 'sonner';
+import { Toaster } from 'sonner';
+import { toastError } from './components/toast.ts';
 import { ConfirmHost } from './components/confirm.tsx';
 import { Icon } from './components/Icon.tsx';
 import { Tip, TipProvider } from './components/Tip.tsx';
@@ -138,7 +139,8 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
 
   /**
    * A system notification, if the A28 rules want one: it brings the app forward and runs
-   * `onClick`. Our own chime instead of the system sound, so it's the same everywhere.
+   * `onClick`. Our own sound (#37) instead of the system's, so it's the same everywhere: the
+   * alert, or for a nudge the ringtone.
    */
   const notify = (
     occasion: Occasion,
@@ -150,9 +152,13 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
     const viewingRoom = document.hasFocus() && shownRoom.current === roomId;
     const notice = noticeFor(occasion, { ...situation(), viewingRoom });
     if (!notice.notify) return;
-    if (notice.sound) playChime();
+    if (notice.sound) {
+      if (occasion.kind === 'nudge') ring();
+      else playSound('alert');
+    }
     const notification = new Notification(title, { body, silent: true });
     notification.onclick = () => {
+      stopRing();
       window.hasbihal.system.focusWindow();
       onClick();
     };
@@ -225,7 +231,7 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   useEffect(
     () =>
       hangout.onNotice((notice) => {
-        toast.error(t(notice));
+        toastError(t(notice));
       }),
     [hangout, t],
   );

@@ -1,18 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { LOCALES } from '@hasbihal/core';
-import { X } from 'lucide-react';
+import { Play, Square, X } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
 import { VoiceSettingsFields } from '../hangout/VoiceSettings.tsx';
 import { systemLocale, useLanguage, useT } from '../i18n.tsx';
 import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
 import { Tabs } from '../components/Tabs.tsx';
-import { Select, Switch } from '../components/controls.tsx';
+import { Select, Slider, Switch } from '../components/controls.tsx';
+import { RINGTONES, ring, soundSettings, stopRing } from '../sound.ts';
 
-type Tab = 'general' | 'voice';
+type Tab = 'general' | 'voice' | 'sounds';
 
 /**
  * The app's settings for this computer: language (A18) and starting with the computer (A39);
- * microphone, camera and how the mic opens (A29, A37). The profile (A41) stays about the person.
+ * microphone, camera and how the mic opens (A29, A37); sound effects and the ringtone (#37). The
+ * profile (A41) stays about the person.
  */
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -29,7 +31,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       <Tabs
         value={tab}
         onChange={setTab}
-        tabs={(['general', 'voice'] as const).map((value) => ({
+        tabs={(['general', 'voice', 'sounds'] as const).map((value) => ({
           value,
           label: t(`settings.tab.${value}`),
         }))}
@@ -40,11 +42,13 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             <LanguageSection />
             <StartupSection />
           </>
-        ) : (
+        ) : tab === 'voice' ? (
           <section className="profile__section">
             <VoiceSettingsFields cameraPreview />
             <p className="field__hint">{t('settings.voiceHint')}</p>
           </section>
+        ) : (
+          <SoundsSection />
         )}
       </Tabs>
     </Modal>
@@ -104,5 +108,66 @@ function StartupSection() {
       </Switch>
       <p className="field__hint">{t('settings.launchAtStartupHint')}</p>
     </section>
+  );
+}
+
+/** #37: how loud the sound effects are (or off), and which ringtone a call into a call rings with. */
+function SoundsSection() {
+  const t = useT();
+  const settings = useSyncExternalStore(soundSettings.subscribe, soundSettings.get);
+  const ringing = useSyncExternalStore(soundSettings.subscribe, soundSettings.ringing);
+  // A ringtone being tried out stops with the settings.
+  useEffect(() => stopRing, []);
+  const percent = Math.round(settings.volume * 100);
+  return (
+    <>
+      <section className="profile__section">
+        <span className="field__label">
+          {t('settings.sounds')} ·{' '}
+          {percent === 0 ? t('settings.soundsOff') : t('settings.soundsLevel', { percent })}
+        </span>
+        <Slider
+          label={t('settings.sounds')}
+          min={0}
+          max={100}
+          step={5}
+          value={percent}
+          onChange={(value) => {
+            soundSettings.update({ volume: value / 100 });
+          }}
+        />
+        <p className="field__hint">{t('settings.soundsHint')}</p>
+      </section>
+      <section className="profile__section">
+        <div className="settings__ringtone">
+          <Select
+            label={t('settings.ringtone')}
+            value={settings.ringtone}
+            onChange={(ringtone) => {
+              soundSettings.update({ ringtone });
+              ring(ringtone);
+            }}
+            options={RINGTONES.map((value) => ({
+              value,
+              label: t(`settings.ringtone.${value}`),
+            }))}
+          />
+          <button
+            type="button"
+            className="button"
+            data-testid="ringtone-play"
+            disabled={percent === 0}
+            onClick={() => {
+              if (ringing) stopRing();
+              else ring();
+            }}
+          >
+            <Icon icon={ringing ? Square : Play} />{' '}
+            {ringing ? t('settings.ringtoneStop') : t('settings.ringtonePlay')}
+          </button>
+        </div>
+        <p className="field__hint">{t('settings.ringtoneHint')}</p>
+      </section>
+    </>
   );
 }

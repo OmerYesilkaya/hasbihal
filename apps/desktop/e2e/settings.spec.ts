@@ -1,6 +1,6 @@
 import { createPerson, expect, test } from './support.ts';
 
-test('settings: language, microphone test, camera preview', async ({ desktop }) => {
+test('settings: language, microphone test, camera preview, ringtone', async ({ desktop }) => {
   const page = await desktop.signedIn(await createPerson('Derya Test'));
   await page.getByTestId('open-settings').click();
   const settings = page.getByTestId('settings');
@@ -25,4 +25,20 @@ test('settings: language, microphone test, camera preview', async ({ desktop }) 
   await expect
     .poll(() => settings.locator('video').evaluate((v) => (v as { videoWidth: number }).videoWidth))
     .toBeGreaterThan(0);
+
+  // The ringtone plays from the bundled file (a file that failed to load would end at once),
+  // can be stopped, and the choice stays.
+  await settings.getByRole('tab', { name: 'Sesler' }).click();
+  await expect(settings.getByRole('combobox', { name: 'Zil sesi' })).toHaveText('Zil 1');
+  await settings.getByRole('combobox', { name: 'Zil sesi' }).click();
+  await page.getByRole('option', { name: 'Zil 2', exact: true }).click();
+  const play = settings.getByTestId('ringtone-play');
+  await expect(play).toHaveText('Durdur');
+  await page.waitForTimeout(1500);
+  await expect(play).toHaveText('Durdur');
+  await play.click();
+  await expect(play).toHaveText('Dinle');
+  expect(await page.evaluate(() => localStorage.getItem('hasbihal.sounds'))).toContain(
+    '"ringtone":"ring1"',
+  );
 });

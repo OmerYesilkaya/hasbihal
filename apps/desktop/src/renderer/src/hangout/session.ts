@@ -19,6 +19,7 @@ import { HangoutToken } from '@hasbihal/protocol';
 import { api } from '../api.ts';
 import { Microphone, type InputMode, type MicSettings } from './microphone.ts';
 import { SPEAKING_CHECK_MS, SpeakingDetector } from './speaking.ts';
+import { playSound, stopRing } from '../sound.ts';
 
 /** One person in the call, as the grid shows them. */
 export interface ParticipantView {
@@ -247,10 +248,12 @@ export class HangoutSession {
     room
       .on(RoomEvent.ParticipantConnected, (participant) => {
         this.#syncSubscriptions(participant);
+        this.#callSound('joined');
         refresh();
       })
       .on(RoomEvent.ParticipantDisconnected, (participant) => {
         this.#watching.delete(participant.identity);
+        this.#callSound('left');
         refresh();
       })
       .on(RoomEvent.TrackPublished, (_publication, participant) => {
@@ -294,6 +297,8 @@ export class HangoutSession {
     }
     if (this.#room !== room) return; // left while connecting
     this.#set({ status: 'connected' });
+    stopRing(); // whoever called us here, we're here now
+    playSound('joined');
     for (const participant of room.remoteParticipants.values())
       this.#syncSubscriptions(participant);
     this.#startSpeakingCheck();
@@ -315,7 +320,11 @@ export class HangoutSession {
     this.#watching.clear();
     for (const elements of this.#audioElements.values()) for (const el of elements) el.remove();
     this.#audioElements.clear();
-    if (room) await room.disconnect();
+    if (room) {
+      // Only a call that had connected: not for giving up while still connecting.
+      if (this.#state.status !== 'connecting') playSound('left');
+      await room.disconnect();
+    }
     this.#set({
       roomId: null,
       status: 'idle',
@@ -331,12 +340,14 @@ export class HangoutSession {
       await this.toggleDeafen(); // un-deafening unmutes too, as in Discord
       return;
     }
+    playSound('click');
     await this.#setMicMuted(!this.#state.micMuted);
   }
 
   /** Deafen: hear nobody and be heard by nobody. */
   async toggleDeafen(): Promise<void> {
     const deafened = !this.#state.deafened;
+    playSound('click');
     this.#set({ deafened });
     this.#applyVolumes();
     await this.#setMicMuted(deafened);
@@ -684,6 +695,11 @@ export class HangoutSession {
     if (!changed) return;
     this.#speakers = speakers;
     this.#refresh();
+  }
+
+  /** Someone else joining or leaving: not heard while deafened, like everything else in the call. */
+  #callSound(sound: 'joined' | 'left'): void {
+    if (!this.#state.deafened) playSound(sound);
   }
 
   #set(change: Partial<HangoutState>): void {

@@ -6,7 +6,7 @@ import { Menu, MenuItem, MenuSeparator } from '../components/Popover.tsx';
 import { useT } from '../i18n.tsx';
 import { useRoomPrefs } from './useRoomPrefs.ts';
 import { confirm } from '../components/confirm.tsx';
-import { toast } from 'sonner';
+import { toastError } from '../components/toast.ts';
 import { Tip } from '../components/Tip.tsx';
 
 /**
@@ -30,7 +30,7 @@ export function RoomMenu({ roomId, roomName }: { roomId: string; roomName: strin
     if (!yes) return;
     // The room leaves the list when the server's room_deleted arrives, here and everywhere.
     const result = await api(info.serverUrl, 'DELETE', `/rooms/${roomId}`);
-    if (!result.ok) toast.error(t('error.unexpected'));
+    if (!result.ok) toastError(t('error.unexpected'));
   };
 
   return (
