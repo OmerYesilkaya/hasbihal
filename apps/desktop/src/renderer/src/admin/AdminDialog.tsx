@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MessageKey } from '@hasbihal/core';
 import type { OneTimeLink } from '@hasbihal/protocol';
-import { type PendingInvite, type Role, type User } from '@hasbihal/protocol';
+import { type Role, type User } from '@hasbihal/protocol';
 import { Avatar } from '../components/Avatar.tsx';
+import { queryKeys, unwrap } from '../queries.ts';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
 import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
@@ -69,34 +71,25 @@ function Invites() {
   const { members } = useChatState();
   const [role, setRole] = useState<Role>('member');
   const [created, setCreated] = useState<OneTimeLink | null>(null);
-  const [pending, setPending] = useState<PendingInvite[]>([]);
-  const [error, setError] = useState<MessageKey | null>(null);
-
-  // Reloaded after each change.
-  const [revision, setRevision] = useState(0);
-  const reload = () => {
-    setRevision((n) => n + 1);
-  };
-  useEffect(() => {
-    let current = true;
-    void client.admin.invites().then((result) => {
-      if (current && result.ok) setPending(result.value.invites);
-    });
-    return () => {
-      current = false;
-    };
-  }, [client, revision]);
-
-  const create = async () => {
-    const result = await client.invites.create({ role });
-    if (!result.ok) {
-      setError('error.unexpected');
-      return;
-    }
-    setError(null);
-    setCreated(result.value);
-    reload();
-  };
+  const queryClient = useQueryClient();
+  const pending = useQuery({
+    queryKey: queryKeys.invites,
+    queryFn: () => unwrap(client.admin.invites()),
+    select: (list) => list.invites,
+  });
+  const reload = () => queryClient.invalidateQueries({ queryKey: queryKeys.invites });
+  const create = useMutation({
+    mutationFn: (inviteRole: Role) => unwrap(client.invites.create({ role: inviteRole })),
+    onSuccess: (link) => {
+      setCreated(link);
+      return reload();
+    },
+  });
+  const revoke = useMutation({
+    mutationFn: (inviteId: string) => unwrap(client.admin.revokeInvite(inviteId)),
+    onSuccess: reload,
+  });
+  const failed = [create, revoke, pending].some((state) => state.isError);
 
   return (
     <>
@@ -111,18 +104,25 @@ function Invites() {
             label: t(`admin.role.${r}`),
           }))}
         />
-        <button type="button" className="button button--primary" onClick={() => void create()}>
+        <button
+          type="button"
+          className="button button--primary"
+          disabled={create.isPending}
+          onClick={() => {
+            create.mutate(role);
+          }}
+        >
           {t('admin.createInvite')}
         </button>
       </div>
-      {error && <p className="field__error">{t(error)}</p>}
+      {failed && <p className="field__error">{t('error.unexpected')}</p>}
       {created && <LinkBox link={created} hint="admin.inviteHint" />}
       <h2 className="profile__subtitle">{t('admin.pending')}</h2>
-      {pending.length === 0 ? (
+      {!pending.data ? null : pending.data.length === 0 ? (
         <p className="field__hint">{t('admin.noPending')}</p>
       ) : (
         <ul className="admin__list">
-          {pending.map((invite) => (
+          {pending.data.map((invite) => (
             <li key={invite.id} className="admin__item">
               <span>
                 {t(`admin.role.${invite.role}`)} ·{' '}
@@ -139,7 +139,10 @@ function Invites() {
               <button
                 type="button"
                 className="link link--danger"
-                onClick={() => void client.admin.revokeInvite(invite.id).then(reload)}
+                disabled={revoke.isPending}
+                onClick={() => {
+                  revoke.mutate(invite.id);
+                }}
               >
                 {t('admin.revoke')}
               </button>

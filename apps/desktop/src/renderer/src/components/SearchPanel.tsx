@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { foldTurkish, parseMarkdown, toPlainText } from '@hasbihal/core';
 import { type Message } from '@hasbihal/protocol';
 import { useChat, useChatState } from '../chat/context.tsx';
+import { queryKeys, unwrap } from '../queries.ts';
 import { formatDateTime, useT } from '../i18n.tsx';
 import { EmptyState } from './EmptyState.tsx';
 import { Paperclip } from 'lucide-react';
@@ -19,12 +21,6 @@ const wordsOf = (q: string) =>
     .filter(Boolean)
     .map(foldTurkish);
 
-interface Found {
-  query: string;
-  messages: Message[];
-  hasMore: boolean;
-}
-
 /**
  * Search across every room (A27), in the right-hand column: while there is a query it shows
  * results, newest first, in place of the member list (`children`).
@@ -40,9 +36,8 @@ export function SearchPanel({
   const { client } = useChat();
   const input = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
-  const [found, setFound] = useState<Found | null>(null);
-  const [failed, setFailed] = useState(false);
-  const latest = useRef(0);
+  // What's searched for: the query once typing pauses.
+  const [settled, setSettled] = useState('');
   const active = query.trim().length >= MIN_LENGTH;
 
   // ⌘F / Ctrl+F: there is no page to find in, so it searches the messages.
@@ -60,35 +55,30 @@ export function SearchPanel({
     };
   }, []);
 
-  const run = async (q: string, before?: string) => {
-    const ticket = ++latest.current;
-    const result = await client.search({ q, ...(before ? { before } : {}) });
-    if (ticket !== latest.current) return; // a newer search has started
-    if (!result.ok) {
-      setFailed(true);
-      return;
-    }
-    const page = result.value;
-    setFailed(false);
-    setFound((previous) => ({
-      query: q,
-      messages: before && previous ? [...previous.messages, ...page.messages] : page.messages,
-      hasMore: page.hasMore,
-    }));
-  };
-
   useEffect(() => {
-    const q = query.trim();
-    if (q.length < MIN_LENGTH) return;
-    const timer = setTimeout(() => void run(q), DEBOUNCE_MS);
+    const timer = setTimeout(() => {
+      setSettled(query.trim());
+    }, DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
     };
-    // `run` reads only stable values and refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  const current = active && found?.query === query.trim() ? found : null;
+  // Newest first; "more" asks for what came before the last one shown. A search seen again
+  // shows at once and reloads behind the scenes (no staleTime), as new messages may match.
+  const search = useInfiniteQuery({
+    queryKey: queryKeys.search(settled),
+    queryFn: ({ pageParam }) =>
+      unwrap(client.search({ q: settled, ...(pageParam ? { before: pageParam } : {}) })),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => (page.hasMore ? (page.messages.at(-1)?.id ?? null) : null),
+    enabled: settled.length >= MIN_LENGTH,
+    staleTime: 0,
+  });
+  const current =
+    active && settled === query.trim() && search.data
+      ? { query: settled, messages: search.data.pages.flatMap((page) => page.messages) }
+      : null;
   return (
     <>
       <div className="search">
@@ -103,10 +93,7 @@ export function SearchPanel({
             setQuery(e.target.value);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setQuery('');
-              setFound(null);
-            }
+            if (e.key === 'Escape') setQuery('');
           }}
         />
       </div>
@@ -114,7 +101,7 @@ export function SearchPanel({
         children
       ) : (
         <div className="search__results" data-testid="search-results" aria-live="polite">
-          {failed ? (
+          {search.isError ? (
             <p className="search__note">{t('error.unavailable')}</p>
           ) : !current ? (
             <p className="search__note">{t('search.searching')}</p>
@@ -132,11 +119,12 @@ export function SearchPanel({
                   }}
                 />
               ))}
-              {current.hasMore && (
+              {search.hasNextPage && (
                 <button
                   type="button"
                   className="link search__more"
-                  onClick={() => void run(current.query, current.messages.at(-1)?.id)}
+                  disabled={search.isFetchingNextPage}
+                  onClick={() => void search.fetchNextPage()}
                 >
                   {t('search.more')}
                 </button>

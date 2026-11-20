@@ -1,8 +1,11 @@
 import { useId, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { fromWall, toWall, type MessageKey } from '@hasbihal/core';
-import type { RoomEvent } from '@hasbihal/protocol';
+import type { RoomEvent, SaveEventRequest } from '@hasbihal/protocol';
 import { REMINDER_CHOICES, type Recurrence } from '@hasbihal/protocol';
 import { useChat, useChatState } from '../chat/context.tsx';
+import { unwrap } from '../queries.ts';
+import { useRefreshEvents } from './useEvents.ts';
 import { useT } from '../i18n.tsx';
 import { Checkbox, Select } from '../components/controls.tsx';
 
@@ -52,7 +55,18 @@ export function EventForm({
   const [reminder, setReminder] = useState(event?.reminderMin ?? 10);
   const [invitees, setInvitees] = useState<string[]>(event?.inviteeIds ?? []);
   const [error, setError] = useState<MessageKey | null>(null);
-  const [saving, setSaving] = useState(false);
+  const refreshEvents = useRefreshEvents();
+  const saveEvent = useMutation({
+    mutationFn: (body: SaveEventRequest) =>
+      unwrap(event ? client.events.update(event.id, body) : client.events.create(body)),
+    onSuccess: () => {
+      refreshEvents();
+      onDone();
+    },
+    onError: () => {
+      setError('error.unexpected');
+    },
+  });
 
   const days = t('events.weekdays').split(',');
   const recurrence = (): Recurrence | null => {
@@ -66,13 +80,12 @@ export function EventForm({
     };
   };
 
-  const save = async () => {
+  const save = () => {
     if (!title.trim() || !date || !time) {
       setError('events.incomplete');
       return;
     }
-    setSaving(true);
-    const body = {
+    const body: SaveEventRequest = {
       roomId,
       title,
       description: description.trim() || null,
@@ -82,12 +95,7 @@ export function EventForm({
       reminderMin: reminder,
       inviteeIds: invitees,
     };
-    const result = await (event
-      ? client.events.update(event.id, body)
-      : client.events.create(body));
-    setSaving(false);
-    if (result.ok) onDone();
-    else setError('error.unexpected');
+    saveEvent.mutate(body);
   };
 
   const people = [...members.values()].sort((a, b) =>
@@ -98,7 +106,7 @@ export function EventForm({
       className="event-form"
       onSubmit={(e) => {
         e.preventDefault();
-        void save();
+        save();
       }}
     >
       <label className="field__label" htmlFor={`${id}-title`}>
@@ -241,7 +249,7 @@ export function EventForm({
         <button type="button" className="button" onClick={onDone}>
           {t('composer.cancel')}
         </button>
-        <button type="submit" className="button button--primary" disabled={saving}>
+        <button type="submit" className="button button--primary" disabled={saveEvent.isPending}>
           {t('events.save')}
         </button>
       </div>

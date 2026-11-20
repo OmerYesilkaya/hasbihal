@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import type { MessageKey } from '@hasbihal/core';
+import { useMutation } from '@tanstack/react-query';
 import type { Occurrence, RoomEvent, RsvpResponse } from '@hasbihal/protocol';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Menu, MenuItem, MenuSeparator } from '../components/Popover.tsx';
 import { useChat, useChatState } from '../chat/context.tsx';
 import type { ApiResult } from '../api.ts';
+import { unwrap } from '../queries.ts';
 import { formatWhen, formatTime, useT } from '../i18n.tsx';
 import { EventForm, fromInputs, toInputs } from './EventForm.tsx';
-import type { EventsView } from './useEvents.ts';
+import { useRefreshEvents, type EventsView } from './useEvents.ts';
 import { CalendarClock, CalendarX, Check, Ellipsis, Pencil, Trash2, Undo2, X } from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
 import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
@@ -192,7 +193,6 @@ function OccurrenceRow({
   const { me, members } = useChatState();
   const [moving, setMoving] = useState(false);
   const [moveTo, setMoveTo] = useState(() => toInputs(occurrence.startsAt));
-  const [error, setError] = useState<MessageKey | null>(null);
   const date = client.events.occurrence(event.id, occurrence.start);
   const mine = occurrence.rsvps.find((r) => r.userId === me?.id)?.response;
   const names = (response: RsvpResponse) =>
@@ -203,13 +203,19 @@ function OccurrenceRow({
   const notComing = names('no');
   const invited = me ? event.inviteeIds.includes(me.id) : false;
 
-  const call = async (pending: Promise<ApiResult<unknown>>) => {
-    const result = await pending;
-    setError(result.ok ? null : 'error.unexpected');
-    return result.ok;
-  };
+  const refreshEvents = useRefreshEvents();
+  // Any change to this date or its event: on success every event window reloads.
+  const change = useMutation({
+    mutationFn: (request: () => Promise<ApiResult<unknown>>) => unwrap(request()),
+    onSuccess: refreshEvents,
+  });
+  const call = (request: () => Promise<ApiResult<unknown>>) =>
+    change.mutateAsync(request).then(
+      () => true,
+      () => false,
+    );
   const rsvp = (response: RsvpResponse) =>
-    call(mine === response ? date.clearRsvp() : date.rsvp({ response }));
+    call(() => (mine === response ? date.clearRsvp() : date.rsvp({ response })));
 
   return (
     <li
@@ -257,15 +263,17 @@ function OccurrenceRow({
             )}
           </span>
         )}
-        {error && <span className="field__error">{t(error)}</span>}
+        {change.isError && <span className="field__error">{t('error.unexpected')}</span>}
         {moving && (
           <form
             className="occurrence__move"
             onSubmit={(e) => {
               e.preventDefault();
-              void call(date.change({ kind: 'moved', startsAt: fromInputs(moveTo) })).then((ok) => {
-                if (ok) setMoving(false);
-              });
+              void call(() => date.change({ kind: 'moved', startsAt: fromInputs(moveTo) })).then(
+                (ok) => {
+                  if (ok) setMoving(false);
+                },
+              );
             }}
           >
             <input
@@ -326,14 +334,14 @@ function OccurrenceRow({
           >
             <>
               {occurrence.skipped || occurrence.moved ? (
-                <MenuItem icon={<Icon icon={Undo2} />} onSelect={() => void call(date.restore())}>
+                <MenuItem icon={<Icon icon={Undo2} />} onSelect={() => void call(date.restore)}>
                   {t('events.restore')}
                 </MenuItem>
               ) : (
                 <>
                   <MenuItem
                     icon={<Icon icon={CalendarX} />}
-                    onSelect={() => void call(date.change({ kind: 'skipped' }))}
+                    onSelect={() => void call(() => date.change({ kind: 'skipped' }))}
                   >
                     {t('events.skip')}
                   </MenuItem>
@@ -360,7 +368,7 @@ function OccurrenceRow({
                     action: t('events.delete'),
                     danger: true,
                   }).then((yes) => {
-                    if (yes) void call(client.events.delete(event.id));
+                    if (yes) void call(() => client.events.delete(event.id));
                   })
                 }
               >

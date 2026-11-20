@@ -1,8 +1,10 @@
-import { useEffect, useId, useRef, useState, type SubmitEvent } from 'react';
-import { DisplayName, Password, User, AVATAR_MAX_BYTES, type Session } from '@hasbihal/protocol';
+import { useId, useRef, useState, type SubmitEvent } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { DisplayName, Password, User, AVATAR_MAX_BYTES } from '@hasbihal/protocol';
 import type { MessageKey } from '@hasbihal/core';
 import { Avatar } from '../components/Avatar.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
+import { queryKeys, unwrap } from '../queries.ts';
 import { useChat, useChatState } from './context.tsx';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -228,28 +230,22 @@ function PasswordSection() {
 function SessionsSection() {
   const t = useT();
   const { client } = useChat();
-  const [sessions, setSessions] = useState<Session[] | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    void client.me.sessions().then((result) => {
-      if (current && result.ok) setSessions(result.value.sessions);
-    });
-    return () => {
-      current = false;
-    };
-  }, [client]);
-
-  const revoke = async (id: string) => {
-    const result = await client.me.revokeSession(id);
-    if (result.ok) setSessions((list) => list?.filter((s) => s.id !== id) ?? null);
-  };
+  const queryClient = useQueryClient();
+  const sessions = useQuery({
+    queryKey: queryKeys.sessions,
+    queryFn: () => unwrap(client.me.sessions()),
+    select: (list) => list.sessions,
+  });
+  const revoke = useMutation({
+    mutationFn: (sessionId: string) => unwrap(client.me.revokeSession(sessionId)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.sessions }),
+  });
 
   return (
     <section className="profile__section">
       <h2 className="profile__subtitle">{t('profile.devices')}</h2>
       <ul className="sessions">
-        {sessions?.map((session) => (
+        {sessions.data?.map((session) => (
           <li key={session.id} className="sessions__item" data-testid="session">
             <div>
               <div className="sessions__name">{session.deviceName}</div>
@@ -260,13 +256,23 @@ function SessionsSection() {
               </div>
             </div>
             {!session.current && (
-              <button type="button" className="link" onClick={() => void revoke(session.id)}>
+              <button
+                type="button"
+                className="link"
+                disabled={revoke.isPending}
+                onClick={() => {
+                  revoke.mutate(session.id);
+                }}
+              >
                 {t('profile.signOutDevice')}
               </button>
             )}
           </li>
         ))}
       </ul>
+      {(sessions.isError || revoke.isError) && (
+        <p className="field__error">{t('error.unavailable')}</p>
+      )}
     </section>
   );
 }
