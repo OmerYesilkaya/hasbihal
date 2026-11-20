@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ApiError, Attachment, FileUrls, type FileUrl } from '@hasbihal/protocol';
+import { ApiError, Attachment, type FileUrl } from '@hasbihal/protocol';
 import type { ApiResult } from './api.ts';
-import { api } from './api.ts';
+import { createClient } from './client.ts';
 
 const unreachable = { code: 'unavailable', message: 'The server cannot be reached.' } as const;
 
@@ -102,11 +102,8 @@ class FileAddressCache {
     const serverUrl = this.#serverUrl;
     for (let i = 0; i < batch.length; i += 100) {
       const part = batch.slice(i, i + 100);
-      const result = await api(serverUrl, 'POST', '/files/urls', {
-        body: { ids: part.map(([id]) => id) },
-        schema: FileUrls,
-      });
-      const urls: Record<string, FileUrl> = result.ok && result.value ? result.value.urls : {};
+      const result = await createClient(serverUrl).files.urls({ ids: part.map(([id]) => id) });
+      const urls: Record<string, FileUrl> = result.ok ? result.value.urls : {};
       for (const [id, resolvers] of part) {
         const url = urls[id];
         const addresses = url

@@ -6,16 +6,32 @@ export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: AuthErro
 
 const unreachable: AuthError = { code: 'unavailable', message: 'The server cannot be reached.' };
 
+type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+
 /**
- * A request to the server with the session's access token. `schema` parses the answer; without
- * it the answer is ignored (204s). Errors come back as the server's `ApiError`, or `unavailable`.
+ * A request to the server with the session's access token; `schema` parses the answer, and
+ * without it the answer is ignored (204s, or answers nobody reads). Never throws: errors come
+ * back as the server's `ApiError`, or `unavailable`. Called through the typed client
+ * (`client.ts`), which names every endpoint.
  */
-export async function api<S extends z.ZodType>(
+export function request<S extends z.ZodType>(
   serverUrl: string,
-  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  method: Method,
   path: string,
-  options: { body?: unknown; schema?: S } = {},
-): Promise<ApiResult<z.infer<S> | null>> {
+  options: { body?: unknown; schema: S },
+): Promise<ApiResult<z.infer<S>>>;
+export function request(
+  serverUrl: string,
+  method: Method,
+  path: string,
+  options?: { body?: unknown },
+): Promise<ApiResult<null>>;
+export async function request(
+  serverUrl: string,
+  method: Method,
+  path: string,
+  options: { body?: unknown; schema?: z.ZodType } = {},
+): Promise<ApiResult<unknown>> {
   const token = await window.hasbihal.auth.accessToken();
   if (!token.ok) return token;
   const { body } = options;
@@ -45,16 +61,6 @@ export async function api<S extends z.ZodType>(
   return parsed.success
     ? { ok: true, value: parsed.data }
     : { ok: false, error: { code: 'internal', message: 'Unexpected server response.' } };
-}
-
-/** GET that only cares about success: state the gateway will ask to reload anyway. */
-export async function apiGet<S extends z.ZodType>(
-  serverUrl: string,
-  path: string,
-  schema: S,
-): Promise<z.infer<S> | undefined> {
-  const result = await api(serverUrl, 'GET', path, { schema });
-  return result.ok ? (result.value ?? undefined) : undefined;
 }
 
 const fileUrls = new Map<string, Promise<string | null>>();

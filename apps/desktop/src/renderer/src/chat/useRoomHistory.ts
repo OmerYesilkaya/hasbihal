@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { roomMessages } from '@hasbihal/core';
-import { MessagePage } from '@hasbihal/protocol';
-import { apiGet } from '../api.ts';
 import { useChat, useChatState } from './context.tsx';
 
 const PAGE_SIZE = 50;
@@ -11,7 +9,7 @@ const PAGE_SIZE = 50;
  * pages on demand. Messages live in the store; this only tracks paging.
  */
 export function useRoomHistory(roomId: string) {
-  const { info, store } = useChat();
+  const { client, store } = useChat();
   const loaded = useChatState().messages.has(roomId);
   const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
   const inFlight = useRef(new Set<string>());
@@ -19,17 +17,14 @@ export function useRoomHistory(roomId: string) {
   useEffect(() => {
     if (loaded || inFlight.current.has(roomId)) return;
     inFlight.current.add(roomId);
-    void apiGet(
-      info.serverUrl,
-      `/rooms/${roomId}/messages?limit=${String(PAGE_SIZE)}`,
-      MessagePage,
-    ).then((page) => {
+    void client.rooms.messages(roomId, { limit: PAGE_SIZE }).then((result) => {
       inFlight.current.delete(roomId);
-      if (!page) return;
+      if (!result.ok) return;
+      const page = result.value;
       store.addMessages(roomId, page.messages);
       setHasMore((h) => ({ ...h, [roomId]: page.hasMore }));
     });
-  }, [roomId, loaded, info.serverUrl, store]);
+  }, [roomId, loaded, client, store]);
 
   /** Loads the page before the oldest loaded message; resolves with how many arrived. */
   const loadOlder = useCallback(async (): Promise<number> => {
@@ -37,17 +32,14 @@ export function useRoomHistory(roomId: string) {
     const key = `${roomId}:older`;
     if (!oldest || inFlight.current.has(key)) return 0;
     inFlight.current.add(key);
-    const page = await apiGet(
-      info.serverUrl,
-      `/rooms/${roomId}/messages?limit=${String(PAGE_SIZE)}&before=${oldest.id}`,
-      MessagePage,
-    );
+    const result = await client.rooms.messages(roomId, { limit: PAGE_SIZE, before: oldest.id });
     inFlight.current.delete(key);
-    if (!page) return 0;
+    if (!result.ok) return 0;
+    const page = result.value;
     store.addMessages(roomId, page.messages);
     setHasMore((h) => ({ ...h, [roomId]: page.hasMore }));
     return page.messages.length;
-  }, [roomId, info.serverUrl, store]);
+  }, [roomId, client, store]);
 
   return { loaded, hasMore: hasMore[roomId] ?? false, loadOlder };
 }

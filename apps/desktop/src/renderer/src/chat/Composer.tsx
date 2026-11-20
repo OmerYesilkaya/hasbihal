@@ -9,8 +9,8 @@ import {
   type Ref,
 } from 'react';
 import { decorate, foldTurkish, newId, type Decoration, type MessageKey } from '@hasbihal/core';
-import { Message, MESSAGE_BODY_MAX, type User } from '@hasbihal/protocol';
-import { api } from '../api.ts';
+import type { Message } from '@hasbihal/protocol';
+import { MESSAGE_BODY_MAX, type User } from '@hasbihal/protocol';
 import { useT } from '../i18n.tsx';
 import { formatSize, uploadFile } from '../files.ts';
 import { currentLocale } from '../i18n.tsx';
@@ -61,7 +61,7 @@ export function Composer({
   onEditLast,
 }: ComposerProps) {
   const t = useT();
-  const { info, store, typing } = useChat();
+  const { info, client, store, typing } = useChat();
   const { members, me } = useChatState();
   const input = useRef<HTMLTextAreaElement>(null);
   const mirror = useRef<HTMLDivElement>(null);
@@ -94,18 +94,15 @@ export function Composer({
       { durationMs },
     );
     const result = upload.ok
-      ? await api(info.serverUrl, 'POST', `/rooms/${roomId}/messages`, {
-          body: {
-            id: newId(),
-            body: '',
-            attachmentIds: [upload.value.id],
-            ...(replyToId ? { replyToId } : {}),
-          },
-          schema: Message,
+      ? await client.rooms.send(roomId, {
+          id: newId(),
+          body: '',
+          attachmentIds: [upload.value.id],
+          ...(replyToId ? { replyToId } : {}),
         })
       : upload;
     setVoiceProgress(null);
-    if (result.ok && result.value) {
+    if (result.ok) {
       store.apply({ type: 'message_created', message: result.value });
       onCancel();
     } else {
@@ -207,18 +204,9 @@ export function Composer({
         onCancel();
         return;
       }
-      const result = await api(info.serverUrl, 'PATCH', `/messages/${editing.id}`, {
-        body: { body },
-        schema: Message,
-      });
-      if (!result.ok || !result.value) {
-        setError(
-          result.ok
-            ? 'error.unexpected'
-            : result.error.code === 'unavailable'
-              ? 'error.unavailable'
-              : 'error.unexpected',
-        );
+      const result = await client.messages.edit(editing.id, { body });
+      if (!result.ok) {
+        setError(result.error.code === 'unavailable' ? 'error.unavailable' : 'error.unexpected');
         return;
       }
       store.apply({ type: 'message_updated', message: result.value });
@@ -232,11 +220,13 @@ export function Composer({
     pending.current = { id, key };
     setText('');
     onCancel();
-    const result = await api(info.serverUrl, 'POST', `/rooms/${roomId}/messages`, {
-      body: { id, body, attachmentIds, ...(replyTo ? { replyToId: replyTo.id } : {}) },
-      schema: Message,
+    const result = await client.rooms.send(roomId, {
+      id,
+      body,
+      attachmentIds,
+      ...(replyTo ? { replyToId: replyTo.id } : {}),
     });
-    if (result.ok && result.value) {
+    if (result.ok) {
       pending.current = null;
       clear();
       store.apply({ type: 'message_created', message: result.value });
@@ -244,13 +234,7 @@ export function Composer({
     }
     // Give the text back (unless they've started a new one) so nothing typed is lost.
     setText((current) => current || body);
-    setError(
-      result.ok
-        ? 'error.unexpected'
-        : result.error.code === 'unavailable'
-          ? 'composer.sendFailed'
-          : 'error.unexpected',
-    );
+    setError(result.error.code === 'unavailable' ? 'composer.sendFailed' : 'error.unexpected');
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

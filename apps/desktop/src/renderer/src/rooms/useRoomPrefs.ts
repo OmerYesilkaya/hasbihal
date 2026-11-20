@@ -1,5 +1,4 @@
-import { RoomPrefs } from '@hasbihal/protocol';
-import { api } from '../api.ts';
+import type { RoomPrefs } from '@hasbihal/protocol';
 import { useChat, useChatState } from '../chat/context.tsx';
 
 /**
@@ -9,14 +8,14 @@ import { useChat, useChatState } from '../chat/context.tsx';
 export function useRoomPrefs(
   roomId: string,
 ): [RoomPrefs | undefined, (change: Partial<RoomPrefs>) => void] {
-  const { info, store } = useChat();
+  const { client, store } = useChat();
   const prefs = useChatState().rooms.get(roomId)?.prefs;
   const save = (change: Partial<RoomPrefs>) => {
     const current = store.getSnapshot().rooms.get(roomId)?.prefs;
     if (!current) return;
     const next = { ...current, ...change };
     store.setRoomPrefs(roomId, next);
-    void api(info.serverUrl, 'PUT', `/rooms/${roomId}/prefs`, { body: next, schema: RoomPrefs });
+    void client.rooms.setPrefs(roomId, next);
   };
   return [prefs, save];
 }

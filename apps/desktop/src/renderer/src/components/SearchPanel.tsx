@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { foldTurkish, parseMarkdown, toPlainText } from '@hasbihal/core';
-import { SearchResults, type Message } from '@hasbihal/protocol';
-import { api } from '../api.ts';
+import { type Message } from '@hasbihal/protocol';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
 import { EmptyState } from './EmptyState.tsx';
@@ -38,7 +37,7 @@ export function SearchPanel({
   children: ReactNode;
 }) {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const input = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<Found | null>(null);
@@ -63,12 +62,9 @@ export function SearchPanel({
 
   const run = async (q: string, before?: string) => {
     const ticket = ++latest.current;
-    const params = new URLSearchParams({ q, ...(before ? { before } : {}) });
-    const result = await api(info.serverUrl, 'GET', `/search?${params.toString()}`, {
-      schema: SearchResults,
-    });
+    const result = await client.search({ q, ...(before ? { before } : {}) });
     if (ticket !== latest.current) return; // a newer search has started
-    if (!result.ok || !result.value) {
+    if (!result.ok) {
       setFailed(true);
       return;
     }

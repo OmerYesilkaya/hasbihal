@@ -1,5 +1,4 @@
 import { Bell, BellOff, Ellipsis, Star, StarOff, Trash2 } from 'lucide-react';
-import { api } from '../api.ts';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Menu, MenuItem, MenuSeparator } from '../components/Popover.tsx';
@@ -15,7 +14,7 @@ import { Tip } from '../components/Tip.tsx';
  */
 export function RoomMenu({ roomId, roomName }: { roomId: string; roomName: string }) {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const isAdmin = useChatState().me?.role === 'admin';
   const [prefs, save] = useRoomPrefs(roomId);
   if (!prefs) return null;
@@ -29,7 +28,7 @@ export function RoomMenu({ roomId, roomName }: { roomId: string; roomName: strin
     });
     if (!yes) return;
     // The room leaves the list when the server's room_deleted arrives, here and everywhere.
-    const result = await api(info.serverUrl, 'DELETE', `/rooms/${roomId}`);
+    const result = await client.rooms.delete(roomId);
     if (!result.ok) toastError(t('error.unexpected'));
   };
 

@@ -30,6 +30,7 @@ import { Tulip } from './components/Tulip.tsx';
 import { formatTime, I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
 import { playSound, ring, stopRing } from './sound.ts';
+import { createClient } from './client.ts';
 import { useGateway } from './useGateway.ts';
 import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
 import { SettingsDialog } from './settings/SettingsDialog.tsx';
@@ -122,8 +123,9 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const t = useT();
   // One store per signed-in session: signing out unmounts the shell and drops it.
   const [store] = useState(() => new ChatStore());
+  const [client] = useState(() => createClient(info.serverUrl));
   // One call per signed-in session too; signing out leaves it.
-  const [hangout] = useState(() => new HangoutSession(info.serverUrl));
+  const [hangout] = useState(() => new HangoutSession(client));
   const hangoutState = useSyncExternalStore(hangout.subscribe, hangout.getSnapshot);
   const [chosenRoom, setChosenRoom] = useState<string | null>(null);
 
@@ -165,7 +167,7 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   };
   const nameOf = (userId: string) => store.getSnapshot().members.get(userId)?.displayName ?? '?';
   const roomName = (roomId: string) => store.getSnapshot().rooms.get(roomId)?.name ?? '?';
-  const { status, setPresence, typing } = useGateway(info, store, {
+  const { status, setPresence, typing } = useGateway(info, client, store, {
     message: (message) => {
       const text = toPlainText(parseMarkdown(message.body)).replace(/\s+/g, ' ').trim();
       notify(
@@ -217,8 +219,8 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   });
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const chat = useMemo(
-    (): Chat => ({ info, store, typing, hangout }),
-    [info, store, typing, hangout],
+    (): Chat => ({ info, client, store, typing, hangout }),
+    [info, client, store, typing, hangout],
   );
 
   useEffect(

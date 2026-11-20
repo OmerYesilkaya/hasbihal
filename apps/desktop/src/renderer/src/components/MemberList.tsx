@@ -1,8 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { hangoutOf, sortMembers, type ChatStore } from '@hasbihal/core';
 import type { MessageKey } from '@hasbihal/core';
-import { NudgeResult, type PresenceStatus, type User } from '@hasbihal/protocol';
-import { api } from '../api.ts';
+import { type PresenceStatus, type User } from '@hasbihal/protocol';
 import { useChat, useHangout } from '../chat/context.tsx';
 import { useT } from '../i18n.tsx';
 import { Avatar } from './Avatar.tsx';
@@ -60,16 +59,13 @@ export function MemberList({ store }: { store: ChatStore }) {
 /** "Sohbete çağır" (A13): a nudge into the call you're in; the answer comes as a toast. */
 function NudgeButton({ member, roomId }: { member: User; roomId: string | null }) {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const nudge = async () => {
     if (!roomId) return;
-    const res = await api(info.serverUrl, 'POST', '/nudges', {
-      body: { toUserId: member.id, roomId },
-      schema: NudgeResult,
-    });
+    const res = await client.nudge({ toUserId: member.id, roomId });
     const busy = !res.ok && res.error.issues?.[0]?.code === 'recipient_busy';
     const name = member.displayName;
-    if (res.ok) toast(t(res.value?.delivered ? 'nudge.sent' : 'nudge.offline', { name }));
+    if (res.ok) toast(t(res.value.delivered ? 'nudge.sent' : 'nudge.offline', { name }));
     else if (busy) toast(t('nudge.busy', { name }));
     else if (res.error.code === 'rate_limited') toast(t('nudge.tooSoon', { name }));
     else toastError(t('error.unexpected'));

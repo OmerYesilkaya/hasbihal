@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GatewayClient, type ChatStore, type GatewayStatus } from '@hasbihal/core';
-import { MemberList, RoomList, type Message, type PresenceMode } from '@hasbihal/protocol';
+import type { Message, PresenceMode } from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
-import { apiGet } from './api.ts';
+import type { Client } from './client.ts';
 
 function toWebSocketUrl(serverUrl: string): string {
   const url = new URL('/ws', serverUrl);
@@ -23,7 +23,7 @@ export interface GatewayNotices {
   eventReminder: (reminder: { roomId: string; title: string; startsAt: string }) => void;
 }
 
-export function useGateway(info: AppInfo, store: ChatStore, notices: GatewayNotices) {
+export function useGateway(info: AppInfo, api: Client, store: ChatStore, notices: GatewayNotices) {
   const [status, setStatus] = useState<GatewayStatus>({ kind: 'connecting', attempt: 0 });
   const client = useRef<GatewayClient | null>(null);
   // The latest handlers, without reconnecting when they change.
@@ -35,13 +35,13 @@ export function useGateway(info: AppInfo, store: ChatStore, notices: GatewayNoti
   useEffect(() => {
     let loaded = false;
     const loadMembers = async () => {
-      const list = await apiGet(info.serverUrl, '/members', MemberList);
-      if (list) store.setMembers(list.members);
+      const list = await api.members.list();
+      if (list.ok) store.setMembers(list.value.members);
     };
     // Every welcome: unread counts may have moved on another device while this one was away.
     const loadRooms = async () => {
-      const list = await apiGet(info.serverUrl, '/rooms', RoomList);
-      if (list) store.setRooms(list.rooms);
+      const list = await api.rooms.list();
+      if (list.ok) store.setRooms(list.value.rooms);
     };
 
     const gateway = new GatewayClient({
@@ -113,7 +113,7 @@ export function useGateway(info: AppInfo, store: ChatStore, notices: GatewayNoti
       client.current = null;
       store.reset();
     };
-  }, [info.serverUrl, info.appVersion, store]);
+  }, [info.serverUrl, info.appVersion, api, store]);
 
   const setPresence = useCallback((mode: PresenceMode) => {
     client.current?.setPresence(mode);

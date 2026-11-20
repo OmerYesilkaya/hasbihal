@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { MessageKey } from '@hasbihal/core';
 import type { Occurrence, RoomEvent, RsvpResponse } from '@hasbihal/protocol';
-import { api } from '../api.ts';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Menu, MenuItem, MenuSeparator } from '../components/Popover.tsx';
 import { useChat, useChatState } from '../chat/context.tsx';
+import type { ApiResult } from '../api.ts';
 import { formatWhen, formatTime, useT } from '../i18n.tsx';
 import { EventForm, fromInputs, toInputs } from './EventForm.tsx';
 import type { EventsView } from './useEvents.ts';
@@ -188,12 +188,12 @@ function OccurrenceRow({
   onEdit: () => void;
 }) {
   const t = useT();
-  const { info } = useChat();
+  const { client } = useChat();
   const { me, members } = useChatState();
   const [moving, setMoving] = useState(false);
   const [moveTo, setMoveTo] = useState(() => toInputs(occurrence.startsAt));
   const [error, setError] = useState<MessageKey | null>(null);
-  const base = `/events/${event.id}/occurrences/${occurrence.start}`;
+  const date = client.events.occurrence(event.id, occurrence.start);
   const mine = occurrence.rsvps.find((r) => r.userId === me?.id)?.response;
   const names = (response: RsvpResponse) =>
     occurrence.rsvps
@@ -203,13 +203,13 @@ function OccurrenceRow({
   const notComing = names('no');
   const invited = me ? event.inviteeIds.includes(me.id) : false;
 
-  const call = async (method: 'PUT' | 'DELETE', path: string, body?: unknown) => {
-    const result = await api(info.serverUrl, method, path, body === undefined ? {} : { body });
+  const call = async (pending: Promise<ApiResult<unknown>>) => {
+    const result = await pending;
     setError(result.ok ? null : 'error.unexpected');
     return result.ok;
   };
   const rsvp = (response: RsvpResponse) =>
-    mine === response ? call('DELETE', `${base}/rsvp`) : call('PUT', `${base}/rsvp`, { response });
+    call(mine === response ? date.clearRsvp() : date.rsvp({ response }));
 
   return (
     <li
@@ -263,7 +263,7 @@ function OccurrenceRow({
             className="occurrence__move"
             onSubmit={(e) => {
               e.preventDefault();
-              void call('PUT', base, { kind: 'moved', startsAt: fromInputs(moveTo) }).then((ok) => {
+              void call(date.change({ kind: 'moved', startsAt: fromInputs(moveTo) })).then((ok) => {
                 if (ok) setMoving(false);
               });
             }}
@@ -326,14 +326,14 @@ function OccurrenceRow({
           >
             <>
               {occurrence.skipped || occurrence.moved ? (
-                <MenuItem icon={<Icon icon={Undo2} />} onSelect={() => void call('DELETE', base)}>
+                <MenuItem icon={<Icon icon={Undo2} />} onSelect={() => void call(date.restore())}>
                   {t('events.restore')}
                 </MenuItem>
               ) : (
                 <>
                   <MenuItem
                     icon={<Icon icon={CalendarX} />}
-                    onSelect={() => void call('PUT', base, { kind: 'skipped' })}
+                    onSelect={() => void call(date.change({ kind: 'skipped' }))}
                   >
                     {t('events.skip')}
                   </MenuItem>
@@ -360,7 +360,7 @@ function OccurrenceRow({
                     action: t('events.delete'),
                     danger: true,
                   }).then((yes) => {
-                    if (yes) void call('DELETE', `/events/${event.id}`);
+                    if (yes) void call(client.events.delete(event.id));
                   })
                 }
               >

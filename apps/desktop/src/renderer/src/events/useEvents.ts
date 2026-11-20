@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { EventWindow, type Occurrence, type RoomEvent } from '@hasbihal/protocol';
-import { api } from '../api.ts';
+import type { Occurrence, RoomEvent } from '@hasbihal/protocol';
 import { useChat, useChatState } from '../chat/context.tsx';
 
 export interface EventsView {
@@ -17,7 +16,7 @@ const HOUR = 3_600_000;
  * whenever any room's events change (A15). Events are fetched per window, never kept in the store.
  */
 export function useEvents(roomId: string | null, days: number): EventsView {
-  const { info } = useChat();
+  const { client } = useChat();
   const { eventsRevision } = useChatState();
   const [view, setView] = useState<EventsView>(EMPTY);
   // Reload hourly too, so "tomorrow" becomes "today" in a window left open.
@@ -34,26 +33,25 @@ export function useEvents(roomId: string | null, days: number): EventsView {
   useEffect(() => {
     let current = true;
     const now = Date.now();
-    const query = new URLSearchParams({
-      from: new Date(now - HOUR).toISOString(),
-      to: new Date(now + days * 24 * HOUR).toISOString(),
-      ...(roomId ? { roomId } : {}),
-    });
-    void api(info.serverUrl, 'GET', `/events?${query.toString()}`, { schema: EventWindow }).then(
-      (result) => {
-        if (!current || !result.ok || !result.value) return;
+    void client.events
+      .window({
+        from: new Date(now - HOUR).toISOString(),
+        to: new Date(now + days * 24 * HOUR).toISOString(),
+        ...(roomId ? { roomId } : {}),
+      })
+      .then((result) => {
+        if (!current || !result.ok) return;
         setView({
           events: new Map(result.value.events.map((e) => [e.id, e])),
           // What already ended is gone; skipped ones stay listed, marked.
           occurrences: result.value.occurrences.filter((o) => Date.parse(o.endsAt) > Date.now()),
           loaded: true,
         });
-      },
-    );
+      });
     return () => {
       current = false;
     };
-  }, [info.serverUrl, roomId, days, eventsRevision, tick]);
+  }, [client, roomId, days, eventsRevision, tick]);
   return view;
 }
 

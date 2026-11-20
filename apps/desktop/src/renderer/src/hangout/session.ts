@@ -15,8 +15,7 @@ import {
   type VideoTrack,
 } from 'livekit-client';
 import type { MessageKey } from '@hasbihal/core';
-import { HangoutToken } from '@hasbihal/protocol';
-import { api } from '../api.ts';
+import type { Client } from '../client.ts';
 import { Microphone, type InputMode, type MicSettings } from './microphone.ts';
 import { SPEAKING_CHECK_MS, SpeakingDetector } from './speaking.ts';
 import { playSound, stopRing } from '../sound.ts';
@@ -131,7 +130,7 @@ export class HangoutSession {
   };
   readonly #listeners = new Set<() => void>();
   readonly #noticeListeners = new Set<(notice: MessageKey) => void>();
-  readonly #serverUrl: string;
+  readonly #client: Client;
   #room: Room | null = null;
   #mic: Microphone | null = null;
   /** Who is speaking, from audio levels (#35); only while in a call. */
@@ -149,8 +148,8 @@ export class HangoutSession {
   /** Remote audio elements, by track sid. */
   readonly #audioElements = new Map<string, HTMLMediaElement[]>();
 
-  constructor(serverUrl: string) {
-    this.#serverUrl = serverUrl;
+  constructor(client: Client) {
+    this.#client = client;
   }
 
   getSnapshot = (): HangoutState => this.#state;
@@ -216,10 +215,8 @@ export class HangoutSession {
     await this.leave();
     this.#set({ roomId, status: 'connecting', notice: null });
 
-    const token = await api(this.#serverUrl, 'POST', `/rooms/${roomId}/hangout/token`, {
-      schema: HangoutToken,
-    });
-    if (!token.ok || !token.value || this.#state.roomId !== roomId) {
+    const token = await this.#client.rooms.hangoutToken(roomId);
+    if (!token.ok || this.#state.roomId !== roomId) {
       this.#set({ roomId: null, status: 'idle', notice: token.ok ? null : 'hangout.joinFailed' });
       return;
     }
