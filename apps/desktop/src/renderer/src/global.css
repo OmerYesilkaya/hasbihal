@@ -1074,13 +1074,13 @@ input::-webkit-calendar-picker-indicator:hover {
   position: absolute;
   top: 3px;
   right: 4px;
-  visibility: hidden;
+  opacity: 0;
 }
 
 .room-row:hover .room-row__more,
 .room-row__more:focus-visible,
 .room-row__more[data-state='open'] {
-  visibility: visible;
+  opacity: 1;
 }
 
 .room-row__more:hover,
@@ -1091,7 +1091,11 @@ input::-webkit-calendar-picker-indicator:hover {
 .room-row:is(:hover, :has(.room-row__more[data-state='open'], .room-row__more:focus-visible))
   > .room
   > :is(.badge, .room__event, .room__muted) {
-  visibility: hidden;
+  opacity: 0;
+}
+
+.room > :is(.badge, .room__event, .room__muted) {
+  transition: opacity var(--hb-fast) ease-out;
 }
 
 .room__muted {
@@ -3451,4 +3455,226 @@ input::-webkit-calendar-picker-indicator:hover {
 
 .empty-state svg {
   opacity: 0.8;
+}
+
+/*
+ * ---- Motion ----
+ *
+ * Everything that changes state moves a little: popups grow from their button, modals settle
+ * in, tooltips fade, hovers ease. Radix marks open and closed with `data-state` and waits for a
+ * closing animation before removing the element, so exits animate too. Short and calm: motion
+ * says where something came from, never makes anyone wait.
+ */
+
+:root {
+  --hb-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --hb-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --hb-fast: 120ms;
+  --hb-base: 180ms;
+  --hb-slow: 240ms;
+}
+
+@keyframes hb-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes hb-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* A popup grows out of its button: from slightly smaller, nudged toward the button. */
+@keyframes hb-pop-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+    translate: var(--hb-from-x, 0) var(--hb-from-y, 0);
+  }
+}
+
+@keyframes hb-pop-out {
+  to {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+/* A modal settles in from just below. Its centring uses `translate`, so only scale moves here. */
+@keyframes hb-modal-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+
+@keyframes hb-modal-out {
+  to {
+    opacity: 0;
+    scale: 0.98;
+  }
+}
+
+@keyframes hb-check-in {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
+
+/* Popovers, menus, selects, tooltips: grow from the side their button is on. */
+.popover,
+.tooltip {
+  transform-origin: var(
+    --radix-popover-content-transform-origin,
+    var(
+      --radix-dropdown-menu-content-transform-origin,
+      var(--radix-select-content-transform-origin, var(--radix-tooltip-content-transform-origin))
+    )
+  );
+}
+
+.popover[data-side='bottom'],
+.tooltip[data-side='bottom'] {
+  --hb-from-y: -4px;
+}
+
+.popover[data-side='top'],
+.tooltip[data-side='top'] {
+  --hb-from-y: 4px;
+}
+
+.popover[data-side='left'],
+.tooltip[data-side='left'] {
+  --hb-from-x: 4px;
+}
+
+.popover[data-side='right'],
+.tooltip[data-side='right'] {
+  --hb-from-x: -4px;
+}
+
+.popover[data-state='open'],
+.tooltip:is([data-state='delayed-open'], [data-state='instant-open']) {
+  animation: hb-pop-in var(--hb-base) var(--hb-ease-out);
+}
+
+.popover[data-state='closed'],
+.tooltip[data-state='closed'] {
+  animation: hb-pop-out var(--hb-fast) var(--hb-ease-in-out) forwards;
+}
+
+/* Radix Select has no closed state to animate; it opens like the rest. */
+.popover.select__menu {
+  animation: hb-pop-in var(--hb-base) var(--hb-ease-out);
+}
+
+/* Modals and "are you sure?": the backdrop fades, the window settles. */
+.modal-overlay[data-state='open'] {
+  animation: hb-fade-in var(--hb-base) ease-out;
+}
+
+.modal-overlay[data-state='closed'] {
+  animation: hb-fade-out var(--hb-fast) ease-in forwards;
+}
+
+.modal[data-state='open'] {
+  animation: hb-modal-in var(--hb-slow) var(--hb-ease-out);
+}
+
+.modal[data-state='closed'] {
+  animation: hb-modal-out var(--hb-fast) var(--hb-ease-in-out) forwards;
+}
+
+/* The media viewer fades: growing a full-screen picture looks odd. */
+.modal.viewer[data-state='open'] {
+  animation: hb-fade-in var(--hb-base) ease-out;
+}
+
+.modal.viewer[data-state='closed'] {
+  animation: hb-fade-out var(--hb-fast) ease-in forwards;
+}
+
+/* Switching tabs fades the new panel in. */
+[role='tabpanel'][data-state='active'] {
+  animation: hb-fade-in var(--hb-base) ease-out;
+}
+
+/* Ticks and dots pop in. */
+.checkbox__mark,
+.radio__dot,
+.menu-item__check,
+.select__check {
+  animation: hb-check-in var(--hb-fast) var(--hb-ease-out);
+}
+
+/* Hover, press and focus ease instead of snapping. :where() keeps it overridable. */
+:where(
+  button,
+  a,
+  input,
+  textarea,
+  .room,
+  .member,
+  .menu-item,
+  .select,
+  .checkbox,
+  .radio,
+  .share-picker__tab,
+  .reaction,
+  .chip
+) {
+  transition-property: background-color, border-color, color, opacity, box-shadow, outline-color;
+  transition-duration: var(--hb-fast);
+  transition-timing-function: ease-out;
+}
+
+/* Buttons give a little when pressed. */
+:where(.button, .round-button, .icon-button):active:not(:disabled) {
+  scale: 0.96;
+}
+
+:where(.button, .round-button, .icon-button) {
+  transition-property:
+    background-color, border-color, color, opacity, box-shadow, outline-color, scale;
+}
+
+/* Menu items: Radix moves a highlight with the mouse and the arrow keys. */
+.menu-item[data-highlighted] {
+  background: var(--hb-selected);
+  outline: none;
+}
+
+/* A message's tools fade in on hover (they switch `display`, so this needs @starting-style). */
+.message__toolbar {
+  transition:
+    opacity var(--hb-fast) ease-out,
+    display var(--hb-fast) allow-discrete;
+}
+
+@starting-style {
+  .message:hover .message__toolbar,
+  .message:focus-within .message__toolbar {
+    opacity: 0;
+  }
+}
+
+/* Joining a call opens its area above the chat; "all emoji" swaps in for the quick ones. */
+.stage,
+.emoji-picker {
+  animation: hb-fade-in var(--hb-base) ease-out;
+}
+
+/* Toasts slide and stack by Sonner's own stylesheet (main.tsx). */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }
