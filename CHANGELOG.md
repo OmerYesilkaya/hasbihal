@@ -4,6 +4,20 @@ Her sürümde neler değişti. Yeni sürüm çıkarken buraya `## <sürüm>` ba�
 sayfasındaki notlar buradan alınır (`.github/workflows/release.yml`). Kurulum için:
 [docs/KURULUM.md](docs/KURULUM.md).
 
+## 0.4.0
+
+- **Sesler:** sesli sohbete girince ve çıkınca (sen ya da başkası), mikrofonu ya da sesi kapatıp
+  açınca, bildirimlerde ve hatalarda kısa bir ses. Biri seni sohbete çağırınca zil çalar.
+  Ayarlar → Sesler'de ses düzeyini ayarla ya da sesleri kapat, zil sesini seç.
+- **Mesaj kutusunda tek düğme:** dosya ekle, sesli mesaj kaydet ve emojiler sağdaki ⋯ düğmesinde.
+  Seçtiğin emoji imlecin olduğu yere girer.
+- **Etkinlikler** her etkinliği bir kez, sıradaki tarihiyle ve nasıl tekrarlandığıyla gösterir;
+  sonraki tarihler bir tıkla açılır.
+- **Konuşma halkası** konuşur konuşmaz yanar, kamera açıkken de görünür. Sol taraftaki oda
+  listesinde, bulunduğun sohbetteki kişilerin fotoğraflarında da çıkar.
+- **Paylaşılan ekran** tam ekran açılabilir.
+- Pencerelerin başlıkları yeniden doğru boyutta.
+
 ## 0.3.0
 
 - **Durumun adının altında.** Sol alttaki adına ya da fotoğrafına tıklayınca bir menü açılır:
