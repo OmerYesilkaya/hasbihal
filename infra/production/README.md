@@ -151,11 +151,47 @@ docker compose start server
 
 ## Updating
 
+A release updates the server by itself: pushing a version tag (`.github/workflows/release.yml`)
+builds the installers and, once both have built, runs `deploy.sh` here over SSH. Migrations run
+when the server starts. Clients that are too old get the "new version" screen (A33).
+
+To update by hand instead, on the server:
+
 ```bash
-cd /opt/hasbihal && GIT_SSH_COMMAND='ssh -i ~/.ssh/hasbihal' git pull && cd infra/production && docker compose up -d --build
+/opt/hasbihal/infra/production/deploy.sh
 ```
 
-Migrations run when the server starts. Clients that are too old get the "new version" screen (A33).
+### One-time setup for automatic updates
+
+The workflow signs in with its own key, which the server lets run `deploy.sh` and nothing else:
+no shell, no port forwarding. If the key ever leaks, the worst it can do is redeploy `main`.
+
+1. On your computer, make the key (no passphrase: the workflow can't type one):
+
+   ```bash
+   ssh-keygen -t ed25519 -N '' -C hasbihal-deploy -f ~/.ssh/hasbihal-deploy
+   ```
+
+2. Give the private half to the workflow, as the `DEPLOY_SSH_KEY` secret:
+
+   ```bash
+   gh secret set DEPLOY_SSH_KEY < ~/.ssh/hasbihal-deploy
+   ```
+
+3. Let the public half run only `deploy.sh` on the server:
+
+   ```bash
+   ssh root@<host> "echo 'command=\"/opt/hasbihal/infra/production/deploy.sh\",restrict $(cat ~/.ssh/hasbihal-deploy.pub)' >> ~/.ssh/authorized_keys"
+   ```
+
+4. Delete the private half from your computer; GitHub has it now, and a new one is easy to make:
+
+   ```bash
+   rm ~/.ssh/hasbihal-deploy
+   ```
+
+The workflow pins the server's SSH host key (`SERVER_HOST_KEY` in `release.yml`), so it only ever
+signs in to this server. After moving to a new server, update it there.
 
 ## Notes
 
