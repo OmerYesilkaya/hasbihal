@@ -351,4 +351,6 @@ export const en: Record<MessageKey, string> = {
   'hangout.micTestFailed':
     'Couldn’t open the microphone. Check permissions and the chosen microphone.',
   'share.exitFullscreen': 'Exit full screen',
+  'events.laterDates': '{count, plural, one {# later date} other {# later dates}}',
+  'events.fewerDates': 'Show fewer',
 };

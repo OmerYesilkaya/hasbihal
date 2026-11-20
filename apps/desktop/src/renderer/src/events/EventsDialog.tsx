@@ -15,8 +15,9 @@ import { confirm } from '../components/confirm.tsx';
 import { Tip } from '../components/Tip.tsx';
 
 /**
- * A room's events (A15, A16): what's coming up for four weeks, with RSVPs per occurrence for
- * everyone, and for admins adding, editing, skipping, moving, and deleting.
+ * A room's events (A15, A16): each event once, at its next time, with RSVPs for everyone, and
+ * for admins adding, editing, skipping, moving, and deleting. Later dates (four weeks ahead)
+ * open on request, so two weekly events don't fill the dialog (#40).
  */
 export function EventsDialog({
   roomId,
@@ -73,13 +74,13 @@ export function EventsDialog({
               <EmptyState>{t('events.none')}</EmptyState>
             ) : (
               <ul className="occurrences">
-                {occurrences.map((o) => {
-                  const event = view.events.get(o.eventId);
+                {groupByEvent(occurrences).map(([eventId, list]) => {
+                  const event = view.events.get(eventId);
                   return event ? (
-                    <OccurrenceRow
-                      key={`${o.eventId}@${o.start}`}
+                    <EventGroup
+                      key={eventId}
                       event={event}
-                      occurrence={o}
+                      occurrences={list}
                       isAdmin={isAdmin}
                       onEdit={() => {
                         setEditing(event);
@@ -96,14 +97,93 @@ export function EventsDialog({
   );
 }
 
+/** Occurrences by event, in the order each event next happens. */
+function groupByEvent(occurrences: Occurrence[]): [string, Occurrence[]][] {
+  const groups = new Map<string, Occurrence[]>();
+  for (const o of occurrences) {
+    const list = groups.get(o.eventId);
+    if (list) list.push(o);
+    else groups.set(o.eventId, [o]);
+  }
+  return [...groups];
+}
+
+/** "Her hafta · Çar, Cum · 09:00"; null for a one-off event. */
+function describeRepeat(event: RoomEvent, t: ReturnType<typeof useT>): string | null {
+  const r = event.recurrence;
+  if (!r) return null;
+  const how =
+    r.freq === 'weekly' && r.interval === 2
+      ? t('events.repeat.biweekly')
+      : t(`events.repeat.${r.freq}`);
+  const names = t('events.weekdays').split(',');
+  const days = r.freq === 'weekly' ? r.weekdays.map((d) => names[d] ?? '').join(', ') : '';
+  return [how, days, formatTime(event.startsAt)].filter(Boolean).join(' · ');
+}
+
+/**
+ * One event: its next occurrence (and any skipped ones before it, so a skip stays visible),
+ * then its later dates when asked for.
+ */
+function EventGroup({
+  event,
+  occurrences,
+  isAdmin,
+  onEdit,
+}: {
+  event: RoomEvent;
+  occurrences: Occurrence[];
+  isAdmin: boolean;
+  onEdit: () => void;
+}) {
+  const t = useT();
+  const [expanded, setExpanded] = useState(false);
+  const next = occurrences.findIndex((o) => !o.skipped);
+  const shownCount = next === -1 ? occurrences.length : next + 1;
+  const later = occurrences.length - shownCount;
+  const shown = expanded ? occurrences : occurrences.slice(0, shownCount);
+  const repeat = describeRepeat(event, t);
+  return (
+    <li className="event-group" data-testid="event-group">
+      <ul className="occurrences">
+        {shown.map((o, i) => (
+          <OccurrenceRow
+            key={o.start}
+            event={event}
+            occurrence={o}
+            repeat={i === 0 ? repeat : null}
+            isAdmin={isAdmin}
+            onEdit={onEdit}
+          />
+        ))}
+      </ul>
+      {later > 0 && (
+        <button
+          type="button"
+          className="link event-group__more"
+          aria-expanded={expanded}
+          onClick={() => {
+            setExpanded((v) => !v);
+          }}
+        >
+          {expanded ? t('events.fewerDates') : t('events.laterDates', { count: later })}
+        </button>
+      )}
+    </li>
+  );
+}
+
 function OccurrenceRow({
   event,
   occurrence,
+  repeat,
   isAdmin,
   onEdit,
 }: {
   event: RoomEvent;
   occurrence: Occurrence;
+  /** How the event repeats, on its first row. */
+  repeat: string | null;
   isAdmin: boolean;
   onEdit: () => void;
 }) {
@@ -153,6 +233,11 @@ function OccurrenceRow({
           {occurrence.moved && <em> · {t('events.moved')}</em>}
           {invited && <span className="occurrence__invited"> · {t('events.invited')}</span>}
         </span>
+        {repeat && (
+          <span className="occurrence__repeat" data-testid="event-repeat">
+            {repeat}
+          </span>
+        )}
         {event.description && <span className="occurrence__description">{event.description}</span>}
         {!occurrence.skipped && (
           <span className="occurrence__rsvps">
