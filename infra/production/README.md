@@ -46,7 +46,8 @@ cd /opt/hasbihal/infra/production && cp .env.example .env
 Fill in `.env`:
 
 - `HASBIHAL_HOST`: your hostname.
-- `POSTGRES_PASSWORD` and `LIVEKIT_API_SECRET`: each one the output of `openssl rand -base64 32`.
+- `POSTGRES_PASSWORD`: the output of `openssl rand -hex 32`. It goes into the database URL, where base64's `/` and `+` would break it.
+- `LIVEKIT_API_SECRET`: the output of `openssl rand -base64 32`.
 - `AUTH_SIGNING_KEY`: generate it as shown below, and paste it in quotes.
 - `RESTIC_PASSWORD`: the output of `openssl rand -base64 32`. It encrypts the backups; **keep a copy in your password manager**, because without it the backups can't be read. Leave `RESTIC_REPOSITORY=/backups` for now (see Backups below).
 
