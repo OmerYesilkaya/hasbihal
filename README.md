@@ -6,6 +6,17 @@ A private chat, voice, video, and screen-sharing app for family and friends, for
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
 
+## Installing
+
+Download the latest `.dmg` (macOS 14.2+) or `.exe` (Windows 10 22H2+) from
+[Releases](https://github.com/OmerYesilkaya/hasbihal/releases/latest). The installers aren't signed
+by Apple or Microsoft, so the first launch needs one extra confirmation; the step-by-step guide,
+in Turkish, is [docs/KURULUM.md](docs/KURULUM.md). You need an invite link from an admin to sign
+up. What changed in each version: [CHANGELOG.md](CHANGELOG.md).
+
+Releasing a new version (bump `apps/desktop/package.json`, add its `CHANGELOG.md` section, push a
+`v…` tag) is described at the top of `.github/workflows/release.yml`.
+
 ## Development
 
 Requirements: Node.js 24+, pnpm 9, and Docker (for PostgreSQL and LiveKit). Packaging the macOS app also needs the

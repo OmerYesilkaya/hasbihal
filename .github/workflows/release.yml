@@ -1,8 +1,9 @@
 name: Release
 
 # Builds the installers (DECISIONS A30: plain .dmg and .exe, no auto-update), updates the server,
-# and puts the installers on a draft GitHub Release for the owner to check and publish. Push a tag
-# that matches the app's version (apps/desktop/package.json), e.g.
+# and puts the installers on a draft GitHub Release for the owner to check and publish; its notes
+# are the version's section of CHANGELOG.md. Push a tag that matches the app's version
+# (apps/desktop/package.json) and has a CHANGELOG.md section, e.g.
 # `git tag v1.0.0 && git push origin v1.0.0`. Run by hand from the Actions tab, it only builds:
 # the installers are kept as workflow artifacts, and the server is left alone.
 #
@@ -41,6 +42,13 @@ jobs:
           version=$(node -p "require('./apps/desktop/package.json').version")
           if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
             echo "::error::Tag ${GITHUB_REF_NAME} doesn't match the app's version ${version}."
+            exit 1
+          fi
+      - name: The changelog says what's new
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if ! grep -qxF "## ${GITHUB_REF_NAME#v}" CHANGELOG.md; then
+            echo "::error::Add a \"## ${GITHUB_REF_NAME#v}\" section to CHANGELOG.md: it becomes the release notes."
             exit 1
           fi
 
@@ -121,13 +129,21 @@ jobs:
         with:
           path: installers
           merge-multiple: true
+      # The version's changelog section, and where to find the install steps.
+      - name: Write the release notes
+        run: |
+          awk -v heading="## ${GITHUB_REF_NAME#v}" \
+            '$0 == heading { found = 1; next } /^## / { found = 0 } found' CHANGELOG.md > notes.md
+          printf '\n---\n\nKurulum: %s/%s/blob/main/docs/KURULUM.md\n' \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" >> notes.md
+          cat notes.md
       # A draft: the owner tests the installers, then publishes it and tells the family (A30).
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "$GITHUB_REF_NAME" installers/* --draft --title "Hasbihal
-          ${GITHUB_REF_NAME#v}" --notes-file docs/KURULUM.md
+          ${GITHUB_REF_NAME#v}" --notes-file notes.md
 
   # The server goes out with the installers: only once both have built, so a release is all or
   # nothing. Current apps keep working with the new server, so updating it first is safe; the

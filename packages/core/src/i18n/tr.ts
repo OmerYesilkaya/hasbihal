@@ -359,6 +359,8 @@ export const tr = {
   'hangout.micTestFailed': 'Mikrofon açılamadı. İzinleri ve seçili mikrofonu kontrol et.',
   'share.exitFullscreen': 'Tam ekrandan çık',
   'composer.more': 'Ekle: dosya, sesli mesaj, emoji',
+  'events.laterDates': '{count, plural, one {# sonraki tarih} other {# sonraki tarih}}',
+  'events.fewerDates': 'Daha az göster',
 } as const;
 
 export type MessageKey = keyof typeof tr;

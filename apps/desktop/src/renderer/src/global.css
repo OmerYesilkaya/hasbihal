@@ -1816,7 +1816,7 @@ input::-webkit-calendar-picker-indicator:hover {
   padding: 16px 20px 4px;
 }
 
-.profile__header h1 {
+.profile__header :is(h1, h2) {
   margin: 0;
   font-size: 18px;
 }
@@ -2125,6 +2125,17 @@ input::-webkit-calendar-picker-indicator:hover {
   padding: 2px 0;
   font-size: 12px;
   color: var(--hb-text-secondary);
+}
+
+/* #41: in your own call, the same gold ring as the tiles, around the small avatar. */
+.room__voice li .avatar {
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 200ms ease-out;
+}
+
+.room__voice li[data-speaking] .avatar {
+  box-shadow: 0 0 0 2px var(--hb-accent);
+  transition-duration: 60ms;
 }
 
 .room__voice .avatar {
@@ -3031,6 +3042,24 @@ input::-webkit-calendar-picker-indicator:hover {
   border-bottom: none;
 }
 
+/* One event (#40): its next date, then the later ones on request. */
+.event-group {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--hb-border);
+}
+
+.event-group:last-child {
+  border-bottom: none;
+}
+
+.event-group__more {
+  align-self: flex-start;
+  /* Under the event's title, past the date column. */
+  margin: -4px 0 10px 136px;
+  font-size: 12px;
+}
+
 .occurrence[data-skipped] .occurrence__when,
 .occurrence[data-skipped] .occurrence__title {
   color: var(--hb-text-secondary);
@@ -3065,6 +3094,7 @@ input::-webkit-calendar-picker-indicator:hover {
   font-weight: 400;
 }
 
+.occurrence__repeat,
 .occurrence__description,
 .occurrence__rsvps {
   color: var(--hb-text-secondary);

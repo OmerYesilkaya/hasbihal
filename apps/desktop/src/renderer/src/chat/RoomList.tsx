@@ -5,7 +5,7 @@ import { api } from '../api.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { nextOccurrence, useEvents } from '../events/useEvents.ts';
 import { dayKey, formatTime, useT } from '../i18n.tsx';
-import { useChat, useChatState } from './context.tsx';
+import { useChat, useChatState, useHangout } from './context.tsx';
 import { BellOff, Calendar } from 'lucide-react';
 import { RoomMenu } from '../rooms/RoomMenu.tsx';
 import { Icon } from '../components/Icon.tsx';
@@ -29,6 +29,10 @@ export function RoomList({
   const { info, store } = useChat();
   const state = useChatState();
   const rooms = activeRooms(state);
+  // #41: in the call you're in, who is speaking (the same as the call's tiles; other rooms'
+  // audio never reaches this app).
+  const call = useHangout();
+  const speakers = new Set(call.participants.filter((p) => p.speaking).map((p) => p.userId));
   const favorites = rooms.filter((r) => r.prefs.favorite);
   const others = rooms.filter((r) => !r.prefs.favorite);
   const id = useId();
@@ -102,7 +106,11 @@ export function RoomList({
             {state.hangouts.get(room.id)?.map((p) => {
               const member = state.members.get(p.userId);
               return member ? (
-                <li key={p.userId}>
+                <li
+                  key={p.userId}
+                  data-testid="voice-member"
+                  data-speaking={speakers.has(p.userId) ? true : undefined}
+                >
                   <Avatar user={member} />
                   <span>{member.displayName}</span>
                   {p.screenShare && <span className="live-badge">{t('share.live')}</span>}
