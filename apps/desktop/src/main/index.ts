@@ -1,9 +1,10 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, session, shell } from 'electron';
+import electronUpdater from 'electron-updater';
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { LOCALES } from '@hasbihal/core';
-import { IPC, type AppInfo, type AuthResult } from '../shared/app-info.ts';
+import { IPC, type AppInfo, type AuthResult, type UpdateState } from '../shared/app-info.ts';
 import { registerAppSchemePrivileges, serveRendererFromAppScheme } from './app-protocol.ts';
 import { AuthSession } from './auth-session.ts';
 import { Background } from './background.ts';
@@ -18,6 +19,7 @@ import {
   isTrustedOrigin,
 } from './security.ts';
 import { SafeStorageTokenStore } from './token-store.ts';
+import { Updates } from './updates.ts';
 
 const devServerUrl = process.env.ELECTRON_RENDERER_URL;
 const isDev = !app.isPackaged && devServerUrl !== undefined;
@@ -136,6 +138,19 @@ function deviceName(): string {
       : 'Linux';
 }
 
+function canUpdate(): boolean {
+  return app.isPackaged && (process.platform === 'darwin' || process.platform === 'win32');
+}
+
+function createUpdates(): Updates {
+  return new Updates({
+    updater: electronUpdater.autoUpdater,
+    inApplicationsFolder: () => process.platform !== 'darwin' || app.isInApplicationsFolder(),
+    moveToApplicationsFolder: () => app.moveToApplicationsFolder(),
+    onChange: (state) => mainWindow?.webContents.send(IPC.updateChanged, state),
+  });
+}
+
 /**
  * Registers an IPC handler whose argument is validated first: the renderer is treated as
  * untrusted (ARCHITECTURE §4.2), so nothing it sends reaches the session unchecked.
@@ -236,6 +251,18 @@ void app.whenReady().then(async () => {
     if (typeof id === 'string' && id.length < 200) screens.choose(id, audio === true);
   });
   idleWatcher.start();
+
+  // In-app updates (A30): installed builds for macOS and Windows only. Development and test runs
+  // have nothing to update, and electron-updater wouldn't find its app-update.yml.
+  const updates = canUpdate() ? createUpdates() : undefined;
+  ipcMain.handle(IPC.updateState, (): UpdateState => updates?.state ?? { kind: 'none' });
+  ipcMain.on(IPC.updateCheck, () => {
+    void updates?.check();
+  });
+  ipcMain.on(IPC.updateInstall, () => {
+    void updates?.install();
+  });
+  updates?.start();
 
   mainWindow = createMainWindow();
 

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { app, Menu, nativeImage, Tray, type BrowserWindow } from 'electron';
+import { app, autoUpdater, Menu, nativeImage, Tray, type BrowserWindow } from 'electron';
 import { createTranslator, LOCALES, resolveLocale, type Locale } from '@hasbihal/core';
 import trayPng from '../../resources/tray.png?asset';
 import tray2xPng from '../../resources/tray@2x.png?asset';
@@ -48,6 +48,12 @@ export class Background {
     app.on('before-quit', () => {
       this.#quitting = true;
     });
+    // Installing an update on macOS (Squirrel.Mac) closes every window before it quits: let them
+    // close, or the app stays open and the update never installs (ARCHITECTURE §4.5).
+    if (process.platform === 'darwin')
+      autoUpdater.on('before-quit-for-update', () => {
+        this.#quitting = true;
+      });
   }
 
   /** Whether this launch was the OS starting us at login, so no window should appear. */

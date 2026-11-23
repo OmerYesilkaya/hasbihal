@@ -29,5 +29,5 @@ Başlamadan önce Hasbihal'i kuran kişiye **Gmail adresini** söyle; seni liste
 
 - **Pencereyi kapatınca Hasbihal kapanmaz:** arka planda açık kalır (Mac'te üst menü çubuğunda, Windows'ta saatin yanındaki simgeler arasında), böylece çağrılar ve hatırlatmalar gelir. Tamamen çıkmak için o simgeye tıklayıp **Hasbihal'dan çık**'ı seç.
 - **Bilgisayar açılınca kendiliğinden başlar.** İstemezsen **Ayarlar**'dan ya da o simgenin menüsünden kapatabilirsin.
-- **Yeni sürüm** çıktığında Hasbihal sana söyler. Yeni dosyayı indirip aynı adımlarla kur; hesabın ve mesajların yerinde kalır.
+- **Yeni sürüm** çıktığında Hasbihal sol tarafta haber verir: **Güncelle**'ye bas, gerisini o halleder (indirir, kurar, yeniden açılır). Hesabın ve mesajların yerinde kalır. Mac'te Hasbihal'in **Uygulamalar** klasöründe olması gerekir; değilse önce oraya taşımayı önerir. Güncellemeden sonra Mac bir kez bilgisayar parolanı isteyebilir (Hasbihal'in kayıtlı oturumuna erişmek için): parolanı gir ve **Her Zaman İzin Ver**'e bas.
 - **Hatırlaman gereken bir parola yok:** giriş hep Google hesabınla.

@@ -7,6 +7,8 @@ import {
   type ScreenBridge,
   type ScreenSource,
   type SystemBridge,
+  type UpdatesBridge,
+  type UpdateState,
 } from '../shared/app-info.ts';
 import type { HasbihalBridge } from './api';
 
@@ -70,12 +72,30 @@ const screen: ScreenBridge = {
   },
 };
 
+const updates: UpdatesBridge = {
+  state: () => ipcRenderer.invoke(IPC.updateState) as Promise<UpdateState>,
+  onChanged: (listener) => {
+    const handler = (_event: unknown, state: UpdateState) => {
+      listener(state);
+    };
+    ipcRenderer.on(IPC.updateChanged, handler);
+    return () => ipcRenderer.off(IPC.updateChanged, handler);
+  },
+  check: () => {
+    ipcRenderer.send(IPC.updateCheck);
+  },
+  install: () => {
+    ipcRenderer.send(IPC.updateInstall);
+  },
+};
+
 /** The only main-process capabilities the renderer can reach (ARCHITECTURE §4.1). */
 const bridge: HasbihalBridge = {
   getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo) as Promise<AppInfo>,
   auth,
   system,
   screen,
+  updates,
 };
 
 contextBridge.exposeInMainWorld('hasbihal', bridge);

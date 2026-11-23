@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { MessageKey } from '@hasbihal/core';
 import type { User } from '@hasbihal/protocol';
 import { Tulip } from '../components/Tulip.tsx';
+import { UpdateCard } from '../update/UpdateCard.tsx';
 import { useT } from '../i18n.tsx';
 import { errorFor } from './errors.ts';
 
@@ -130,6 +131,7 @@ export function AuthScreen({ sessionEnded, onSignedIn }: AuthScreenProps) {
           )}
         </div>
       </div>
+      <UpdateCard />
     </main>
   );
 }

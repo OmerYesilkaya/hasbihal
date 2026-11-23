@@ -1,7 +1,8 @@
 name: Release
 
-# Builds the installers (DECISIONS A30: plain .dmg and .exe, no auto-update), updates the server,
-# and puts the installers on a draft GitHub Release for the owner to check and publish; its notes
+# Builds the installers (DECISIONS A30: plain .dmg and .exe) and the files the app updates itself
+# from, updates the server, and puts them all on a draft GitHub Release for the owner to check and
+# publish: publishing is what offers the update to every app (ARCHITECTURE §4.5). Its notes
 # are the version's section of CHANGELOG.md. Push a tag that matches the app's version
 # (apps/desktop/package.json) and has a CHANGELOG.md section, e.g.
 # `git tag v1.0.0 && git push origin v1.0.0`. Run by hand from the Actions tab, it only builds:
@@ -106,7 +107,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: hasbihal-macos
-          path: apps/desktop/release/*.dmg
+          # The update's zip, its feed (latest-mac.yml), and blockmaps for differential downloads.
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest-mac.yml
           if-no-files-found: error
 
   windows:
@@ -127,7 +133,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: hasbihal-windows
-          path: apps/desktop/release/*.exe
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest.yml
           if-no-files-found: error
 
   release:
