@@ -1,4 +1,5 @@
-# Unsigned installers, no auto-update (DECISIONS A30). Minimum OS versions per A49.
+# Installers not signed by Apple or Microsoft, which update themselves from published GitHub
+# Releases (DECISIONS A30, ARCHITECTURE §4.5). Minimum OS versions per A49.
 appId: com.hasbihal.desktop
 productName: Hasbihal
 directories:
@@ -24,6 +25,9 @@ mac:
   target:
     - target: dmg
       arch: [universal]
+    # What the app updates itself from (Squirrel.Mac); the dmg is only for the first install.
+    - target: zip
+      arch: [universal]
   category: public.app-category.social-networking
   minimumSystemVersion: '14.2'
   # Self-signed certificate from the build machine's Keychain (DECISIONS A50). It gives the
@@ -42,6 +46,16 @@ win:
     - target: nsis
       arch: [x64, arm64]
 nsis:
+  # No spaces: GitHub turns them into dots, and latest.yml must name the file as uploaded.
+  artifactName: ${productName}-Setup-${version}.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+# The update feed (latest-mac.yml, latest.yml) is read from the repository's published Releases:
+# drafts and pre-releases never reach anyone. The workflow uploads the files; electron-builder
+# never publishes (`--publish never`).
+publish:
+  provider: github
+  owner: OmerYesilkaya
+  repo: hasbihal
+  releaseType: release

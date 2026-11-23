@@ -85,6 +85,34 @@ export interface ScreenBridge {
   choose(id: string, audio: boolean): Promise<void>;
 }
 
+/** Where people download the installers by hand (README, docs/KURULUM.md). */
+export const DOWNLOAD_PAGE = 'https://github.com/OmerYesilkaya/hasbihal/releases/latest';
+
+/** In-app updates (DECISIONS A30, ARCHITECTURE §4.5). */
+export type UpdateState =
+  /** Up to date, not checked yet, or a build that can't update itself (development). */
+  | { kind: 'none' }
+  /**
+   * A published release is newer. `needsMove`: on macOS the app runs from outside /Applications
+   * (the dmg, Downloads), where it can't replace itself; it moves there first.
+   */
+  | { kind: 'available'; version: string; needsMove: boolean }
+  /** `progress` from 0 to 1. */
+  | { kind: 'downloading'; version: string; progress: number }
+  /** Downloaded: the app quits, installs it, and starts again. */
+  | { kind: 'installing'; version: string }
+  /** Downloading or installing failed. Trying again is allowed; the download page always works. */
+  | { kind: 'failed'; version: string };
+
+export interface UpdatesBridge {
+  state(): Promise<UpdateState>;
+  onChanged(listener: (state: UpdateState) => void): () => void;
+  /** Looks for a newer release now (the A33 screen), not only on the regular schedule. */
+  check(): void;
+  /** The Update button: download, install, restart (or move to /Applications first). */
+  install(): void;
+}
+
 export const IPC = {
   getAppInfo: 'app:get-info',
   authRestore: 'auth:restore',
@@ -106,4 +134,8 @@ export const IPC = {
   mentions: 'system:mentions',
   screenSources: 'screen:sources',
   screenChoose: 'screen:choose',
+  updateState: 'update:state',
+  updateChanged: 'update:changed',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
 } as const;

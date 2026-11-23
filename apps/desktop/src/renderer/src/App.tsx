@@ -27,6 +27,7 @@ import { EmptyState } from './components/EmptyState.tsx';
 import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
 import { SearchPanel } from './components/SearchPanel.tsx';
 import { Tulip } from './components/Tulip.tsx';
+import { UpdateCard } from './update/UpdateCard.tsx';
 import { formatTime, I18nProvider, useT } from './i18n.tsx';
 import { HangoutSession } from './hangout/session.ts';
 import { playSound, ring, stopRing } from './sound.ts';
@@ -83,6 +84,7 @@ function Root({ info }: { info: AppInfo }) {
             {t('auth.retry')}
           </button>
         )}
+        <UpdateCard />
       </main>
     );
   }
@@ -322,6 +324,7 @@ function Shell({ info, user, onSignOut }: ShellProps) {
       <main className="splash">
         <Tulip size={56} />
         <p>{t('connection.upgradeRequired')}</p>
+        <UpdateCard required />
       </main>
     );
   }
@@ -345,6 +348,7 @@ function Shell({ info, user, onSignOut }: ShellProps) {
               </div>
               <hr className="divider" />
               <RoomList selectedId={roomId} onSelect={setChosenRoom} />
+              <UpdateCard inCall={inCall} />
               {me.role === 'admin' && (
                 <AdminButton
                   onOpen={() => {

@@ -1,0 +1,18 @@
+{
+  "name": "@hasbihal/spike-updater",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Throwaway spike S3 for issue #50: does electron-updater work on macOS with the self-signed certificate (A50)? Not product code.",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "./build.sh"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0"
+  }
+}

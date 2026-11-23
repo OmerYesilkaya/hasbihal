@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Update spike</title>
+    <style>
+      body { font: 13px -apple-system, sans-serif; margin: 16px; }
+      button { margin-right: 8px; }
+      pre { background: #f4f4f4; padding: 8px; height: 470px; overflow: auto; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h2 id="title"></h2>
+    <button data-cmd="check">Check</button>
+    <button data-cmd="download">Download</button>
+    <button data-cmd="install">Update (install + restart)</button>
+    <button data-cmd="ask-mic">Ask for microphone</button>
+    <button data-cmd="move">Move to Applications</button>
+    <button data-cmd="state">Report state</button>
+    <pre id="log"></pre>
+    <script>
+      const { ipcRenderer } = require('electron');
+      document.getElementById('title').textContent = document.title = 'Update spike v' + require('../package.json').version;
+      for (const b of document.querySelectorAll('button')) b.onclick = () => ipcRenderer.invoke(b.dataset.cmd);
+      ipcRenderer.on('log', (_, line) => {
+        const pre = document.getElementById('log');
+        pre.textContent += line + '\n';
+        pre.scrollTop = pre.scrollHeight;
+      });
+    </script>
+  </body>
+</html>
