@@ -62,16 +62,16 @@ Rule: `protocol` depends on nothing internal. `core` depends only on `protocol`.
 
 ### 3.1 Stack (🟡)
 
-| Concern                   | Choice                                                 | Why                                                                                    |
-| ------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| HTTP framework            | **Fastify**                                            | Fast and mature, with first-class schema validation and a good plugin model.           |
-| WebSocket                 | **@fastify/websocket** (`ws`)                          | Same process and auth path as the HTTP API.                                            |
-| Validation                | **zod** schemas from `@hasbihal/protocol`              | One definition is used on both sides of the wire.                                      |
-| Database access           | **Kysely** (typed SQL query builder) with its migrator | Typed queries without hiding SQL. Full-text search and recursive queries stay natural. |
-| Password hashing          | **argon2** (Argon2id)                                  | A25.                                                                                   |
-| Images / video thumbnails | **sharp**; **ffmpeg** for video posters                | A26.                                                                                   |
-| Logging                   | **pino** (structured JSON)                             | Fastify's native logger.                                                               |
-| Tests                     | **Vitest** + a real PostgreSQL via Testcontainers      | Integration tests hit a real database, not mocks.                                      |
+| Concern                   | Choice                                                              | Why                                                                                    |
+| ------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| HTTP framework            | **Fastify**                                                         | Fast and mature, with first-class schema validation and a good plugin model.           |
+| WebSocket                 | **@fastify/websocket** (`ws`)                                       | Same process and auth path as the HTTP API.                                            |
+| Validation                | **zod** schemas from `@hasbihal/protocol`                           | One definition is used on both sides of the wire.                                      |
+| Database access           | **Kysely** (typed SQL query builder) with its migrator              | Typed queries without hiding SQL. Full-text search and recursive queries stay natural. |
+| Google sign-in            | **jose** (already used for access tokens) checks Google's ID tokens | A25.                                                                                   |
+| Images / video thumbnails | **sharp**; **ffmpeg** for video posters                             | A26.                                                                                   |
+| Logging                   | **pino** (structured JSON)                                          | Fastify's native logger.                                                               |
+| Tests                     | **Vitest** + a real PostgreSQL via Testcontainers                   | Integration tests hit a real database, not mocks.                                      |
 
 ### 3.2 Modules
 
@@ -79,7 +79,7 @@ The server is one process (a modular monolith). Each module owns its tables and 
 
 | Module     | Owns                                                         | Notes              |
 | ---------- | ------------------------------------------------------------ | ------------------ |
-| `auth`     | users' credentials, sessions, invites, recovery links        | A20, A25           |
+| `auth`     | Google sign-in, sessions, who may join (the list, requests)  | A20, A25           |
 | `users`    | profiles, avatars, presence mode, notification prefs         | A21, A28, A40, A41 |
 | `rooms`    | rooms, room settings, per-user room prefs                    | A11, A12           |
 | `messages` | messages, reactions, mentions, read state, search            | A22, A27, A47      |
@@ -94,14 +94,13 @@ The server is one process (a modular monolith). Each module owns its tables and 
 All ids are **UUIDv7**: time-ordered, safe to generate on either side, and good for index locality. All timestamps are `timestamptz` (UTC). Display uses Europe/Istanbul (A17).
 
 ```
-users            id, username (unique, login), display_name, avatar_file_id?, avatar_color (0–7),
-                 role ('admin'|'member'), presence_mode ('available'|'busy'),
-                 created_at, removed_at?
-credentials      user_id, password_hash, password_changed_at
+users            id, username (unique, @mention handle), display_name, avatar_file_id?,
+                 avatar_color (0–7), role ('admin'|'member'), presence_mode ('available'|'busy'),
+                 email? (unique, Google address), google_sub? (unique), created_at, removed_at?
 sessions         id, user_id, refresh_token_hash, device_name, created_at,
                  last_used_at, expires_at, revoked_at?
-invites          id, token_hash, role, created_by?, expires_at, used_by?, used_at?
-recovery_links   id, user_id, token_hash, created_by, expires_at, used_at?
+allowed_emails   email, role, added_by?, added_at
+access_requests  email, name, requested_at
 
 rooms            id, name, topic?, position, created_by, archived_at?
 room_user_prefs  room_id, user_id, notify_level ('mentions'|'all'|'muted'),
@@ -159,7 +158,7 @@ Notes:
 
 An in-process scheduler backed by the `jobs` table: durable, retried with backoff, and safe across restarts. At our scale there is no need for Redis or a separate worker.
 
-Jobs: thumbnail generation, link-preview fetching, event-reminder dispatch, expired session/invite cleanup, and orphaned-file garbage collection.
+Jobs: thumbnail generation, link-preview fetching, event-reminder dispatch, expired session cleanup, Google profile photos (A25), and orphaned-file garbage collection.
 
 ---
 
@@ -230,7 +229,7 @@ The embedded Chromium will age (A30), so the renderer is locked down from day on
 
 ### 5.4 Presence (A21)
 
-- The server counts live WebSocket connections per user. Zero connections means **Çevrimdışı** (offline). Ending a session (sign-out, a revoked device, recovery) closes its connections at once.
+- The server counts live WebSocket connections per user. Zero connections means **Çevrimdışı** (offline). Ending a session (sign-out, a revoked device, removal) closes its connections at once.
 - The user picks **Müsait** (available) or **Meşgul** (busy). The main process reports system idle time, and after 10 minutes idle the client sends `away`, so the user shows as **Uzakta** (away) until activity resumes.
 - "In a hangout" comes from LiveKit webhooks (§6.3), not from the client, so it can't drift.
 
@@ -296,16 +295,14 @@ LiveKit **webhooks** (`participant_joined`, `participant_left`, `track_published
 
 ## 9. Authentication and sessions (A20, A25)
 
-| Item           | Design                                                                                                                                                                                                                                                                                                                                                                                                |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invite         | An admin creates a single-use, expiring invite link (`hasbihal://invite/<token>`, A51) carrying a random 256-bit token. Only its hash is stored. The very first admin's invite comes from a server command (A52).                                                                                                                                                                                     |
-| Sign-up        | Through the invite: choose username (lowercase `a-z0-9._`, 3–20, A53), display name, avatar, and password. Minimum length 10 characters, no composition rules. The password is checked against a local list of common passwords.                                                                                                                                                                      |
-| Passwords      | Argon2id (OWASP-recommended parameters). Sign-in is rate-limited per IP and per account.                                                                                                                                                                                                                                                                                                              |
-| Access token   | Short-lived (15 min) **JWT signed with Ed25519**. Sent on HTTP requests and in the WebSocket `hello`.                                                                                                                                                                                                                                                                                                 |
-| Refresh token  | `<sessionId>.<random secret>`, **rotated on every use**; only the secret's hash is stored. Presenting an old secret for a live session means it was copied, so the session is revoked (theft detection). Clients refresh one request at a time. It expires after 180 days unused. Every authenticated request also checks the session row, so sign-out, revocation, and member removal apply at once. |
-| Client storage | The **main process owns the session**: it signs in, refreshes, and keeps the refresh token encrypted with Electron `safeStorage` (Keychain on macOS, DPAPI on Windows). The renderer only ever receives short-lived access tokens, so a compromised renderer can't take the long-lived session with it.                                                                                               |
-| Recovery       | An admin creates a single-use recovery link (A25) that lets the user set a new password. All existing sessions are revoked.                                                                                                                                                                                                                                                                           |
-| Sessions page  | Users can see and revoke their own sessions in the profile view (A41).                                                                                                                                                                                                                                                                                                                                |
+| Item           | Design                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who may join   | Admins keep a list of Google addresses (A25); the first admin's comes from a server command (`allow-email`, A52). Someone not on the list may send a request, proven with their Google sign-in; online admins get a `access_requested` gateway message, and the admin page lists requests.                                                                                                                                                                                                                                                                                                   |
+| Sign-in        | **Sign in with Google** (OpenID Connect). The desktop app opens Google in the system browser and receives the answer on a one-off `127.0.0.1` port, with PKCE (RFC 8252), then sends the ID token to the server. The server checks its signature against Google's keys, its audience (our client id), and that the address is verified; then finds the account by Google's permanent id (`sub`), else by address for members made before Google sign-in (linked then), else makes one if the address is on the list. Name and photo come from Google. Google is asked nothing after sign-in. |
+| Access token   | Short-lived (15 min) **JWT signed with Ed25519**. Sent on HTTP requests and in the WebSocket `hello`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Refresh token  | `<sessionId>.<random secret>`, **rotated on every use**; only the secret's hash is stored. Presenting an old secret for a live session means it was copied, so the session is revoked (theft detection). Clients refresh one request at a time. It expires after 180 days unused. Every authenticated request also checks the session row, so sign-out, revocation, and member removal apply at once.                                                                                                                                                                                        |
+| Client storage | The **main process owns the session**: it runs the Google sign-in, refreshes, and keeps the refresh token encrypted with Electron `safeStorage` (Keychain on macOS, DPAPI on Windows). The renderer only ever receives short-lived access tokens, so a compromised renderer can't take the long-lived session with it.                                                                                                                                                                                                                                                                       |
+| Sessions page  | Users can see and revoke their own sessions in the profile view (A41).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ---
 
@@ -354,7 +351,7 @@ GitHub Actions:
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `protocol`, `core` (parsers, sync, formatting, recurrence) | Vitest unit tests, test-first for the sync engine and Markdown parser.                                                                                         |
 | Server modules                                             | Vitest integration tests against real PostgreSQL (Testcontainers) and a real LiveKit dev server where needed.                                                  |
-| Desktop app                                                | Playwright's Electron support for end-to-end flows: invite → sign up → chat → join hangout.                                                                    |
+| Desktop app                                                | Playwright's Electron support for end-to-end flows: sign in with Google (a stand-in) → chat → join hangout.                                                    |
 | Media quality                                              | A manual checklist for each release: noise suppression, echo, 1080p60 share with audio on both OSes, packet-loss behaviour (using a network link conditioner). |
 | Internal test period                                       | Technical family members use pre-release builds until the app is stable, then v1.0 ships (A30).                                                                |
 

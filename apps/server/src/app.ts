@@ -3,6 +3,8 @@ import multipart from '@fastify/multipart';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { PROTOCOL_VERSION, type HealthResponse } from '@hasbihal/protocol';
+import { remoteGoogleVerifier, type GoogleVerifier } from './auth/google.ts';
+import { GOOGLE_PHOTO_JOB, googlePhotoJob } from './auth/google-photo.ts';
 import { registerAuth } from './auth/routes.ts';
 import { generateSigningKeyPem, signingKeysFromPem, type SigningKeys } from './auth/tokens.ts';
 import type { Config } from './config.ts';
@@ -40,6 +42,8 @@ export interface AppDeps {
   runJobs?: boolean;
   /** Defaults to LiveKit's API at `config.livekit.apiUrl`. */
   livekitRooms?: LiveKitRooms;
+  /** Defaults to checking ID tokens against Google's keys (`config.google`); tests sign their own. */
+  google?: GoogleVerifier;
 }
 
 /**
@@ -89,25 +93,19 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     hub.stop();
   });
 
-  const guards = await registerAuth(app, {
-    db: deps.db,
-    keys,
-    rateLimitPerMinute: config.authRateLimitPerMinute,
-    gateway: hub,
-  });
-  registerMembers(app, deps.db, guards);
-  registerAdmin(app, { db: deps.db, hub, guards });
   const files = deps.files ?? new LocalFileStore(config.filesDir);
+  const fetcher = deps.fetcher ?? new SafeFetcher({ allowPrivate: config.linkPreviewAllowPrivate });
   const jobs = new JobQueue(deps.db, app.log, {
     [LINK_PREVIEW_JOB]: linkPreviewJob({
       db: deps.db,
       store: files,
-      fetcher: deps.fetcher ?? new SafeFetcher({ allowPrivate: config.linkPreviewAllowPrivate }),
+      fetcher,
       committed: () => {
         hub.eventsCommitted();
       },
     }),
     [EVENT_REMINDER_JOB]: eventReminderJob({ db: deps.db, hub }),
+    [GOOGLE_PHOTO_JOB]: googlePhotoJob({ db: deps.db, store: files, hub, fetcher }),
   });
   app.decorate('jobs', jobs);
   if (deps.runJobs !== false) {
@@ -120,6 +118,21 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
   const jobsQueued = () => {
     jobs.wake();
   };
+
+  const { clientId, issuers, jwksUrl } = config.google;
+  const guards = await registerAuth(app, {
+    db: deps.db,
+    keys,
+    rateLimitPerMinute: config.authRateLimitPerMinute,
+    gateway: hub,
+    google:
+      deps.google ?? (clientId ? remoteGoogleVerifier({ clientId, issuers, jwksUrl }) : undefined),
+    jobsQueued,
+  });
+  if (!deps.google && !clientId)
+    app.log.warn('GOOGLE_CLIENT_ID is not set; Google sign-in is off (development only)');
+  registerMembers(app, deps.db, guards);
+  registerAdmin(app, { db: deps.db, hub, guards });
   registerChat(app, { db: deps.db, hub, guards, jobsQueued });
   registerEvents(app, { db: deps.db, hub, guards, jobsQueued });
   registerFiles(app, {

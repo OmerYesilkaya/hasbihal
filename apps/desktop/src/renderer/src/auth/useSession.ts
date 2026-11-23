@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { User } from '@hasbihal/protocol';
 import type { AuthResult } from '../../../shared/app-info.ts';
-import type { DeepLink } from '../../../shared/deep-link.ts';
 
 export type SessionState =
   | { kind: 'restoring' }
@@ -68,21 +67,4 @@ export function useSession() {
   }, []);
 
   return { state, retry, signedIn, signOut };
-}
-
-/** The latest `hasbihal://` link, including one that launched the app. */
-export function useDeepLink(): [DeepLink | null, () => void] {
-  const [link, setLink] = useState<DeepLink | null>(null);
-  useEffect(() => {
-    // Not guarded against unmounting: React's dev double-mount would otherwise drop the link,
-    // since taking it removes it from the main process.
-    void window.hasbihal.deepLinks.takePending().then((pending) => {
-      if (pending) setLink(pending);
-    });
-    return window.hasbihal.deepLinks.onLink(setLink);
-  }, []);
-  const clear = useCallback(() => {
-    setLink(null);
-  }, []);
-  return [link, clear];
 }

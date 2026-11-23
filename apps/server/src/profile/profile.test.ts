@@ -1,8 +1,8 @@
 import { readdir } from 'node:fs/promises';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ApiError, SignedIn, User, type SignedIn as SignedInType } from '@hasbihal/protocol';
-import { PASSWORD, startHarness, type Harness } from '../../test/harness.ts';
+import { ApiError, User, type SignedIn as SignedInType } from '@hasbihal/protocol';
+import { startHarness, type Harness } from '../../test/harness.ts';
 
 let h: Harness;
 beforeAll(async () => {
@@ -130,41 +130,5 @@ describe('profile details (A41)', () => {
       (m) => m.event.type === 'member_updated' && m.event.user.displayName === 'Ömer Faruk',
     );
     client.ws.terminate();
-  });
-
-  it('changes the password and signs out the other devices only', async () => {
-    const member = await h.signUp();
-    const other = SignedIn.parse(
-      (
-        await h.app.inject({
-          method: 'POST',
-          url: '/auth/sign-in',
-          payload: { username: member.user.username, password: PASSWORD, deviceName: 'PC' },
-        })
-      ).json(),
-    );
-    const wrong = await h.request('POST', '/me/password', as(member), {
-      currentPassword: 'yanlış parola',
-      newPassword: 'yepyeni bir parola 9',
-    });
-    expect(ApiError.parse(wrong.json()).error.issues?.[0]?.code).toBe('wrong_password');
-
-    const res = await h.request('POST', '/me/password', as(member), {
-      currentPassword: PASSWORD,
-      newPassword: 'yepyeni bir parola 9',
-    });
-    expect(res.statusCode).toBe(204);
-    expect((await h.request('GET', '/me', as(member))).statusCode).toBe(200);
-    expect((await h.request('GET', '/me', as(other))).statusCode).toBe(401);
-    const signIn = await h.app.inject({
-      method: 'POST',
-      url: '/auth/sign-in',
-      payload: {
-        username: member.user.username,
-        password: 'yepyeni bir parola 9',
-        deviceName: 'Mac',
-      },
-    });
-    expect(signIn.statusCode).toBe(200);
   });
 });

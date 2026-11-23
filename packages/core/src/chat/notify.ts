@@ -5,7 +5,9 @@ export type Occasion =
   | { kind: 'message'; message: Message; prefs: RoomPrefs }
   | { kind: 'hangout_started'; prefs: RoomPrefs }
   | { kind: 'nudge' }
-  | { kind: 'event_reminder' };
+  | { kind: 'event_reminder' }
+  /** Admins: someone not on the list asked to join (A25). */
+  | { kind: 'access_request' };
 
 export interface Situation {
   myId: string;
@@ -30,9 +32,9 @@ export const mentionsMe = (message: Message, myId: string) =>
   message.mentionsEveryone || message.mentions.includes(myId);
 
 /**
- * The notification rules (A28): mentions, nudges, and event reminders notify, with sound; every
- * message only where asked for; "hangout started" unless turned off; a muted room says nothing;
- * Busy (A19) silences all of it.
+ * The notification rules (A28): mentions, nudges, and event reminders notify, with sound; access
+ * requests (admins, A25) without; every message only where asked for; "hangout started" unless
+ * turned off; a muted room says nothing; Busy (A19) silences all of it.
  */
 export function noticeFor(occasion: Occasion, situation: Situation): Notice {
   if (situation.busy) return QUIET;
@@ -41,6 +43,9 @@ export function noticeFor(occasion: Occasion, situation: Situation): Notice {
     case 'event_reminder':
       // Asked for personally: even a muted room doesn't hide them.
       return { notify: true, sound: true };
+    case 'access_request':
+      // Worth knowing, nobody waiting on the line: no sound.
+      return { notify: true, sound: false };
     case 'hangout_started':
       return occasion.prefs.notify !== 'muted' && occasion.prefs.hangoutAlerts
         ? { notify: true, sound: false }

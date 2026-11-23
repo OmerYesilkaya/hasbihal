@@ -21,6 +21,8 @@ export interface GatewayNotices {
   hangoutStarted: (roomId: string, userId: string) => void;
   nudge: (fromUserId: string, roomId: string) => void;
   eventReminder: (reminder: { roomId: string; title: string; startsAt: string }) => void;
+  /** Admins: someone asked to join (A25). */
+  accessRequested: (request: { email: string; name: string }) => void;
 }
 
 export function useGateway(info: AppInfo, api: Client, store: ChatStore, notices: GatewayNotices) {
@@ -95,6 +97,9 @@ export function useGateway(info: AppInfo, api: Client, store: ChatStore, notices
       },
       onEventReminder: (reminder) => {
         latestNotices.current.eventReminder(reminder);
+      },
+      onAccessRequested: (request) => {
+        latestNotices.current.accessRequested(request);
       },
     });
     client.current = gateway;

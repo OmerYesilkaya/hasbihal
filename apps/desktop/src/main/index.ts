@@ -1,14 +1,13 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, session } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme, session, shell } from 'electron';
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { LOCALES } from '@hasbihal/core';
-import { RecoverRequest, SignInRequest, SignUpRequest } from '@hasbihal/protocol';
 import { IPC, type AppInfo, type AuthResult } from '../shared/app-info.ts';
 import { registerAppSchemePrivileges, serveRendererFromAppScheme } from './app-protocol.ts';
 import { AuthSession } from './auth-session.ts';
 import { Background } from './background.ts';
-import { DeepLinkRouter } from './deep-links.ts';
+import { GOOGLE_ENDPOINTS, GoogleSignIn, type GoogleClient } from './google-sign-in.ts';
 import { IdleWatcher } from './idle.ts';
 import { ScreenSources } from './screen-share.ts';
 import { HangoutShortcuts } from './shortcuts.ts';
@@ -35,6 +34,34 @@ const userDataDir = devOverride('HASBIHAL_USER_DATA_DIR');
 const livekitUrl = devOverride('HASBIHAL_LIVEKIT_URL');
 if (userDataDir) app.setPath('userData', path.resolve(userDataDir));
 
+/**
+ * The Google OAuth client people sign in with (A25), built in like the server address. Unpackaged
+ * builds may use a stand-in Google instead (end-to-end tests), visited by a headless "browser",
+ * and suggest which of its accounts to use.
+ */
+const fakeGoogleUrl = devOverride('HASBIHAL_GOOGLE_URL');
+function googleSignIn(): GoogleSignIn | undefined {
+  if (fakeGoogleUrl) {
+    return new GoogleSignIn({
+      client: {
+        clientId: 'hasbihal-e2e',
+        clientSecret: 'e2e',
+        authUrl: `${fakeGoogleUrl}/authorize`,
+        tokenUrl: `${fakeGoogleUrl}/token`,
+      },
+      openBrowser: async (url) => {
+        await fetch(url);
+      },
+      loginHint: devOverride('HASBIHAL_GOOGLE_LOGIN_HINT'),
+    });
+  }
+  const clientId = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_ID;
+  const clientSecret = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return undefined;
+  const client: GoogleClient = { clientId, clientSecret, ...GOOGLE_ENDPOINTS };
+  return new GoogleSignIn({ client, openBrowser: (url) => shell.openExternal(url) });
+}
+
 app.enableSandbox();
 registerAppSchemePrivileges();
 
@@ -43,12 +70,10 @@ registerAppSchemePrivileges();
 // have no such shortcut and keep Electron's own ID, under which notifications still show.
 if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId('com.hasbihal.desktop');
 
-const deepLinks = new DeepLinkRouter();
 const idleWatcher = new IdleWatcher();
 const shortcuts = new HangoutShortcuts();
 // Packaged builds only: development and test runs never register a login item.
 const background = new Background({ manageStartup: app.isPackaged });
-deepLinks.listen();
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -85,7 +110,6 @@ function createMainWindow(): BrowserWindow {
     if (!background.startedHidden) window.show();
   });
   background.attach(window);
-  deepLinks.setTarget(window.webContents);
   idleWatcher.setTarget(window.webContents);
   shortcuts.setTarget(window.webContents);
 
@@ -152,10 +176,9 @@ void app.whenReady().then(async () => {
     serveRendererFromAppScheme(path.join(import.meta.dirname, '../renderer'), csp);
   }
 
-  deepLinks.register();
-
   const auth = new AuthSession({
     serverUrl,
+    google: googleSignIn(),
     deviceName: deviceName(),
     store: new SafeStorageTokenStore(path.join(app.getPath('userData'), 'session.bin')),
   });
@@ -168,14 +191,18 @@ void app.whenReady().then(async () => {
     serverUrl,
   }));
   handle(IPC.authRestore, z.undefined(), () => auth.restore());
-  handle(IPC.authInviteInfo, z.string().min(1).max(200), (token) => auth.inviteInfo(token));
-  // The device name is the main process's to set, so the renderer's requests leave it out.
-  handle(IPC.authSignUp, SignUpRequest.omit({ deviceName: true }), (r) => auth.signUp(r));
-  handle(IPC.authSignIn, SignInRequest.omit({ deviceName: true }), (r) => auth.signIn(r));
-  handle(IPC.authRecover, RecoverRequest.omit({ deviceName: true }), (r) => auth.recover(r));
+  handle(IPC.authGoogle, z.undefined(), async () => {
+    const result = await auth.signInWithGoogle();
+    // The browser has the focus now: bring the app back to where the person continues.
+    background.show();
+    return result;
+  });
+  ipcMain.on(IPC.authGoogleCancel, () => {
+    auth.cancelGoogleSignIn();
+  });
+  handle(IPC.authRequestAccess, z.undefined(), () => auth.requestAccess());
   handle(IPC.authAccessToken, z.boolean(), (refresh) => auth.accessToken(refresh));
   ipcMain.handle(IPC.authSignOut, () => auth.signOut());
-  ipcMain.handle(IPC.deepLinkTakePending, () => deepLinks.takePending());
   ipcMain.handle(IPC.systemIsIdle, () => idleWatcher.idle);
   ipcMain.on(IPC.systemShortcuts, (_event, active: unknown) => {
     shortcuts.setActive(active === true);
@@ -219,8 +246,7 @@ void app.whenReady().then(async () => {
   });
 });
 
-app.on('second-instance', (_event, argv) => {
-  deepLinks.handleArgv(argv);
+app.on('second-instance', () => {
   background.show();
 });
 

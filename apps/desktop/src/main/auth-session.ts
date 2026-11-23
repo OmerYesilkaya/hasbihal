@@ -1,15 +1,7 @@
-import {
-  ApiError,
-  AuthTokens,
-  InviteInfo,
-  SignedIn,
-  User,
-  type RecoverRequest,
-  type SignInRequest,
-  type SignUpRequest,
-} from '@hasbihal/protocol';
+import { ApiError, AuthTokens, GoogleSignInResult, User } from '@hasbihal/protocol';
 import type { z } from 'zod';
-import type { AuthError, AuthResult } from '../shared/app-info.ts';
+import type { AuthError, AuthResult, GoogleOutcome } from '../shared/app-info.ts';
+import type { GoogleSignInOutcome } from './google-sign-in.ts';
 
 /** Where the refresh token is kept between launches (encrypted on disk, see token-store.ts). */
 export interface TokenStore {
@@ -17,8 +9,16 @@ export interface TokenStore {
   save(refreshToken: string | null): Promise<void>;
 }
 
+/** Who Google says this is: the browser half of the sign-in (`GoogleSignIn`). */
+export interface GoogleIdentityProvider {
+  run(): Promise<GoogleSignInOutcome>;
+  cancel(): void;
+}
+
 export interface AuthSessionOptions {
   serverUrl: string;
+  /** Undefined in builds without a Google client (development without one set up). */
+  google: GoogleIdentityProvider | undefined;
   /** Shown in the user's sessions list. */
   deviceName: string;
   store: TokenStore;
@@ -45,6 +45,11 @@ export class AuthSession {
   readonly #loaded: Promise<void>;
   #access: { token: string; expiresAt: number } | null = null;
   #refreshing: Promise<AuthResult<string>> | null = null;
+  /**
+   * The ID token of a Google account that isn't on the list, kept for asking an admin to let it
+   * in. It never leaves the main process, and Google's tokens expire within the hour.
+   */
+  #notAllowedToken: string | null = null;
   readonly #endedListeners = new Set<() => void>();
 
   constructor(options: AuthSessionOptions) {
@@ -75,20 +80,44 @@ export class AuthSession {
     return me;
   }
 
-  inviteInfo(token: string): Promise<AuthResult<InviteInfo>> {
-    return this.#request('GET', `/auth/invites/${encodeURIComponent(token)}`, InviteInfo);
+  /**
+   * Asks Google who this is (in the browser), then the server to sign them in. Someone not on the
+   * list is told so, and may then `requestAccess`.
+   */
+  async signInWithGoogle(): Promise<AuthResult<GoogleOutcome>> {
+    const { google } = this.#options;
+    if (!google) return fail({ code: 'unavailable', message: 'Google sign-in is not set up.' });
+    this.#notAllowedToken = null;
+    const identity = await google.run();
+    if (!identity.ok) {
+      return identity.reason === 'failed'
+        ? fail({ code: 'unavailable', message: 'Google sign-in failed.' })
+        : ok({ kind: 'cancelled' });
+    }
+    const result = await this.#request('POST', '/auth/google', GoogleSignInResult, {
+      idToken: identity.idToken,
+      deviceName: this.#options.deviceName,
+    });
+    if (!result.ok) return result;
+    if (result.value.status === 'not_allowed') {
+      this.#notAllowedToken = identity.idToken;
+      const { email, requested } = result.value;
+      return ok({ kind: 'notAllowed', email, requested });
+    }
+    await this.#setTokens(result.value.tokens);
+    return ok({ kind: 'signedIn', user: result.value.user });
   }
 
-  signUp(request: Omit<SignUpRequest, 'deviceName'>): Promise<AuthResult<User>> {
-    return this.#signIn('/auth/sign-up', { ...request, deviceName: this.#options.deviceName });
+  cancelGoogleSignIn(): void {
+    this.#options.google?.cancel();
   }
 
-  signIn(request: Omit<SignInRequest, 'deviceName'>): Promise<AuthResult<User>> {
-    return this.#signIn('/auth/sign-in', { ...request, deviceName: this.#options.deviceName });
-  }
-
-  recover(request: Omit<RecoverRequest, 'deviceName'>): Promise<AuthResult<User>> {
-    return this.#signIn('/auth/recover', { ...request, deviceName: this.#options.deviceName });
+  /** "Let me in", for the Google account that just wasn't on the list. */
+  async requestAccess(): Promise<AuthResult<null>> {
+    const idToken = this.#notAllowedToken;
+    if (!idToken) return fail({ code: 'unauthorized', message: 'Sign in with Google first.' });
+    const result = await this.#request('POST', '/auth/access-requests', null, { idToken });
+    return result.ok ? ok(null) : result;
   }
 
   /**
@@ -115,13 +144,6 @@ export class AuthSession {
     // Best effort: the local session is gone either way. When offline, the server-side session
     // stays until it expires unused (180 days) or is revoked from the sessions list.
     if (access?.ok) await this.#request('POST', '/auth/sign-out', null, {}, access.value);
-  }
-
-  async #signIn(path: string, body: object): Promise<AuthResult<User>> {
-    const result = await this.#request('POST', path, SignedIn, body);
-    if (!result.ok) return result;
-    await this.#setTokens(result.value.tokens);
-    return ok(result.value.user);
   }
 
   async #refresh(): Promise<AuthResult<string>> {

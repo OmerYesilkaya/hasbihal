@@ -9,8 +9,8 @@ import { tmpdir } from 'node:os';
 import { createServer, type AddressInfo } from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { SignedIn } from '@hasbihal/protocol';
-import { adminInviteUrl, PASSWORD, SERVER_DIR } from './support.ts';
+import { E2E_GOOGLE_CLIENT_ID, startFakeGoogle } from './fake-google.ts';
+import { allowEmailOnServer, googleAccount, SERVER_DIR, signInWithGoogle } from './support.ts';
 
 const run = promisify(execFile);
 const POSTGRES_IMAGE = 'postgres:17.12'; // same as infra/compose.dev.yml
@@ -211,30 +211,23 @@ async function startSite(): Promise<{ url: string; stop: () => Promise<void> }> 
 }
 
 /**
- * The admin the tests act through to set the scene (invites, rooms), made the way the owner
- * makes the first one (A52). Tests sign in as it with PASSWORD.
+ * The admin the tests act through to set the scene (the list, rooms), made the way the owner
+ * makes the first one (A25, A52): the server command, then a Google sign-in.
  */
-async function createSeedAdmin(serverUrl: string, databaseUrl: string): Promise<string> {
-  const token = (await adminInviteUrl(databaseUrl)).split('/').at(-1);
-  const response = await fetch(new URL('/auth/sign-up', serverUrl), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      inviteToken: token,
-      username: 'kurucu',
-      displayName: 'Kurucu',
-      password: PASSWORD,
-      deviceName: 'e2e',
-    }),
-  });
-  if (!response.ok)
-    throw new Error(`seed admin: ${String(response.status)} ${await response.text()}`);
-  return SignedIn.parse(await response.json()).user.username;
+const SEED_EMAIL = 'kurucu.e2e@gmail.com';
+async function createSeedAdmin(serverUrl: string, databaseUrl: string, googleUrl: string) {
+  await googleAccount({ email: SEED_EMAIL, name: 'Kurucu' }, googleUrl);
+  await allowEmailOnServer(SEED_EMAIL, 'admin', databaseUrl);
+  const result = await signInWithGoogle(SEED_EMAIL, serverUrl, googleUrl);
+  if (result.status !== 'signed_in' || result.user.role !== 'admin')
+    throw new Error(`seed admin: ${JSON.stringify(result)}`);
+  return SEED_EMAIL;
 }
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
   const database = await startPostgres();
   const site = await startSite();
+  const google = await startFakeGoogle();
   const port = await freePort();
   const serverUrl = `http://127.0.0.1:${String(port)}`;
   const livekit = await startLiveKit(port);
@@ -249,8 +242,12 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     LIVEKIT_API_URL: livekit.url.replace('ws:', 'http:'),
     // Link previews may reach the local stand-in site above.
     LINK_PREVIEW_ALLOW_PRIVATE: 'true',
-    // Every test signs people in and up through the API: far more than a person would.
+    // Every test signs people in through the API: far more than a person would.
     AUTH_RATE_LIMIT_PER_MINUTE: '10000',
+    // Google is the stand-in (fake-google.ts).
+    GOOGLE_CLIENT_ID: E2E_GOOGLE_CLIENT_ID,
+    GOOGLE_ISSUER: google.url,
+    GOOGLE_JWKS_URL: `${google.url}/certs`,
   };
   const server = spawn(process.execPath, ['src/main.ts'], {
     cwd: SERVER_DIR,
@@ -263,10 +260,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_LIVEKIT_URL = livekit.url;
   process.env.E2E_DATABASE_URL = database.url;
   process.env.E2E_SITE_URL = site.url;
-  process.env.E2E_SEED_USERNAME = await createSeedAdmin(serverUrl, database.url);
+  process.env.E2E_GOOGLE_URL = google.url;
+  process.env.E2E_SEED_EMAIL = await createSeedAdmin(serverUrl, database.url, google.url);
 
   return async () => {
     server.kill('SIGTERM');
-    await Promise.all([database.stop(), livekit.stop(), site.stop()]);
+    await Promise.all([database.stop(), livekit.stop(), site.stop(), google.stop()]);
   };
 }

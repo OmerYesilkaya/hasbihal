@@ -1,242 +1,266 @@
-import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import type { LightMyRequestResponse } from 'fastify';
+import sharp from 'sharp';
+import { newId } from '@hasbihal/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  AccessList,
   ApiError,
   AuthTokens,
-  InviteInfo,
-  OneTimeLink,
+  GoogleSignInResult,
   SessionList,
-  SignedIn,
-  User,
-  type Role,
+  type SignedIn,
 } from '@hasbihal/protocol';
-import { buildApp } from '../app.ts';
-import { loadConfig } from '../config.ts';
-import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
-import { createInvite } from './routes.ts';
+import { startHarness, type Harness } from '../../test/harness.ts';
+import { TEST_GOOGLE_CLIENT_ID, type GoogleAccount } from '../../test/google.ts';
+import type { Fetcher } from '../previews/fetcher.ts';
+import { photoUrlAtSize } from './google-photo.ts';
 
-let app: FastifyInstance;
-let testDb: TestDatabase;
+/** What the stand-in fetcher hands out as everyone's Google photo. */
+let photo: Buffer;
+const fetched: string[] = [];
+const photoFetcher: Fetcher = {
+  fetch: (url) => {
+    fetched.push(url);
+    return Promise.resolve({ url, contentType: 'image/png', body: photo });
+  },
+};
 
+let h: Harness;
+let admin: SignedIn;
 beforeAll(async () => {
-  testDb = await createTestDatabase();
-  // All test requests come from one IP; the per-IP limit has its own test below.
-  app = await buildApp(loadConfig({ LOG_LEVEL: 'silent', AUTH_RATE_LIMIT_PER_MINUTE: '10000' }), {
-    db: testDb.db,
-  });
-  await app.ready();
+  photo = await sharp({
+    create: { width: 96, height: 96, channels: 3, background: '#c0392b' },
+  })
+    .png()
+    .toBuffer();
+  h = await startHarness({ fetcher: photoFetcher });
+  admin = await h.signUp('admin');
 });
-
 afterAll(async () => {
-  await app.close();
-  await testDb.drop();
+  await h.close();
 });
 
-let counter = 0;
-/** A username no other test uses. */
-const uniqueName = (base = 'user') => `${base}_${++counter}`;
-const PASSWORD = 'çay ve simit 2026';
-
-const post = (url: string, payload: unknown, token?: string) =>
-  app.inject({
+const errorCode = (res: LightMyRequestResponse) => ApiError.parse(res.json()).error.code;
+const result = (res: LightMyRequestResponse) => GoogleSignInResult.parse(res.json());
+const post = (url: string, payload: object, token?: string) =>
+  h.app.inject({
     method: 'POST',
     url,
-    payload: payload as object,
+    payload,
     headers: token ? { authorization: `Bearer ${token}` } : {},
   });
 const get = (url: string, token?: string) =>
-  app.inject({ method: 'GET', url, headers: token ? { authorization: `Bearer ${token}` } : {} });
-const errorCode = (res: LightMyRequestResponse) => ApiError.parse(res.json()).error.code;
-
-async function signUp(
-  role: Role = 'member',
-  username = uniqueName(),
-  password = PASSWORD,
-): Promise<SignedIn> {
-  const invite = await createInvite(testDb.db, role, null);
-  const res = await post('/auth/sign-up', {
-    inviteToken: invite.token,
-    username,
-    displayName: 'Ömer Faruk',
-    password,
-    deviceName: 'Test Mac',
-  });
-  expect(res.statusCode, res.body).toBe(201);
-  return SignedIn.parse(res.json());
-}
-
-describe('invites and sign-up', () => {
-  it('shows what an invite is for before signing up', async () => {
-    const invite = await createInvite(testDb.db, 'admin', null);
-    expect(invite.url).toBe(`hasbihal://invite/${invite.token}`);
-    const res = await get(`/auth/invites/${invite.token}`);
-    expect(InviteInfo.parse(res.json()).role).toBe('admin');
-  });
-
-  it('signs up through an invite, with the invite deciding the role', async () => {
-    const { user, tokens } = await signUp('admin');
-    expect(user.role).toBe('admin');
-    expect(user.displayName).toBe('Ömer Faruk');
-    expect(User.parse((await get('/me', tokens.accessToken)).json()).id).toBe(user.id);
-  });
-
-  it('uses an invite only once', async () => {
-    const invite = await createInvite(testDb.db, 'member', null);
-    const body = (username: string) => ({
-      inviteToken: invite.token,
+  h.app.inject({ method: 'GET', url, headers: token ? { authorization: `Bearer ${token}` } : {} });
+const allow = (email: string, role: 'admin' | 'member' = 'member') =>
+  h.testDb.db.insertInto('allowed_emails').values({ email, role, added_by: null }).execute();
+/** A member made before Google sign-in, given their address with `set-email`. */
+const oldMember = async (account: GoogleAccount, username: string) =>
+  h.testDb.db
+    .insertInto('users')
+    .values({
+      id: newId(),
       username,
-      displayName: 'A',
-      password: PASSWORD,
-      deviceName: 'D',
+      display_name: 'Eski Üye',
+      avatar_color: 3,
+      role: 'member',
+      email: account.email,
+    })
+    .returningAll()
+    .executeTakeFirstOrThrow();
+const signedIn = (res: LightMyRequestResponse) => {
+  const r = result(res);
+  if (r.status !== 'signed_in') throw new Error(`not signed in: ${res.body}`);
+  return r;
+};
+
+describe('signing in with Google (A25)', () => {
+  it('makes an account for an address on the list: name from Google, role from the list', async () => {
+    const watcher = await h.connect(admin.tokens.accessToken);
+    await watcher.waitFor('welcome');
+    const account = { ...h.google.account('Ayşe Yılmaz'), email: 'ayse.yilmaz.a1@gmail.com' };
+    await allow(account.email, 'admin');
+
+    const res = await h.signInWithGoogle(account);
+    expect(res.statusCode).toBe(200);
+    const { user } = signedIn(res);
+    expect(user).toMatchObject({
+      displayName: 'Ayşe Yılmaz',
+      username: 'ayse.yilmaz.a1',
+      role: 'admin',
+      avatarFileId: null,
     });
-    expect((await post('/auth/sign-up', body(uniqueName()))).statusCode).toBe(201);
-    const again = await post('/auth/sign-up', body(uniqueName()));
-    expect(again.statusCode).toBe(404);
-    expect((await get(`/auth/invites/${invite.token}`)).statusCode).toBe(404);
+    await watcher.waitFor(
+      'event',
+      (m) => m.event.type === 'member_joined' && m.event.user.id === user.id,
+    );
+    watcher.ws.terminate();
+    // The address was used up: the list is for people who haven't joined yet.
+    const left = await h.testDb.db
+      .selectFrom('allowed_emails')
+      .where('email', '=', account.email)
+      .selectAll()
+      .execute();
+    expect(left).toEqual([]);
   });
 
-  it('rejects expired and unknown invites', async () => {
-    const expired = await createInvite(testDb.db, 'member', null, -1000);
-    expect((await get(`/auth/invites/${expired.token}`)).statusCode).toBe(404);
-    const res = await post('/auth/sign-up', {
-      inviteToken: 'nope',
-      username: uniqueName(),
-      displayName: 'A',
-      password: PASSWORD,
-      deviceName: 'D',
-    });
-    expect(res.statusCode).toBe(404);
+  it('signs the same Google account back in, even after its address changed', async () => {
+    const member = await h.signUp();
+    const renamed = { ...member.account, email: `yeni.${member.account.email}` };
+    const again = signedIn(await h.signInWithGoogle(renamed));
+    expect(again.user.id).toBe(member.user.id);
   });
 
-  it('enforces the username rules (A53), lowercasing what it can', async () => {
-    const invite = await createInvite(testDb.db, 'member', null);
-    const attempt = (username: string) =>
-      post('/auth/sign-up', {
-        inviteToken: invite.token,
-        username,
-        displayName: 'A',
-        password: PASSWORD,
-        deviceName: 'D',
-      });
-    for (const bad of ['ab', 'ömer', 'has space', 'a'.repeat(21), 'dash-ed']) {
-      const res = await attempt(bad);
-      expect(res.statusCode, bad).toBe(400);
-      expect(ApiError.parse(res.json()).error.issues?.[0]?.path).toEqual(['body', 'username']);
-    }
-    const name = uniqueName('Mixed');
-    const ok = SignedIn.parse((await attempt(name)).json());
-    expect(ok.user.username).toBe(name.toLowerCase());
+  it('numbers the @handle when the address’s is taken', async () => {
+    const first = { ...h.google.account(), email: 'mehmet.b2@gmail.com' };
+    const second = { ...h.google.account(), email: 'mehmet.b2@googlemail.com' };
+    await allow(first.email);
+    await allow(second.email);
+    expect(signedIn(await h.signInWithGoogle(first)).user.username).toBe('mehmet.b2');
+    expect(signedIn(await h.signInWithGoogle(second)).user.username).toBe('mehmet.b22');
   });
 
-  it('refuses a taken username with conflict', async () => {
-    const { user } = await signUp();
-    const invite = await createInvite(testDb.db, 'member', null);
-    const res = await post('/auth/sign-up', {
-      inviteToken: invite.token,
-      username: user.username,
-      displayName: 'B',
-      password: PASSWORD,
-      deviceName: 'D',
+  it('links a member made before Google sign-in by address, keeping their name and @handle', async () => {
+    const account = h.google.account('Google Adı');
+    const old = await oldMember(account, 'eskiuye_1');
+
+    const linked = signedIn(await h.signInWithGoogle(account));
+    expect(linked.user).toMatchObject({
+      id: old.id,
+      username: 'eskiuye_1',
+      displayName: 'Eski Üye',
     });
+    // From now on the Google account is theirs; another one claiming the address isn't.
+    const impostor = { ...h.google.account(), email: account.email };
+    const res = await h.signInWithGoogle(impostor);
     expect(res.statusCode).toBe(409);
-    expect(errorCode(res)).toBe('conflict');
-    // The invite is still unused: the failed sign-up rolled back.
-    expect((await get(`/auth/invites/${invite.token}`)).statusCode).toBe(200);
   });
 
-  it('refuses short, common, and username-containing passwords', async () => {
-    const invite = await createInvite(testDb.db, 'member', null);
-    const username = uniqueName('kerem');
-    const cases = [
-      ['short', undefined],
-      ['qwertyuiop', 'password_too_common'],
-      [`${username}2026!`, 'password_contains_username'],
-    ] as const;
-    for (const [password, code] of cases) {
-      const res = await post('/auth/sign-up', {
-        inviteToken: invite.token,
-        username,
-        displayName: 'K',
-        password,
-        deviceName: 'D',
+  it('tells someone not on the list so, and records their request once', async () => {
+    const memberClient = await h.connect((await h.signUp()).tokens.accessToken);
+    const adminClient = await h.connect(admin.tokens.accessToken);
+    await memberClient.waitFor('welcome');
+    await adminClient.waitFor('welcome');
+    const stranger = h.google.account('Yabancı Biri');
+
+    expect(result(await h.signInWithGoogle(stranger))).toEqual({
+      status: 'not_allowed',
+      email: stranger.email,
+      requested: false,
+    });
+    const request = async () =>
+      post('/auth/access-requests', { idToken: await h.google.idToken(stranger) });
+    expect((await request()).statusCode).toBe(204);
+    expect((await request()).statusCode).toBe(204);
+
+    await adminClient.waitFor('access_requested', (m) => m.email === stranger.email);
+    expect(adminClient.messages.filter((m) => m.type === 'access_requested')).toHaveLength(1);
+    expect(memberClient.messages.some((m) => m.type === 'access_requested')).toBe(false);
+    expect(result(await h.signInWithGoogle(stranger))).toMatchObject({ requested: true });
+    const list = AccessList.parse((await get('/admin/access', admin.tokens.accessToken)).json());
+    expect(list.requests.find((r) => r.email === stranger.email)?.name).toBe('Yabancı Biri');
+    memberClient.ws.terminate();
+    adminClient.ws.terminate();
+  });
+
+  it('refuses ID tokens that are forged, for another app, expired, or unverified', async () => {
+    const account = h.google.account();
+    await allow(account.email);
+    const tries = [
+      { forged: true },
+      { audience: 'another-app.apps.googleusercontent.com' },
+      { issuer: 'https://evil.example' },
+      { expiresIn: -60 },
+      { emailVerified: false },
+    ];
+    for (const options of tries) {
+      const res = await post('/auth/google', {
+        idToken: await h.google.idToken(account, options),
+        deviceName: 'Test',
       });
-      expect(res.statusCode, password).toBe(400);
-      expect(ApiError.parse(res.json()).error.issues?.[0]?.code, password).toBe(code);
+      expect(res.statusCode, JSON.stringify(options)).toBe(401);
+      expect(errorCode(res)).toBe('unauthorized');
+    }
+    const accepted = await post('/auth/google', {
+      idToken: await h.google.idToken(account, { audience: TEST_GOOGLE_CLIENT_ID }),
+      deviceName: 'Test',
+    });
+    expect(accepted.statusCode).toBe(200);
+  });
+
+  it('says so when this server has no Google client', async () => {
+    const bare = await startHarness({ google: undefined });
+    try {
+      const res = await bare.app.inject({
+        method: 'POST',
+        url: '/auth/google',
+        payload: { idToken: 'x', deviceName: 'Test' },
+      });
+      expect(res.statusCode).toBe(503);
+    } finally {
+      await bare.close();
     }
   });
 });
 
-describe('sign-in', () => {
-  it('signs in with username and password, case-insensitive username', async () => {
-    const { user } = await signUp();
-    const res = await post('/auth/sign-in', {
-      username: user.username.toUpperCase(),
-      password: PASSWORD,
-      deviceName: 'Windows PC',
-    });
-    expect(res.statusCode).toBe(200);
-    expect(SignedIn.parse(res.json()).user.id).toBe(user.id);
-  });
+describe('the Google photo (A25, A40)', () => {
+  it('becomes a new member’s photo, asked for at the size we keep', async () => {
+    const account = {
+      ...h.google.account(),
+      picture: 'https://lh3.googleusercontent.com/a/foto=s96-c',
+    };
+    await allow(account.email);
+    const { user } = signedIn(await h.signInWithGoogle(account));
+    await h.app.jobs.runDue();
+    await h.hub.settled();
 
-  it('gives the same answer for a wrong password and an unknown user', async () => {
-    const { user } = await signUp();
-    const wrong = await post('/auth/sign-in', {
-      username: user.username,
-      password: 'wrong password!',
-      deviceName: 'D',
-    });
-    const unknown = await post('/auth/sign-in', {
-      username: uniqueName('ghost'),
-      password: PASSWORD,
-      deviceName: 'D',
-    });
-    expect(wrong.statusCode).toBe(401);
-    expect(unknown.statusCode).toBe(401);
-    expect(wrong.json()).toEqual(unknown.json());
-  });
-
-  it('pauses an account after 5 failed attempts', async () => {
-    const { user } = await signUp();
-    for (let i = 0; i < 5; i++) {
-      expect(
-        (
-          await post('/auth/sign-in', {
-            username: user.username,
-            password: 'wrong password!',
-            deviceName: 'D',
-          })
-        ).statusCode,
-      ).toBe(401);
-    }
-    const blocked = await post('/auth/sign-in', {
-      username: user.username,
-      password: PASSWORD,
-      deviceName: 'D',
-    });
-    expect(blocked.statusCode).toBe(429);
-    expect(errorCode(blocked)).toBe('rate_limited');
-  });
-
-  it('keeps removed members out', async () => {
-    const { user, tokens } = await signUp();
-    await testDb.db
-      .updateTable('users')
-      .set({ removed_at: new Date() })
+    expect(fetched).toContain('https://lh3.googleusercontent.com/a/foto=s256-c');
+    const stored = await h.testDb.db
+      .selectFrom('users')
+      .select('avatar_file_id')
       .where('id', '=', user.id)
+      .executeTakeFirstOrThrow();
+    expect(stored.avatar_file_id).not.toBeNull();
+  });
+
+  it('never replaces a photo the member chose', async () => {
+    const account = { ...h.google.account(), picture: 'https://lh3.googleusercontent.com/b' };
+    const old = await oldMember(account, 'fotolu_1');
+    const chosen = newId();
+    await h.testDb.db
+      .insertInto('files')
+      .values({
+        id: chosen,
+        uploader_id: old.id,
+        kind: 'image',
+        original_name: 'ben.webp',
+        mime: 'image/webp',
+        size_bytes: 1,
+        sha256: Buffer.alloc(32),
+        storage_key: `test/${chosen}.webp`,
+        width: 256,
+        height: 256,
+      })
       .execute();
-    expect(
-      (
-        await post('/auth/sign-in', {
-          username: user.username,
-          password: PASSWORD,
-          deviceName: 'D',
-        })
-      ).statusCode,
-    ).toBe(401);
-    expect((await get('/me', tokens.accessToken)).statusCode).toBe(401);
-    expect((await post('/auth/refresh', { refreshToken: tokens.refreshToken })).statusCode).toBe(
-      401,
-    );
+    await h.testDb.db
+      .updateTable('users')
+      .set({ avatar_file_id: chosen })
+      .where('id', '=', old.id)
+      .execute();
+
+    signedIn(await h.signInWithGoogle(account));
+    await h.app.jobs.runDue();
+    const stored = await h.testDb.db
+      .selectFrom('users')
+      .select('avatar_file_id')
+      .where('id', '=', old.id)
+      .executeTakeFirstOrThrow();
+    expect(stored.avatar_file_id).toBe(chosen);
+  });
+
+  it('keeps Google’s size suffix in step with ours', () => {
+    expect(photoUrlAtSize('https://x/a=s96-c')).toBe('https://x/a=s256-c');
+    expect(photoUrlAtSize('https://x/a=s96')).toBe('https://x/a=s256-c');
+    expect(photoUrlAtSize('https://x/a')).toBe('https://x/a');
   });
 });
 
@@ -247,7 +271,7 @@ describe('tokens and sessions', () => {
   });
 
   it('rotates the refresh token on every use', async () => {
-    const { tokens } = await signUp();
+    const { tokens } = await h.signUp();
     const first = AuthTokens.parse(
       (await post('/auth/refresh', { refreshToken: tokens.refreshToken })).json(),
     );
@@ -258,7 +282,7 @@ describe('tokens and sessions', () => {
   });
 
   it('revokes the session when an old refresh token is replayed', async () => {
-    const { tokens } = await signUp();
+    const { tokens } = await h.signUp();
     const next = AuthTokens.parse(
       (await post('/auth/refresh', { refreshToken: tokens.refreshToken })).json(),
     );
@@ -272,50 +296,34 @@ describe('tokens and sessions', () => {
   });
 
   it('signs out the current session only', async () => {
-    const { user, tokens } = await signUp();
-    const other = SignedIn.parse(
-      (
-        await post('/auth/sign-in', {
-          username: user.username,
-          password: PASSWORD,
-          deviceName: 'PC',
-        })
-      ).json(),
-    );
-    expect((await post('/auth/sign-out', {}, tokens.accessToken)).statusCode).toBe(204);
-    expect((await get('/me', tokens.accessToken)).statusCode).toBe(401);
+    const member = await h.signUp();
+    const other = signedIn(await h.signInWithGoogle(member.account, 'PC'));
+    expect((await post('/auth/sign-out', {}, member.tokens.accessToken)).statusCode).toBe(204);
+    expect((await get('/me', member.tokens.accessToken)).statusCode).toBe(401);
     expect((await get('/me', other.tokens.accessToken)).statusCode).toBe(200);
   });
 
   it('lists sessions and revokes another device', async () => {
-    const { user, tokens } = await signUp();
-    const pc = SignedIn.parse(
-      (
-        await post('/auth/sign-in', {
-          username: user.username,
-          password: PASSWORD,
-          deviceName: 'Windows PC',
-        })
-      ).json(),
-    );
-    const list = SessionList.parse((await get('/me/sessions', tokens.accessToken)).json());
+    const member = await h.signUp();
+    const pc = signedIn(await h.signInWithGoogle(member.account, 'Windows PC'));
+    const list = SessionList.parse((await get('/me/sessions', member.tokens.accessToken)).json());
     expect(list.sessions.map((s) => [s.deviceName, s.current]).sort()).toEqual([
-      ['Test Mac', true],
+      ['Test', true],
       ['Windows PC', false],
     ]);
-    const res = await app.inject({
+    const res = await h.app.inject({
       method: 'DELETE',
       url: `/me/sessions/${pc.tokens.sessionId}`,
-      headers: { authorization: `Bearer ${tokens.accessToken}` },
+      headers: { authorization: `Bearer ${member.tokens.accessToken}` },
     });
     expect(res.statusCode).toBe(204);
     expect((await get('/me', pc.tokens.accessToken)).statusCode).toBe(401);
   });
 
   it("can't revoke someone else's session", async () => {
-    const a = await signUp();
-    const b = await signUp();
-    const res = await app.inject({
+    const a = await h.signUp();
+    const b = await h.signUp();
+    const res = await h.app.inject({
       method: 'DELETE',
       url: `/me/sessions/${b.tokens.sessionId}`,
       headers: { authorization: `Bearer ${a.tokens.accessToken}` },
@@ -325,87 +333,15 @@ describe('tokens and sessions', () => {
   });
 });
 
-describe('admin actions', () => {
-  it('lets admins create invites, and not members', async () => {
-    const admin = await signUp('admin');
-    const member = await signUp('member');
-    const res = await post('/invites', { role: 'member' }, admin.tokens.accessToken);
-    expect(res.statusCode).toBe(201);
-    expect(OneTimeLink.parse(res.json()).url).toMatch(/^hasbihal:\/\/invite\//);
-    const denied = await post('/invites', {}, member.tokens.accessToken);
-    expect(denied.statusCode).toBe(403);
-    expect(errorCode(denied)).toBe('forbidden');
-  });
-
-  it('recovers an account: new password, every old session ends (A25)', async () => {
-    const admin = await signUp('admin');
-    const { user, tokens } = await signUp();
-    const link = OneTimeLink.parse(
-      (await post(`/users/${user.id}/recovery-link`, {}, admin.tokens.accessToken)).json(),
-    );
-    expect(link.url).toMatch(/^hasbihal:\/\/recover\//);
-
-    const newPassword = 'yeni bir parola 42';
-    const recovered = await post('/auth/recover', {
-      recoveryToken: link.token,
-      newPassword,
-      deviceName: 'New PC',
-    });
-    expect(recovered.statusCode).toBe(200);
-    expect(SignedIn.parse(recovered.json()).user.id).toBe(user.id);
-
-    expect((await get('/me', tokens.accessToken)).statusCode).toBe(401);
-    expect(
-      (
-        await post('/auth/sign-in', {
-          username: user.username,
-          password: PASSWORD,
-          deviceName: 'D',
-        })
-      ).statusCode,
-    ).toBe(401);
-    expect(
-      (
-        await post('/auth/sign-in', {
-          username: user.username,
-          password: newPassword,
-          deviceName: 'D',
-        })
-      ).statusCode,
-    ).toBe(200);
-    // Single use.
-    expect(
-      (
-        await post('/auth/recover', {
-          recoveryToken: link.token,
-          newPassword: 'başka bir parola 7',
-          deviceName: 'D',
-        })
-      ).statusCode,
-    ).toBe(404);
-  });
-
-  it("doesn't let members create recovery links", async () => {
-    const member = await signUp();
-    const res = await post(`/users/${member.user.id}/recovery-link`, {}, member.tokens.accessToken);
-    expect(res.statusCode).toBe(403);
-  });
-});
-
 describe('per-IP rate limit', () => {
   it('limits the unauthenticated auth routes per IP', async () => {
-    const limited = await buildApp(
-      loadConfig({ LOG_LEVEL: 'silent', AUTH_RATE_LIMIT_PER_MINUTE: '3' }),
-      {
-        db: testDb.db,
-      },
-    );
+    const limited = await startHarness({}, { AUTH_RATE_LIMIT_PER_MINUTE: '3' });
     try {
       const attempt = () =>
-        limited.inject({
+        limited.app.inject({
           method: 'POST',
-          url: '/auth/sign-in',
-          payload: { username: 'x', password: 'y', deviceName: 'D' },
+          url: '/auth/google',
+          payload: { idToken: 'not-a-token', deviceName: 'D' },
         });
       for (let i = 0; i < 3; i++) expect((await attempt()).statusCode).toBe(401);
       const res = await attempt();

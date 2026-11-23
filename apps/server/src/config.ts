@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { z } from 'zod';
 import pkg from '../package.json' with { type: 'json' };
+import { GOOGLE_ISSUERS, GOOGLE_JWKS_URL } from './auth/google.ts';
 
 const Env = z.object({
   HOST: z.string().default('127.0.0.1'),
@@ -38,8 +39,14 @@ const Env = z.object({
   // Lets link previews reach this machine and private networks: end-to-end tests with a local
   // site only. Refused in production, where it would open the server to SSRF (ARCHITECTURE §7).
   LINK_PREVIEW_ALLOW_PRIVATE: z.stringbool().default(false),
-  // Requests per IP per minute on the unauthenticated auth routes (sign-in, sign-up, …).
+  // Requests per IP per minute on the unauthenticated auth routes (sign-in, access requests, …).
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
+  // The app's Google OAuth client id (A25): ID tokens must be issued to it. Required in
+  // production; without it, development refuses Google sign-ins.
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  // A stand-in for Google (end-to-end tests): its issuer and signing keys. Refused in production.
+  GOOGLE_ISSUER: z.url().optional(),
+  GOOGLE_JWKS_URL: z.url().optional(),
 });
 
 export interface Config {
@@ -55,6 +62,7 @@ export interface Config {
   filesDir: string;
   livekit: { url: string; apiUrl: string; apiKey: string; apiSecret: string };
   authRateLimitPerMinute: number;
+  google: { clientId: string | undefined; issuers: string[]; jwksUrl: string };
   linkPreviewAllowPrivate: boolean;
   serverVersion: string;
 }
@@ -84,6 +92,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       apiSecret: parsed.LIVEKIT_API_SECRET ?? devOnly('LIVEKIT_API_SECRET', 'secret'),
     },
     authRateLimitPerMinute: parsed.AUTH_RATE_LIMIT_PER_MINUTE,
+    google: (() => {
+      const production = parsed.NODE_ENV === 'production';
+      if (production && !parsed.GOOGLE_CLIENT_ID)
+        throw new Error('GOOGLE_CLIENT_ID is required in production');
+      if (production && (parsed.GOOGLE_ISSUER || parsed.GOOGLE_JWKS_URL))
+        throw new Error('GOOGLE_ISSUER and GOOGLE_JWKS_URL are never allowed in production');
+      return {
+        clientId: parsed.GOOGLE_CLIENT_ID,
+        issuers: parsed.GOOGLE_ISSUER ? [parsed.GOOGLE_ISSUER] : GOOGLE_ISSUERS,
+        jwksUrl: parsed.GOOGLE_JWKS_URL ?? GOOGLE_JWKS_URL,
+      };
+    })(),
     linkPreviewAllowPrivate: (() => {
       if (parsed.LINK_PREVIEW_ALLOW_PRIVATE && parsed.NODE_ENV === 'production')
         throw new Error('LINK_PREVIEW_ALLOW_PRIVATE is never allowed in production');

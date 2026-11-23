@@ -1,26 +1,28 @@
-import { useState } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MessageKey } from '@hasbihal/core';
-import type { OneTimeLink } from '@hasbihal/protocol';
-import { type Role, type User } from '@hasbihal/protocol';
+import { Email, type Role } from '@hasbihal/protocol';
 import { Avatar } from '../components/Avatar.tsx';
-import { queryKeys, unwrap } from '../queries.ts';
+import { ApiFailure, queryKeys, unwrap } from '../queries.ts';
 import { useChat, useChatState } from '../chat/context.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
 import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
 import { Tabs } from '../components/Tabs.tsx';
 import { confirm } from '../components/confirm.tsx';
 import { Select } from '../components/controls.tsx';
+import { Icon } from '../components/Icon.tsx';
+import { Shield } from 'lucide-react';
 
-type Tab = 'invites' | 'members' | 'rooms';
+type Tab = 'access' | 'members' | 'rooms';
 
 /**
- * The admin page (A44): a separate place, only for admins, to invite people, manage members and
- * their admin rights, and manage rooms.
+ * The admin page (A44): a separate place, only for admins, to say who may join (A25), manage
+ * members and their admin rights, and manage rooms.
  */
 export function AdminDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
-  const [tab, setTab] = useState<Tab>('invites');
+  const [tab, setTab] = useState<Tab>('access');
+  const requests = useAccessList().data?.requests.length ?? 0;
   return (
     <Modal className="profile admin" testId="admin" onClose={onClose}>
       <header className="profile__header">
@@ -30,72 +32,147 @@ export function AdminDialog({ onClose }: { onClose: () => void }) {
       <Tabs
         value={tab}
         onChange={setTab}
-        tabs={(['invites', 'members', 'rooms'] as const).map((value) => ({
+        tabs={(['access', 'members', 'rooms'] as const).map((value) => ({
           value,
-          label: t(`admin.tab.${value}`),
+          label:
+            value === 'access' && requests > 0
+              ? `${t('admin.tab.access')} (${String(requests)})`
+              : t(`admin.tab.${value}`),
         }))}
         panelClassName="profile__section admin__body"
       >
-        {tab === 'invites' ? <Invites /> : tab === 'members' ? <Members /> : <Rooms />}
+        {tab === 'access' ? <Access /> : tab === 'members' ? <Members /> : <Rooms />}
       </Tabs>
     </Modal>
   );
 }
 
-/** A link shown once, with a copy button: only its hash is kept on the server. */
-function LinkBox({ link, hint }: { link: OneTimeLink; hint: MessageKey }) {
+/** The sidebar's way in, with the number of people waiting to be let in (A25). */
+export function AdminButton({ onOpen }: { onOpen: () => void }) {
   const t = useT();
-  const [copied, setCopied] = useState(false);
+  const waiting = useAccessList().data?.requests.length ?? 0;
   return (
-    <div className="link-box" data-testid="one-time-link">
-      <code>{link.url}</code>
-      <button
-        type="button"
-        className="button"
-        onClick={() => {
-          void navigator.clipboard.writeText(link.url).then(() => {
-            setCopied(true);
-          });
-        }}
-      >
-        {copied ? t('admin.copied') : t('admin.copy')}
-      </button>
-      <p className="field__hint">{t(hint, { date: formatDateTime(link.expiresAt) })}</p>
-    </div>
+    <button type="button" className="sidebar__admin" onClick={onOpen}>
+      <Icon icon={Shield} /> {t('admin.heading')}
+      {waiting > 0 && (
+        <span className="badge" data-mention aria-label={t('admin.waiting', { count: waiting })}>
+          {waiting}
+        </span>
+      )}
+    </button>
   );
 }
 
-function Invites() {
+/**
+ * Who may join (A25): the list, and the requests. Shared with the sidebar's badge, which the
+ * shell refreshes when a request arrives.
+ */
+export function useAccessList(enabled = true) {
+  const { client } = useChat();
+  return useQuery({
+    queryKey: queryKeys.access,
+    queryFn: () => unwrap(client.admin.access()),
+    enabled,
+  });
+}
+
+function Access() {
   const t = useT();
   const { client } = useChat();
   const { members } = useChatState();
-  const [role, setRole] = useState<Role>('member');
-  const [created, setCreated] = useState<OneTimeLink | null>(null);
   const queryClient = useQueryClient();
-  const pending = useQuery({
-    queryKey: queryKeys.invites,
-    queryFn: () => unwrap(client.admin.invites()),
-    select: (list) => list.invites,
-  });
-  const reload = () => queryClient.invalidateQueries({ queryKey: queryKeys.invites });
-  const create = useMutation({
-    mutationFn: (inviteRole: Role) => unwrap(client.invites.create({ role: inviteRole })),
-    onSuccess: (link) => {
-      setCreated(link);
+  const access = useAccessList();
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<Role>('member');
+  const [error, setError] = useState<MessageKey | null>(null);
+  const reload = () => queryClient.invalidateQueries({ queryKey: queryKeys.access });
+  const allow = useMutation({
+    mutationFn: (body: { email: string; role: Role }) => unwrap(client.admin.allowEmail(body)),
+    onSuccess: () => {
+      setEmail('');
+      setError(null);
       return reload();
     },
+    onError: (e: unknown) => {
+      const conflict = e instanceof ApiFailure && e.error.code === 'conflict';
+      setError(conflict ? 'admin.alreadyMember' : 'error.unexpected');
+    },
   });
-  const revoke = useMutation({
-    mutationFn: (inviteId: string) => unwrap(client.admin.revokeInvite(inviteId)),
+  const remove = useMutation({
+    mutationFn: (address: string) => unwrap(client.admin.removeAllowedEmail(address)),
     onSuccess: reload,
   });
-  const failed = [create, revoke, pending].some((state) => state.isError);
+  const dismiss = useMutation({
+    mutationFn: (address: string) => unwrap(client.admin.dismissRequest(address)),
+    onSuccess: reload,
+  });
+
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const parsed = Email.safeParse(email);
+    if (!parsed.success) {
+      setError('admin.emailFormat');
+      return;
+    }
+    allow.mutate({ email: parsed.data, role });
+  };
+  const nameOf = (id: string | null) => (id ? (members.get(id)?.displayName ?? '?') : '—');
 
   return (
     <>
-      <div className="admin__row">
+      {access.data && access.data.requests.length > 0 && (
+        <>
+          <h2 className="profile__subtitle">{t('admin.requests')}</h2>
+          <ul className="admin__list">
+            {access.data.requests.map((r) => (
+              <li key={r.email} className="admin__item" data-testid="access-request">
+                <span>
+                  <strong>{r.name}</strong> <span className="field__hint">{r.email}</span>
+                  <span className="field__hint"> · {formatDateTime(r.requestedAt)}</span>
+                </span>
+                <span className="admin__actions">
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={allow.isPending}
+                    onClick={() => {
+                      allow.mutate({ email: r.email, role: 'member' });
+                    }}
+                  >
+                    {t('admin.letIn')}
+                  </button>
+                  <button
+                    type="button"
+                    className="link link--danger"
+                    disabled={dismiss.isPending}
+                    onClick={() => {
+                      dismiss.mutate(r.email);
+                    }}
+                  >
+                    {t('admin.dismiss')}
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <h2 className="profile__subtitle">{t('admin.allow')}</h2>
+      <form className="admin__row" onSubmit={submit} noValidate>
+        <input
+          className="field__input"
+          type="email"
+          aria-label={t('admin.emailLabel')}
+          placeholder={t('admin.emailPlaceholder')}
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setError(null);
+          }}
+        />
         <Select
-          label={t('admin.inviteRole')}
+          label={t('admin.newRole')}
           hideLabel
           value={role}
           onChange={setRole}
@@ -105,43 +182,42 @@ function Invites() {
           }))}
         />
         <button
-          type="button"
+          type="submit"
           className="button button--primary"
-          disabled={create.isPending}
-          onClick={() => {
-            create.mutate(role);
-          }}
+          disabled={allow.isPending || !email.trim()}
         >
-          {t('admin.createInvite')}
+          {t('admin.add')}
         </button>
-      </div>
-      {failed && <p className="field__error">{t('error.unexpected')}</p>}
-      {created && <LinkBox link={created} hint="admin.inviteHint" />}
+      </form>
+      {error ? (
+        <p className="field__error">{t(error)}</p>
+      ) : (
+        <p className="field__hint">{t('admin.allowHint')}</p>
+      )}
+
       <h2 className="profile__subtitle">{t('admin.pending')}</h2>
-      {!pending.data ? null : pending.data.length === 0 ? (
+      {!access.data ? null : access.data.allowed.length === 0 ? (
         <p className="field__hint">{t('admin.noPending')}</p>
       ) : (
         <ul className="admin__list">
-          {pending.data.map((invite) => (
-            <li key={invite.id} className="admin__item">
+          {access.data.allowed.map((a) => (
+            <li key={a.email} className="admin__item" data-testid="allowed-email">
               <span>
-                {t(`admin.role.${invite.role}`)} ·{' '}
-                {t('admin.createdBy', {
-                  name: invite.createdBy
-                    ? (members.get(invite.createdBy)?.displayName ?? '?')
-                    : '—',
-                })}
+                {a.email}
+                {a.role === 'admin' && (
+                  <span className="admin__badge">{t('admin.role.admin')}</span>
+                )}
                 <span className="field__hint">
                   {' '}
-                  · {t('admin.expires', { date: formatDateTime(invite.expiresAt) })}
+                  · {t('admin.addedBy', { name: nameOf(a.addedBy) })}
                 </span>
               </span>
               <button
                 type="button"
                 className="link link--danger"
-                disabled={revoke.isPending}
+                disabled={remove.isPending}
                 onClick={() => {
-                  revoke.mutate(invite.id);
+                  remove.mutate(a.email);
                 }}
               >
                 {t('admin.revoke')}
@@ -158,7 +234,7 @@ function Members() {
   const t = useT();
   const { client } = useChat();
   const { members, me } = useChatState();
-  const [recovery, setRecovery] = useState<{ user: User; link: OneTimeLink } | null>(null);
+  const emails = useAccessList().data?.memberEmails;
   const [error, setError] = useState<MessageKey | null>(null);
   const current = [...members.values()]
     .filter((m) => !m.removedAt)
@@ -174,21 +250,16 @@ function Members() {
   return (
     <>
       {error && <p className="field__error">{t(error)}</p>}
-      {recovery && (
-        <div>
-          <p className="field__hint">
-            {t('admin.recoveryFor', { name: recovery.user.displayName })}
-          </p>
-          <LinkBox link={recovery.link} hint="admin.recoveryHint" />
-        </div>
-      )}
       <ul className="admin__list">
         {current.map((m) => (
           <li key={m.id} className="admin__item" data-testid="admin-member">
             <span className="admin__member">
               <Avatar user={m} />
               <span>
-                <strong>{m.displayName}</strong> <span className="field__hint">@{m.username}</span>
+                <strong>{m.displayName}</strong>{' '}
+                <span className="field__hint">
+                  {emails?.[m.id] ?? (emails ? t('admin.noEmail') : `@${m.username}`)}
+                </span>
                 {m.role === 'admin' && (
                   <span className="admin__badge">{t('admin.role.admin')}</span>
                 )}
@@ -205,18 +276,6 @@ function Members() {
                 }
               >
                 {m.role === 'admin' ? t('admin.demote') : t('admin.promote')}
-              </button>
-              <button
-                type="button"
-                className="link"
-                onClick={() =>
-                  void client.admin.recoveryLink(m.id).then((result) => {
-                    if (result.ok) setRecovery({ user: m, link: result.value });
-                    else setError('error.unexpected');
-                  })
-                }
-              >
-                {t('admin.recovery')}
               </button>
               {m.id !== me?.id && (
                 <button

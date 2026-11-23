@@ -1,13 +1,5 @@
-import type {
-  ApiError,
-  InviteInfo,
-  RecoverRequest,
-  SignInRequest,
-  SignUpRequest,
-  User,
-} from '@hasbihal/protocol';
+import type { ApiError, User } from '@hasbihal/protocol';
 import type { Locale } from '@hasbihal/core';
-import type { DeepLink } from './deep-link.ts';
 
 /** Information the main process hands to the renderer at startup. */
 export interface AppInfo {
@@ -22,6 +14,14 @@ export type AuthError = ApiError['error'];
 
 export type AuthResult<T> = { ok: true; value: T } | { ok: false; error: AuthError };
 
+/** How a "Sign in with Google" ended (DECISIONS A25). Failures are `AuthError`s. */
+export type GoogleOutcome =
+  | { kind: 'signedIn'; user: User }
+  /** Google knows them, Hasbihal doesn't (yet): `requested` once they've asked an admin. */
+  | { kind: 'notAllowed'; email: string; requested: boolean }
+  /** They closed the browser tab, declined at Google, took too long, or pressed Cancel. */
+  | { kind: 'cancelled' };
+
 /**
  * The session lives in the main process (ARCHITECTURE §9): it signs in, keeps the refresh token
  * encrypted with safeStorage, and refreshes. The renderer only ever sees short-lived access tokens.
@@ -29,10 +29,12 @@ export type AuthResult<T> = { ok: true; value: T } | { ok: false; error: AuthErr
 export interface AuthBridge {
   /** At startup: the stored session's user, or null when there is none (or it has ended). */
   restore(): Promise<AuthResult<User | null>>;
-  inviteInfo(token: string): Promise<AuthResult<InviteInfo>>;
-  signUp(request: Omit<SignUpRequest, 'deviceName'>): Promise<AuthResult<User>>;
-  signIn(request: Omit<SignInRequest, 'deviceName'>): Promise<AuthResult<User>>;
-  recover(request: Omit<RecoverRequest, 'deviceName'>): Promise<AuthResult<User>>;
+  /** Opens Google's sign-in in the browser and waits for it (up to 5 minutes). */
+  signInWithGoogle(): Promise<AuthResult<GoogleOutcome>>;
+  /** Stops a Google sign-in that is waiting for the browser. */
+  cancelGoogleSignIn(): void;
+  /** After `notAllowed`: asks the admins to let this Google account in. */
+  requestAccess(): Promise<AuthResult<null>>;
   /**
    * A valid access token, refreshed when needed (or when `refresh` is set, after the server
    * rejected the current one). `unauthorized` means the session has ended.
@@ -41,12 +43,6 @@ export interface AuthBridge {
   signOut(): Promise<void>;
   /** Called when the session ends without the user signing out (revoked elsewhere, expired). */
   onSessionEnded(listener: () => void): () => void;
-}
-
-export interface DeepLinkBridge {
-  /** A link that arrived before the UI was ready (e.g. the one that launched the app). */
-  takePending(): Promise<DeepLink | null>;
-  onLink(listener: (link: DeepLink) => void): () => void;
 }
 
 /** System facts the renderer needs. */
@@ -92,15 +88,12 @@ export interface ScreenBridge {
 export const IPC = {
   getAppInfo: 'app:get-info',
   authRestore: 'auth:restore',
-  authInviteInfo: 'auth:invite-info',
-  authSignUp: 'auth:sign-up',
-  authSignIn: 'auth:sign-in',
-  authRecover: 'auth:recover',
+  authGoogle: 'auth:google',
+  authGoogleCancel: 'auth:google-cancel',
+  authRequestAccess: 'auth:request-access',
   authAccessToken: 'auth:access-token',
   authSignOut: 'auth:sign-out',
   authSessionEnded: 'auth:session-ended',
-  deepLinkTakePending: 'deep-link:take-pending',
-  deepLinkReceived: 'deep-link:received',
   systemIsIdle: 'system:is-idle',
   systemIdleChanged: 'system:idle-changed',
   systemShortcuts: 'system:shortcuts',

@@ -65,6 +65,11 @@ describe('notification rules (A28)', () => {
     expect(noticeFor({ kind: 'event_reminder' }, at)).toEqual({ notify: true, sound: true });
   });
 
+  it('tells admins about access requests, quietly (A25)', () => {
+    expect(noticeFor({ kind: 'access_request' }, at)).toEqual({ notify: true, sound: false });
+    expect(noticeFor({ kind: 'access_request' }, { ...at, busy: true }).notify).toBe(false);
+  });
+
   it('is silent when Busy (A19)', () => {
     const busy = { ...at, busy: true };
     expect(forMessage(message({ mentions: [ME] }), prefs(), busy).notify).toBe(false);

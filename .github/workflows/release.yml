@@ -10,6 +10,9 @@ name: Release
 # Needs, under the repository's Settings → Secrets and variables → Actions:
 #   - variable HASBIHAL_SERVER_URL: the server the app talks to, e.g. https://hasbihal.duckdns.org
 #     (it is built into the app, A30);
+#   - variables GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET: the app's Google OAuth client, a
+#     "Desktop app" one (A25; infra/production/README.md, "The desktop app for this server").
+#     Google treats a desktop client's secret as public: it is built into the app;
 #   - secrets MAC_CERT_P12 (the "Hasbihal Self-Signed" certificate and key, .p12, base64) and
 #     MAC_CERT_PASSWORD (A50);
 #   - secret DEPLOY_SSH_KEY: the private half of a key that the server only lets run
@@ -24,6 +27,8 @@ permissions:
 
 env:
   MAIN_VITE_SERVER_URL: ${{ vars.HASBIHAL_SERVER_URL }}
+  MAIN_VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+  MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ vars.GOOGLE_CLIENT_SECRET }}
 
 jobs:
   check:
@@ -34,6 +39,12 @@ jobs:
         run: |
           if [ -z "$MAIN_VITE_SERVER_URL" ]; then
             echo "::error::Set the HASBIHAL_SERVER_URL variable: the app has its server built in (A30)."
+            exit 1
+          fi
+      - name: The Google client is set
+        run: |
+          if [ -z "$MAIN_VITE_GOOGLE_CLIENT_ID" ] || [ -z "$MAIN_VITE_GOOGLE_CLIENT_SECRET" ]; then
+            echo "::error::Set the GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET variables: people sign in with Google (A25)."
             exit 1
           fi
       - name: The tag matches the app's version
