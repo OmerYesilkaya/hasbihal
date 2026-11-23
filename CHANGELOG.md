@@ -4,6 +4,16 @@ Her sürümde neler değişti. Yeni sürüm çıkarken buraya `## <sürüm>` ba�
 sayfasındaki notlar buradan alınır (`.github/workflows/release.yml`). Kurulum için:
 [docs/KURULUM.md](docs/KURULUM.md).
 
+## 0.6.0
+
+- **Kendi kendine güncelleme:** yeni sürüm çıkınca Hasbihal sol tarafta haber verir. **Güncelle**'ye
+  bas; indirir, kurar ve yeniden açılır. Sesli sohbetteysen önce sorar. Bu sürümü bir kereliğine
+  yine elle kurman gerekiyor; sonrakiler kendiliğinden gelir.
+- **Mac'te** Hasbihal'in **Uygulamalar** klasöründe olması gerekir; değilse güncellemeden önce oraya
+  taşımayı önerir. Güncellemeden sonra Mac bir kez bilgisayar parolanı isteyebilir: parolanı gir ve
+  **Her Zaman İzin Ver**'e bas.
+- **Windows'ta** kurulum dosyasının adı artık **Hasbihal-Setup-….exe**.
+
 ## 0.5.0
 
 - **Google ile giriş:** parola, kullanıcı adı ve davet bağlantısı yok. **Google ile giriş yap**'a
