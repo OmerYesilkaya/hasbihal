@@ -10,28 +10,70 @@ import {
   type Page,
 } from '@playwright/test';
 import { newId } from '@hasbihal/core';
-import { Attachment, Message, OneTimeLink, Room, SignedIn, type Role } from '@hasbihal/protocol';
+import { Attachment, GoogleSignInResult, Message, Room, type Role } from '@hasbihal/protocol';
 
 // Shared by every spec: each test makes its own people and rooms through the API (milliseconds),
 // so any one of them runs on its own (`pnpm test:e2e -g hangout`), in any order.
 
 export const SERVER_DIR = path.resolve(import.meta.dirname, '../../server');
 const APP_DIR = path.resolve(import.meta.dirname, '..');
-export const PASSWORD = 'çay ve simit her sabah';
 
 const serverUrl = () => process.env.E2E_SERVER_URL ?? '';
+const googleUrl = () => process.env.E2E_GOOGLE_URL ?? '';
 
-/** The first-admin command (A52), exactly as the owner runs it on the server. */
-export async function adminInviteUrl(databaseUrl = process.env.E2E_DATABASE_URL): Promise<string> {
+/** The server command that lets an address in (A25), exactly as the owner runs it. */
+export async function allowEmailOnServer(
+  email: string,
+  role: Role = 'member',
+  databaseUrl = process.env.E2E_DATABASE_URL,
+): Promise<string> {
   const { stdout } = await promisify(execFile)(
     process.execPath,
-    ['src/cli/create-admin-invite.ts'],
+    ['src/cli/allow-email.ts', email, ...(role === 'admin' ? ['--admin'] : [])],
     { cwd: SERVER_DIR, env: { ...process.env, DATABASE_URL: databaseUrl } },
   );
-  const url = /hasbihal:\/\/invite\/\S+/.exec(stdout)?.[0];
-  if (!url) throw new Error(`no invite link in:\n${stdout}`);
-  return url;
+  return stdout;
 }
+
+// ---- Google, as the stand-in plays it (fake-google.ts) -----------------------------------------
+
+/** Gives someone a Google account the stand-in signs in as. */
+export async function googleAccount(
+  account: { email: string; name: string; picture?: string },
+  url = googleUrl(),
+): Promise<void> {
+  const response = await fetch(new URL('/test/accounts', url), {
+    method: 'POST',
+    body: JSON.stringify(account),
+  });
+  if (!response.ok) throw new Error(`google account: ${String(response.status)}`);
+}
+
+/** An ID token for this account, as the app gets it from the browser. */
+export async function googleIdToken(email: string, url = googleUrl()): Promise<string> {
+  const response = await fetch(new URL(`/test/id-token?email=${encodeURIComponent(email)}`, url));
+  return ((await response.json()) as { idToken: string }).idToken;
+}
+
+/** Signs in through the API with a Google account: what the app does after the browser. */
+export async function signInWithGoogle(email: string, url = serverUrl(), google = googleUrl()) {
+  const response = await fetch(new URL('/auth/google', url), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ idToken: await googleIdToken(email, google), deviceName: 'e2e' }),
+  });
+  if (!response.ok) throw new Error(`sign-in: ${String(response.status)} ${await response.text()}`);
+  return GoogleSignInResult.parse(await response.json());
+}
+
+let counter = 0;
+/** A Gmail address no other test uses: tests share the database. */
+export const uniqueEmail = (name: string) =>
+  `${name
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[^a-z]/g, '')
+    .slice(0, 10)}.${String(process.pid % 1000)}.${String(++counter)}@gmail.com`;
 
 // ---- the server's API, for setting the scene -------------------------------------------------
 
@@ -57,62 +99,42 @@ async function call<T>(
   return parse ? parse.parse(text ? JSON.parse(text) : null) : (undefined as T);
 }
 
-/** A person in a test: what the API returned, and how to sign in as them. */
+/** A person in a test: what the API returned, and the Google account they sign in with. */
 export interface Person {
   id: string;
   username: string;
   displayName: string;
-  password: string;
+  email: string;
   token: string;
 }
 
 let seed: Promise<string> | undefined;
-/** The seed admin's access token (made in global setup), for creating invites and rooms. */
+/** The seed admin's access token (made in global setup), for letting people in and making rooms. */
 function seedToken(): Promise<string> {
-  seed ??= call(
-    'POST',
-    '/auth/sign-in',
-    null,
-    {
-      username: process.env.E2E_SEED_USERNAME,
-      password: PASSWORD,
-      deviceName: 'e2e',
-    },
-    SignedIn,
-  ).then((s) => s.tokens.accessToken);
+  seed ??= signInWithGoogle(process.env.E2E_SEED_EMAIL ?? '').then((result) => {
+    if (result.status !== 'signed_in') throw new Error('the seed admin is not signed in');
+    return result.tokens.accessToken;
+  });
   return seed;
 }
 
-let counter = 0;
+/** Puts an address on the list, as an admin does on the admin page (A25). */
+export const allowEmail = async (email: string, role: Role = 'member') =>
+  call('POST', '/admin/allowed-emails', await seedToken(), { email, role });
 
-/** A single-use invite link made by the seed admin. */
-export const createInvite = async (role: Role = 'member') =>
-  call('POST', '/invites', await seedToken(), { role }, OneTimeLink);
-
-/**
- * A new member (or admin) with this display name. Usernames get a unique suffix: tests share the
- * database, so names must not collide between them.
- */
+/** A new member (or admin) with this display name, who has signed in with Google once. */
 export async function createPerson(displayName: string, role: Role = 'member'): Promise<Person> {
-  const invite = await createInvite(role);
-  const username = `${displayName
-    .toLocaleLowerCase('tr-TR')
-    .normalize('NFD')
-    .replace(/[^a-z]/g, '')
-    .slice(0, 10)}${String(process.pid % 1000)}${String(++counter)}`;
-  const signedIn = await call(
-    'POST',
-    '/auth/sign-up',
-    null,
-    { inviteToken: invite.token, username, displayName, password: PASSWORD, deviceName: 'e2e' },
-    SignedIn,
-  );
+  const email = uniqueEmail(displayName);
+  await googleAccount({ email, name: displayName });
+  await allowEmail(email, role);
+  const result = await signInWithGoogle(email);
+  if (result.status !== 'signed_in') throw new Error(`${email} is not signed in`);
   return {
-    id: signedIn.user.id,
-    username,
+    id: result.user.id,
+    username: result.user.username,
     displayName,
-    password: PASSWORD,
-    token: signedIn.tokens.accessToken,
+    email,
+    token: result.tokens.accessToken,
   };
 }
 
@@ -143,14 +165,15 @@ export async function uploadFile(as: Person, name: string, mime: string, data: B
 // ---- the desktop app -------------------------------------------------------------------------
 
 export interface Desktop {
-  /** Starts the app with fresh data: another `launch` is another computer. */
-  launch(): Promise<Page>;
+  /**
+   * Starts the app with fresh data: another `launch` is another computer. `google` is the Google
+   * account the browser is signed in to, which "Sign in with Google" then uses.
+   */
+  launch(options?: { google?: string }): Promise<Page>;
   /** Starts the app and signs in as this person, through the sign-in screen. */
   signedIn(person: Person): Promise<Page>;
   /** Restarts the app on the same computer (same data folder) as `page`. */
   restart(page: Page): Promise<Page>;
-  /** Delivers a link to an app, the way macOS does when one is clicked elsewhere. */
-  openLink(page: Page, url: string): Promise<void>;
   /** Quits the app showing `page` (that computer goes offline). */
   close(page: Page): Promise<void>;
   /** The Electron app behind a page, to reach its main process. */
@@ -161,10 +184,13 @@ export const test = base.extend<{ desktop: Desktop }>({
   // Playwright reads a fixture's dependencies from this pattern; this one has none.
   // eslint-disable-next-line no-empty-pattern
   desktop: async ({}, use) => {
-    const running = new Map<Page, { app: ElectronApplication; dataDir: string }>();
+    const running = new Map<
+      Page,
+      { app: ElectronApplication; dataDir: string; google: string | undefined }
+    >();
     const dirs: string[] = [];
 
-    const start = async (dataDir: string) => {
+    const start = async (dataDir: string, google: string | undefined) => {
       const app = await electron.launch({
         // Fake microphone (a beeping tone) and camera. Permissions go through the app's handler.
         args: ['--use-fake-device-for-media-stream', APP_DIR, '--lang=tr'],
@@ -175,24 +201,25 @@ export const test = base.extend<{ desktop: Desktop }>({
           // Screen sharing shares the app's own page: no screen-recording permission needed.
           HASBIHAL_FAKE_SCREEN: '1',
           HASBIHAL_USER_DATA_DIR: dataDir,
+          // Google is the stand-in, and its "browser" is signed in to this account.
+          HASBIHAL_GOOGLE_URL: googleUrl(),
+          HASBIHAL_GOOGLE_LOGIN_HINT: google ?? '',
         },
       });
       const page = await app.firstWindow();
-      running.set(page, { app, dataDir });
+      running.set(page, { app, dataDir, google });
       return page;
     };
 
     const desktop: Desktop = {
-      async launch() {
+      async launch(options = {}) {
         const dir = await mkdtemp(path.join(tmpdir(), 'hasbihal-e2e-'));
         dirs.push(dir);
-        return start(dir);
+        return start(dir, options.google);
       },
       async signedIn(person) {
-        const page = await desktop.launch();
-        await page.getByLabel('Kullanıcı adı').fill(person.username);
-        await page.getByLabel('Parola').fill(person.password);
-        await page.getByRole('button', { name: 'Giriş yap' }).click();
+        const page = await desktop.launch({ google: person.email });
+        await page.getByRole('button', { name: 'Google ile giriş yap' }).click();
         await page.getByTestId('current-user').filter({ hasText: person.displayName }).waitFor();
         return page;
       },
@@ -200,12 +227,7 @@ export const test = base.extend<{ desktop: Desktop }>({
         const entry = running.get(page);
         if (!entry) throw new Error('not a running app');
         await desktop.close(page);
-        return start(entry.dataDir);
-      },
-      async openLink(page, url) {
-        await running.get(page)?.app.evaluate(({ app: electronApp }, link) => {
-          electronApp.emit('open-url', { preventDefault: () => undefined }, link);
-        }, url);
+        return start(entry.dataDir, entry.google);
       },
       appOf(page) {
         const entry = running.get(page);

@@ -1,34 +1,57 @@
-import { useEffect, useId, useState, type SubmitEvent, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { MessageKey } from '@hasbihal/core';
-import type { InviteInfo, User } from '@hasbihal/protocol';
-import { tokenFromInput, type DeepLink } from '../../../shared/deep-link.ts';
+import type { User } from '@hasbihal/protocol';
 import { Tulip } from '../components/Tulip.tsx';
 import { useT } from '../i18n.tsx';
-import {
-  errorsFromServer,
-  hasErrors,
-  validateNewAccount,
-  validateNewPassword,
-  withoutField,
-  type FieldErrors,
-} from './errors.ts';
+import { errorFor } from './errors.ts';
 
-type View = 'signIn' | 'signUp' | 'recover';
+type View =
+  | { kind: 'start' }
+  /** Google's page is open in the browser. */
+  | { kind: 'waiting' }
+  /** Google knows them; the list doesn't (A25). */
+  | { kind: 'notAllowed'; email: string; requested: boolean };
 
 interface AuthScreenProps {
-  link: DeepLink | null;
   /** The session ended on its own (revoked elsewhere, expired), so say why we're here. */
   sessionEnded: boolean;
   onSignedIn: (user: User) => void;
 }
 
-const viewFor = (link: DeepLink | null): View =>
-  link?.kind === 'invite' ? 'signUp' : link?.kind === 'recover' ? 'recover' : 'signIn';
-
-/** Remounted (via `key`) for each new link, so its form starts with that link's token. */
-export function AuthScreen({ link, sessionEnded, onSignedIn }: AuthScreenProps) {
+/** Signing in (A25): one button, Google does the rest. Nothing to type, nothing to remember. */
+export function AuthScreen({ sessionEnded, onSignedIn }: AuthScreenProps) {
   const t = useT();
-  const [view, setView] = useState<View>(viewFor(link));
+  const [view, setView] = useState<View>({ kind: 'start' });
+  const [error, setError] = useState<MessageKey | null>(null);
+  const [asking, setAsking] = useState(false);
+
+  const signIn = async () => {
+    setError(null);
+    setView({ kind: 'waiting' });
+    const result = await window.hasbihal.auth.signInWithGoogle();
+    if (!result.ok) {
+      setError(errorFor(result.error));
+      setView({ kind: 'start' });
+      return;
+    }
+    const outcome = result.value;
+    if (outcome.kind === 'signedIn') onSignedIn(outcome.user);
+    else if (outcome.kind === 'notAllowed') setView(outcome);
+    else setView({ kind: 'start' });
+  };
+
+  const requestAccess = async (email: string) => {
+    setError(null);
+    setAsking(true);
+    const result = await window.hasbihal.auth.requestAccess();
+    setAsking(false);
+    if (result.ok) setView({ kind: 'notAllowed', email, requested: true });
+    // An hour-old Google sign-in has expired: starting over is the fix.
+    else
+      setError(
+        result.error.code === 'unauthorized' ? 'auth.requestExpired' : errorFor(result.error),
+      );
+  };
 
   return (
     <main className="auth">
@@ -37,358 +60,100 @@ export function AuthScreen({ link, sessionEnded, onSignedIn }: AuthScreenProps) 
           <Tulip size={40} />
           <span className="auth__name">{t('app.name')}</span>
         </div>
-        {sessionEnded && view === 'signIn' && (
-          <p className="auth__notice">{t('auth.sessionEnded')}</p>
-        )}
-        {view === 'signIn' && <SignInForm onSignedIn={onSignedIn} onNavigate={setView} />}
-        {view === 'signUp' && (
-          <SignUpForm
-            initialToken={link?.kind === 'invite' ? link.token : ''}
-            onSignedIn={onSignedIn}
-            onBack={() => {
-              setView('signIn');
-            }}
-          />
-        )}
-        {view === 'recover' && (
-          <RecoverForm
-            initialToken={link?.kind === 'recover' ? link.token : ''}
-            onSignedIn={onSignedIn}
-            onBack={() => {
-              setView('signIn');
-            }}
-          />
-        )}
+        <div className="auth__form">
+          {view.kind === 'notAllowed' ? (
+            <>
+              <h1 className="auth__title">{t('auth.notAllowed.title')}</h1>
+              {error && (
+                <p className="auth__error" role="alert">
+                  {t(error)}
+                </p>
+              )}
+              <p className="auth__text">{t('auth.notAllowed.body', { email: view.email })}</p>
+              {view.requested ? (
+                <p className="auth__notice" role="status">
+                  {t('auth.notAllowed.requested')}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  className="button button--primary"
+                  disabled={asking}
+                  onClick={() => void requestAccess(view.email)}
+                >
+                  {t('auth.notAllowed.request')}
+                </button>
+              )}
+              <div className="auth__links">
+                <button type="button" className="link" onClick={() => void signIn()}>
+                  {t(view.requested ? 'auth.notAllowed.tryAgain' : 'auth.notAllowed.otherAccount')}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="auth__title">{t('auth.signIn.title')}</h1>
+              {sessionEnded && !error && <p className="auth__notice">{t('auth.sessionEnded')}</p>}
+              {error && (
+                <p className="auth__error" role="alert">
+                  {t(error)}
+                </p>
+              )}
+              <button
+                type="button"
+                className="button google-button"
+                disabled={view.kind === 'waiting'}
+                onClick={() => void signIn()}
+              >
+                <GoogleLogo />
+                {t('auth.signIn.google')}
+              </button>
+              {view.kind === 'waiting' ? (
+                <div className="auth__links">
+                  <p className="auth__hint" role="status">
+                    {t('auth.signIn.waiting')}
+                  </p>
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => {
+                      window.hasbihal.auth.cancelGoogleSignIn();
+                    }}
+                  >
+                    {t('auth.signIn.cancel')}
+                  </button>
+                </div>
+              ) : (
+                <p className="auth__hint">{t('auth.signIn.hint')}</p>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </main>
   );
 }
 
-function SignInForm({
-  onSignedIn,
-  onNavigate,
-}: {
-  onSignedIn: (user: User) => void;
-  onNavigate: (view: View) => void;
-}) {
-  const t = useT();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setBusy(true);
-    const result = await window.hasbihal.auth.signIn({ username, password });
-    setBusy(false);
-    if (result.ok) onSignedIn(result.value);
-    else setErrors(errorsFromServer(result.error, 'signIn'));
-  };
-
+/** Google's "G", as its sign-in branding asks for on a "Sign in with Google" button. */
+function GoogleLogo() {
   return (
-    <Form title={t('auth.signIn.title')} onSubmit={submit} error={errors.form}>
-      <Field
-        label={t('auth.field.username')}
-        value={username}
-        onChange={setUsername}
-        autoComplete="username"
-        autoFocus
+    <svg className="google-button__logo" viewBox="0 0 48 48" aria-hidden="true">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
       />
-      <Field
-        label={t('auth.field.password')}
-        value={password}
-        onChange={setPassword}
-        type="password"
-        autoComplete="current-password"
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
       />
-      <button
-        className="button button--primary"
-        type="submit"
-        disabled={busy || !username || !password}
-      >
-        {t('auth.signIn.submit')}
-      </button>
-      <div className="auth__links">
-        <button
-          type="button"
-          className="link"
-          onClick={() => {
-            onNavigate('signUp');
-          }}
-        >
-          {t('auth.signIn.toSignUp')}
-        </button>
-        <button
-          type="button"
-          className="link"
-          onClick={() => {
-            onNavigate('recover');
-          }}
-        >
-          {t('auth.signIn.toRecover')}
-        </button>
-        <p className="auth__hint">{t('auth.signIn.forgotHint')}</p>
-      </div>
-    </Form>
-  );
-}
-
-function SignUpForm({
-  initialToken,
-  onSignedIn,
-  onBack,
-}: {
-  initialToken: string;
-  onSignedIn: (user: User) => void;
-  onBack: () => void;
-}) {
-  const t = useT();
-  const [invite, setInvite] = useState(initialToken);
-  // The last invite checked, with its token, so a stale answer is never shown for a new one.
-  const [checked, setChecked] = useState<{ token: string; info: InviteInfo } | null>(null);
-  const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [busy, setBusy] = useState(false);
-
-  // Check the invite as soon as it looks like one, so a dead link is caught before the form.
-  const token = tokenFromInput(invite, 'invite');
-  const inviteInfo = checked && checked.token === token ? checked.info : null;
-  useEffect(() => {
-    if (!token) return;
-    let current = true;
-    void window.hasbihal.auth.inviteInfo(token).then((result) => {
-      if (!current) return;
-      if (result.ok) {
-        setChecked({ token, info: result.value });
-        setErrors((e) => withoutField(e, 'link'));
-      } else {
-        setErrors((e) => ({ ...e, ...errorsFromServer(result.error, 'signUp') }));
-      }
-    });
-    return () => {
-      current = false;
-    };
-  }, [token]);
-
-  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const local: FieldErrors = { ...validateNewAccount({ username, displayName, password }) };
-    if (!token) local.link = 'error.inviteFormat';
-    setErrors(local);
-    if (hasErrors(local) || !token) return;
-    setBusy(true);
-    const result = await window.hasbihal.auth.signUp({
-      inviteToken: token,
-      username,
-      displayName,
-      password,
-    });
-    setBusy(false);
-    if (result.ok) onSignedIn(result.value);
-    else setErrors(errorsFromServer(result.error, 'signUp'));
-  };
-
-  return (
-    <Form title={t('auth.signUp.title')} onSubmit={submit} error={errors.form}>
-      <Field
-        label={t('auth.signUp.invite')}
-        value={invite}
-        onChange={setInvite}
-        error={errors.link}
-        hint={
-          inviteInfo
-            ? inviteInfo.role === 'admin'
-              ? 'auth.signUp.inviteAdmin'
-              : 'auth.signUp.inviteMember'
-            : undefined
-        }
-        spellCheck={false}
-        autoFocus={!initialToken}
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
       />
-      <Field
-        label={t('auth.field.displayName')}
-        value={displayName}
-        onChange={setDisplayName}
-        error={errors.displayName}
-        hint="auth.field.displayNameHint"
-        autoComplete="name"
-        autoFocus={Boolean(initialToken)}
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
       />
-      <Field
-        label={t('auth.field.username')}
-        value={username}
-        onChange={setUsername}
-        error={errors.username}
-        hint="auth.field.usernameHint"
-        autoComplete="username"
-        spellCheck={false}
-      />
-      <Field
-        label={t('auth.field.password')}
-        value={password}
-        onChange={setPassword}
-        error={errors.password}
-        hint="auth.field.passwordHint"
-        type="password"
-        autoComplete="new-password"
-      />
-      <button className="button button--primary" type="submit" disabled={busy}>
-        {t('auth.signUp.submit')}
-      </button>
-      <div className="auth__links">
-        <button type="button" className="link" onClick={onBack}>
-          {t('auth.back')}
-        </button>
-      </div>
-    </Form>
-  );
-}
-
-function RecoverForm({
-  initialToken,
-  onSignedIn,
-  onBack,
-}: {
-  initialToken: string;
-  onSignedIn: (user: User) => void;
-  onBack: () => void;
-}) {
-  const t = useT();
-  const [recovery, setRecovery] = useState(initialToken);
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const token = tokenFromInput(recovery, 'recover');
-    const local: FieldErrors = {};
-    if (!token) local.link = 'error.recoveryFormat';
-    const passwordError = validateNewPassword(password);
-    if (passwordError) local.password = passwordError;
-    setErrors(local);
-    if (hasErrors(local) || !token) return;
-    setBusy(true);
-    const result = await window.hasbihal.auth.recover({
-      recoveryToken: token,
-      newPassword: password,
-    });
-    setBusy(false);
-    if (result.ok) onSignedIn(result.value);
-    else setErrors(errorsFromServer(result.error, 'recover'));
-  };
-
-  return (
-    <Form title={t('auth.recover.title')} onSubmit={submit} error={errors.form}>
-      <Field
-        label={t('auth.recover.link')}
-        value={recovery}
-        onChange={setRecovery}
-        error={errors.link}
-        spellCheck={false}
-        autoFocus={!initialToken}
-      />
-      <Field
-        label={t('auth.field.newPassword')}
-        value={password}
-        onChange={setPassword}
-        error={errors.password}
-        hint="auth.field.passwordHint"
-        type="password"
-        autoComplete="new-password"
-        autoFocus={Boolean(initialToken)}
-      />
-      <p className="auth__hint">{t('auth.recover.hint')}</p>
-      <button className="button button--primary" type="submit" disabled={busy}>
-        {t('auth.recover.submit')}
-      </button>
-      <div className="auth__links">
-        <button type="button" className="link" onClick={onBack}>
-          {t('auth.back')}
-        </button>
-      </div>
-    </Form>
-  );
-}
-
-function Form({
-  title,
-  onSubmit,
-  error,
-  children,
-}: {
-  title: string;
-  onSubmit: (e: SubmitEvent<HTMLFormElement>) => Promise<void>;
-  error?: MessageKey | undefined;
-  children: ReactNode;
-}) {
-  const t = useT();
-  return (
-    <form className="auth__form" onSubmit={(e) => void onSubmit(e)} noValidate>
-      <h1 className="auth__title">{title}</h1>
-      {error && (
-        <p className="auth__error" role="alert">
-          {t(error)}
-        </p>
-      )}
-      {children}
-    </form>
-  );
-}
-
-interface FieldProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  error?: MessageKey | undefined;
-  hint?: MessageKey | undefined;
-  type?: 'text' | 'password';
-  autoComplete?: string;
-  autoFocus?: boolean;
-  spellCheck?: boolean;
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  error,
-  hint,
-  type = 'text',
-  autoComplete,
-  autoFocus,
-  spellCheck,
-}: FieldProps) {
-  const t = useT();
-  const id = useId();
-  const note = error ?? hint;
-  return (
-    <div className="field">
-      <label className="field__label" htmlFor={id}>
-        {label}
-      </label>
-      <input
-        id={id}
-        className="field__input"
-        type={type}
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-        }}
-        autoComplete={autoComplete ?? 'off'}
-        autoFocus={autoFocus}
-        spellCheck={spellCheck ?? false}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={note ? `${id}-note` : undefined}
-      />
-      {note && (
-        <p id={`${id}-note`} className={error ? 'field__error' : 'field__hint'}>
-          {t(note)}
-        </p>
-      )}
-    </div>
+    </svg>
   );
 }

@@ -15,14 +15,14 @@ import {
 } from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
 import { AuthScreen } from './auth/AuthScreen.tsx';
-import { useDeepLink, useSession } from './auth/useSession.ts';
+import { useSession } from './auth/useSession.ts';
 import { ChatProvider, type Chat } from './chat/context.tsx';
 import { ProfileDialog } from './chat/ProfileDialog.tsx';
 import { RoomList } from './chat/RoomList.tsx';
 import { RoomView } from './chat/RoomView.tsx';
 import { Avatar } from './components/Avatar.tsx';
 import { ConnectionBadge } from './components/ConnectionBadge.tsx';
-import { AdminDialog } from './admin/AdminDialog.tsx';
+import { AdminButton, AdminDialog } from './admin/AdminDialog.tsx';
 import { EmptyState } from './components/EmptyState.tsx';
 import { MemberList, PRESENCE_LABEL } from './components/MemberList.tsx';
 import { SearchPanel } from './components/SearchPanel.tsx';
@@ -36,7 +36,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useGateway } from './useGateway.ts';
 import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
 import { SettingsDialog } from './settings/SettingsDialog.tsx';
-import { LogOut, Settings, Shield, UserRound, X } from 'lucide-react';
+import { LogOut, Settings, UserRound } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { toastError } from './components/toast.ts';
 import { ConfirmHost } from './components/confirm.tsx';
@@ -71,7 +71,6 @@ export function App({ info }: { info: AppInfo }) {
 function Root({ info }: { info: AppInfo }) {
   const t = useT();
   const session = useSession();
-  const [link, clearLink] = useDeepLink();
   const { state } = session;
 
   if (state.kind === 'restoring' || state.kind === 'offline') {
@@ -91,42 +90,30 @@ function Root({ info }: { info: AppInfo }) {
   if (state.kind === 'signedOut') {
     return (
       <AuthScreen
-        key={link ? `${link.kind}:${link.token}` : 'none'}
-        link={link}
         sessionEnded={state.ended}
         onSignedIn={(user) => {
-          clearLink();
           session.signedIn(user);
         }}
       />
     );
   }
 
-  return (
-    <Shell
-      info={info}
-      user={state.user}
-      linkWhileSignedIn={link !== null}
-      onDismissLink={clearLink}
-      onSignOut={() => void session.signOut()}
-    />
-  );
+  return <Shell info={info} user={state.user} onSignOut={() => void session.signOut()} />;
 }
 
 interface ShellProps {
   info: AppInfo;
   user: User;
-  linkWhileSignedIn: boolean;
-  onDismissLink: () => void;
   onSignOut: () => void;
 }
 
-function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: ShellProps) {
+function Shell({ info, user, onSignOut }: ShellProps) {
   const t = useT();
   // One store per signed-in session: signing out unmounts the shell and drops it.
   const [store] = useState(() => new ChatStore());
   const [client] = useState(() => createClient(info.serverUrl));
   const [queryClient] = useState(createQueryClient);
+  const [adminOpen, setAdminOpen] = useState(false);
   // One call per signed-in session too; signing out leaves it.
   const [hangout] = useState(() => new HangoutSession(client));
   const hangoutState = useSyncExternalStore(hangout.subscribe, hangout.getSnapshot);
@@ -149,12 +136,13 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
    */
   const notify = (
     occasion: Occasion,
-    roomId: string,
+    /** The room it's about, if any: no notification while it's on screen. */
+    roomId: string | null,
     title: string,
     body: string,
     onClick: () => void,
   ) => {
-    const viewingRoom = document.hasFocus() && shownRoom.current === roomId;
+    const viewingRoom = roomId !== null && document.hasFocus() && shownRoom.current === roomId;
     const notice = noticeFor(occasion, { ...situation(), viewingRoom });
     if (!notice.notify) return;
     if (notice.sound) {
@@ -216,6 +204,19 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
         t('events.reminderBody', { time: formatTime(startsAt), room: roomName(roomId) }),
         () => {
           setChosenRoom(roomId);
+        },
+      );
+    },
+    // A25: "Kemal (kemal@gmail.com) wants to join". The admin page lists it, with a badge.
+    accessRequested: ({ email, name }) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.access });
+      notify(
+        { kind: 'access_request' },
+        null,
+        t('admin.requestTitle', { name }),
+        t('admin.requestBody', { email }),
+        () => {
+          setAdminOpen(true);
         },
       );
     },
@@ -290,7 +291,6 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
   const me = state.me ?? user;
   // The chosen room, or the first one; a deleted or archived choice falls back the same way.
   const [profileOpen, setProfileOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // ⌘, (Ctrl+, on Windows) opens Settings, as in most desktop apps.
   useEffect(() => {
@@ -346,15 +346,11 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
               <hr className="divider" />
               <RoomList selectedId={roomId} onSelect={setChosenRoom} />
               {me.role === 'admin' && (
-                <button
-                  type="button"
-                  className="sidebar__admin"
-                  onClick={() => {
+                <AdminButton
+                  onOpen={() => {
                     setAdminOpen(true);
                   }}
-                >
-                  <Icon icon={Shield} /> {t('admin.heading')}
-                </button>
+                />
               )}
               <UserPanel
                 user={me}
@@ -374,14 +370,6 @@ function Shell({ info, user, linkWhileSignedIn, onDismissLink, onSignOut }: Shel
               <div className="content__status">
                 <ConnectionBadge status={status} />
               </div>
-              {linkWhileSignedIn && (
-                <div className="banner" role="status">
-                  <span>{t('auth.linkWhileSignedIn')}</span>
-                  <button type="button" className="link" onClick={onDismissLink} aria-label="×">
-                    <Icon icon={X} />
-                  </button>
-                </div>
-              )}
               {roomId ? (
                 <RoomView key={roomId} roomId={roomId} />
               ) : (

@@ -77,6 +77,8 @@ export interface GatewayClientOptions {
     title: string;
     startsAt: string;
   }) => void;
+  /** Admins only: someone not on the list asked to join (A25). */
+  onAccessRequested?: (request: { email: string; name: string }) => void;
   backoff?: BackoffOptions;
   pingIntervalMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -226,6 +228,9 @@ export class GatewayClient {
           return;
         case 'event_reminder':
           this.options.onEventReminder?.(message);
+          return;
+        case 'access_requested':
+          this.options.onAccessRequested?.({ email: message.email, name: message.name });
           return;
         case 'upgrade_required':
           this.halt({ kind: 'upgrade_required' });

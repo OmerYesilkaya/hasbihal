@@ -26,7 +26,7 @@ export async function unwrap<T>(pending: Promise<ApiResult<T>>): Promise<T> {
  */
 export const queryKeys = {
   sessions: ['me', 'sessions'],
-  invites: ['admin', 'invites'],
+  access: ['admin', 'access'],
   events: ['events'],
   eventWindow: (roomId: string | null, days: number) => ['events', { roomId, days }],
   search: (q: string) => ['search', q],

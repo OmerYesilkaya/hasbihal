@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import { Id } from './id.ts';
 
-// Accounts and sessions (ARCHITECTURE §9, DECISIONS A20, A25, A51–A53).
+// Accounts and sessions (ARCHITECTURE §9, DECISIONS A20, A25, A53).
 
-/** A53: lowercase a-z, 0-9, `.` and `_`, 3–20 characters. Used to sign in, never shown as a name. */
+/**
+ * A53: lowercase a-z, 0-9, `.` and `_`, 3–20 characters. The handle in `@mentions`, never shown
+ * as a name. Made from the Google address when an account is created (A25).
+ */
 export const USERNAME_PATTERN = /^[a-z0-9._]{3,20}$/;
 export const Username = z
   .string()
@@ -17,18 +20,8 @@ export const DisplayName = z
   .transform((s) => s.normalize('NFC').trim())
   .pipe(z.string().min(1).max(40));
 
-/** ARCHITECTURE §9: at least 10 characters, no composition rules; the server also rejects common passwords. */
-export const PASSWORD_MIN_LENGTH = 10;
-export const Password = z.string().min(PASSWORD_MIN_LENGTH).max(256);
-
-/** Server-side password checks, sent as `ValidationIssue.code`. */
-export const PasswordProblem = z.enum(['password_too_common', 'password_contains_username']);
-export type PasswordProblem = z.infer<typeof PasswordProblem>;
-
-/** Shared so the sign-up form can warn before submitting. */
-export function passwordContainsUsername(password: string, username: string): boolean {
-  return username.length > 0 && password.toLowerCase().includes(username.toLowerCase());
-}
+/** A Google account's address, lowercased: how admins let someone in (A25). */
+export const Email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
 /** Shown in the sessions list, e.g. "Ömer's MacBook". */
 export const DeviceName = z
@@ -64,67 +57,66 @@ export const AuthTokens = z.object({
 });
 export type AuthTokens = z.infer<typeof AuthTokens>;
 
-/** Answer to sign-up, sign-in, and recovery. */
 export const SignedIn = z.object({ user: User, tokens: AuthTokens });
 export type SignedIn = z.infer<typeof SignedIn>;
 
-export const SignUpRequest = z.object({
-  inviteToken: z.string().min(1),
-  username: Username,
-  displayName: DisplayName,
-  password: Password,
-  deviceName: DeviceName,
-});
-export type SignUpRequest = z.input<typeof SignUpRequest>;
+/** A Google ID token is a JWT of about 1 KB; this leaves room without inviting abuse. */
+const IdToken = z.string().min(1).max(8192);
 
-export const SignInRequest = z.object({
-  username: z.string().trim().toLowerCase().min(1).max(64),
-  // Not `Password`: an old password shorter than today's minimum must still get a normal "wrong password".
-  password: z.string().min(1).max(256),
-  deviceName: DeviceName,
-});
-export type SignInRequest = z.input<typeof SignInRequest>;
+/** `POST /auth/google`: the ID token the app got from Google's sign-in page (A25). */
+export const GoogleSignInRequest = z.object({ idToken: IdToken, deviceName: DeviceName });
+export type GoogleSignInRequest = z.input<typeof GoogleSignInRequest>;
+
+/**
+ * The answer to a Google sign-in. `not_allowed` is an ordinary outcome, not an error: the address
+ * isn't on the list, and the app offers to ask an admin (`requested` once it has).
+ */
+export const GoogleSignInResult = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('signed_in'), user: User, tokens: AuthTokens }),
+  z.object({ status: z.literal('not_allowed'), email: z.string(), requested: z.boolean() }),
+]);
+export type GoogleSignInResult = z.infer<typeof GoogleSignInResult>;
+
+/** `POST /auth/access-requests`: "let me in", proven with the same ID token. */
+export const AccessRequestRequest = z.object({ idToken: IdToken });
+export type AccessRequestRequest = z.infer<typeof AccessRequestRequest>;
 
 export const RefreshRequest = z.object({ refreshToken: z.string().min(1).max(200) });
 export type RefreshRequest = z.infer<typeof RefreshRequest>;
 
-/** What the sign-up screen shows before the form is filled in. */
-export const InviteInfo = z.object({ role: Role, expiresAt: z.iso.datetime() });
-export type InviteInfo = z.infer<typeof InviteInfo>;
-
-export const CreateInviteRequest = z.object({ role: Role.default('member') });
-export type CreateInviteRequest = z.input<typeof CreateInviteRequest>;
-
-/** An invite not used yet (the admin page, A44). Its link was shown once, when it was made. */
-export const PendingInvite = z.object({
-  id: Id,
-  role: Role,
-  createdBy: Id.nullable(),
-  createdAt: z.iso.datetime(),
-  expiresAt: z.iso.datetime(),
-});
-export type PendingInvite = z.infer<typeof PendingInvite>;
-
-export const InviteList = z.object({ invites: z.array(PendingInvite) });
-export type InviteList = z.infer<typeof InviteList>;
-
 export const ChangeRoleRequest = z.object({ role: Role });
 export type ChangeRoleRequest = z.infer<typeof ChangeRoleRequest>;
 
-/** A single-use link: `hasbihal://invite/<token>` or `hasbihal://recover/<token>` (A51). */
-export const OneTimeLink = z.object({
-  token: z.string(),
-  url: z.string(),
-  expiresAt: z.iso.datetime(),
-});
-export type OneTimeLink = z.infer<typeof OneTimeLink>;
+// ---- who may join (A20, A25, A44) ------------------------------------------------------------
 
-export const RecoverRequest = z.object({
-  recoveryToken: z.string().min(1),
-  newPassword: Password,
-  deviceName: DeviceName,
+/** An address an admin let in, whose owner hasn't signed in yet. */
+export const AllowedEmail = z.object({
+  email: z.string(),
+  role: Role,
+  addedBy: Id.nullable(),
+  addedAt: z.iso.datetime(),
 });
-export type RecoverRequest = z.input<typeof RecoverRequest>;
+export type AllowedEmail = z.infer<typeof AllowedEmail>;
+
+/** Someone not on the list who asked to join. */
+export const AccessRequest = z.object({
+  email: z.string(),
+  name: z.string(),
+  requestedAt: z.iso.datetime(),
+});
+export type AccessRequest = z.infer<typeof AccessRequest>;
+
+/** `GET /admin/access`: the admin page's "who may join" view. */
+export const AccessList = z.object({
+  allowed: z.array(AllowedEmail),
+  requests: z.array(AccessRequest),
+  /** Each member's Google address; null until they first sign in with Google. */
+  memberEmails: z.record(Id, z.string().nullable()),
+});
+export type AccessList = z.infer<typeof AccessList>;
+
+export const AllowEmailRequest = z.object({ email: Email, role: Role.default('member') });
+export type AllowEmailRequest = z.input<typeof AllowEmailRequest>;
 
 export const Session = z.object({
   id: Id,
@@ -139,22 +131,10 @@ export type Session = z.infer<typeof Session>;
 export const SessionList = z.object({ sessions: z.array(Session) });
 export type SessionList = z.infer<typeof SessionList>;
 
-/** `hasbihal://invite/<token>` and `hasbihal://recover/<token>`. */
-export const APP_URL_SCHEME = 'hasbihal';
-export const inviteUrl = (token: string) => `${APP_URL_SCHEME}://invite/${token}`;
-export const recoveryUrl = (token: string) => `${APP_URL_SCHEME}://recover/${token}`;
-
 // ---- profile (A40, A41) ----------------------------------------------------------------------
 
 export const UpdateProfileRequest = z.object({ displayName: DisplayName });
 export type UpdateProfileRequest = z.input<typeof UpdateProfileRequest>;
-
-/** Changing the password signs out every other device. */
-export const ChangePasswordRequest = z.object({
-  currentPassword: z.string().min(1).max(256),
-  newPassword: Password,
-});
-export type ChangePasswordRequest = z.input<typeof ChangePasswordRequest>;
 
 /** Profile photos up to this size are accepted; they're stored as a 256 px WebP. */
 export const AVATAR_MAX_BYTES = 8 * 1024 * 1024;

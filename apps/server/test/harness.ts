@@ -7,21 +7,20 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { expect } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
+  GoogleSignInResult,
   PROTOCOL_VERSION,
   ServerMessage,
-  SignedIn,
   parseFrame,
   type ClientMessage,
   type Role,
+  type SignedIn,
 } from '@hasbihal/protocol';
 import { buildApp, type AppDeps } from '../src/app.ts';
-import { createInvite } from '../src/auth/routes.ts';
 import { loadConfig } from '../src/config.ts';
 import { LocalFileStore } from '../src/files/store.ts';
 import { GatewayHub } from '../src/gateway/hub.ts';
 import { createTestDatabase, type TestDatabase } from './database.ts';
-
-export const PASSWORD = 'bir uzun parola cümlesi';
+import { fakeGoogle, type FakeGoogle, type GoogleAccount } from './google.ts';
 
 /** A gateway connection that records every server message. */
 export interface TestClient {
@@ -43,7 +42,12 @@ export interface Harness {
   testDb: TestDatabase;
   /** Where this harness's uploads go (a temporary folder). */
   filesDir: string;
-  signUp(role?: Role): Promise<SignedIn>;
+  /** Google, as the app sees it in tests: makes accounts and their ID tokens. */
+  google: FakeGoogle;
+  /** A new member: their address is put on the list, then they sign in with Google. */
+  signUp(role?: Role): Promise<SignedIn & { account: GoogleAccount }>;
+  /** `POST /auth/google` with this account's ID token. */
+  signInWithGoogle(account: GoogleAccount, deviceName?: string): Promise<LightMyRequestResponse>;
   connect(accessToken: string, lastSeq?: number): Promise<TestClient>;
   /** An authenticated request; `payload` makes it JSON. */
   request(
@@ -55,15 +59,20 @@ export interface Harness {
   close(): Promise<void>;
 }
 
-let counter = 0;
-
-/** `deps` overrides parts of the app, e.g. a fetcher that may reach a local test site. */
-export async function startHarness(deps: Partial<AppDeps> = {}): Promise<Harness> {
+/**
+ * `deps` overrides parts of the app, e.g. a fetcher that may reach a local test site; `env` its
+ * configuration.
+ */
+export async function startHarness(
+  deps: Partial<AppDeps> = {},
+  env: Record<string, string> = {},
+): Promise<Harness> {
   const testDb = await createTestDatabase();
   const hub = new GatewayHub(testDb.db);
   const filesDir = await mkdtemp(path.join(tmpdir(), 'hasbihal-files-'));
+  const google = await fakeGoogle();
   const app = await buildApp(
-    loadConfig({ LOG_LEVEL: 'silent', AUTH_RATE_LIMIT_PER_MINUTE: '10000' }),
+    loadConfig({ LOG_LEVEL: 'silent', AUTH_RATE_LIMIT_PER_MINUTE: '10000', ...env }),
     // No real LiveKit in tests: its room listing is empty.
     {
       db: testDb.db,
@@ -72,33 +81,40 @@ export async function startHarness(deps: Partial<AppDeps> = {}): Promise<Harness
       livekitRooms: { list: () => Promise.resolve(new Map()) },
       // Tests run jobs when they choose (app.jobs.runDue()), so nothing races them.
       runJobs: false,
+      google: google.verifier,
       ...deps,
     },
   );
   await app.ready();
+
+  const signInWithGoogle = async (account: GoogleAccount, deviceName = 'Test') => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/google',
+      payload: { idToken: await google.idToken(account), deviceName },
+    });
+    await hub.settled(); // a new member's member_joined event has gone out
+    return res;
+  };
 
   return {
     app,
     hub,
     testDb,
     filesDir,
+    google,
+    signInWithGoogle,
     async signUp(role: Role = 'member') {
-      const invite = await createInvite(testDb.db, role, null);
-      const n = String(++counter);
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/sign-up',
-        payload: {
-          inviteToken: invite.token,
-          username: `user_${n}`,
-          displayName: `Üye ${n}`,
-          password: PASSWORD,
-          deviceName: 'Test',
-        },
-      });
-      expect(res.statusCode, res.body).toBe(201);
-      await hub.settled(); // its member_joined event has gone out
-      return SignedIn.parse(res.json());
+      const account = google.account();
+      await testDb.db
+        .insertInto('allowed_emails')
+        .values({ email: account.email, role, added_by: null })
+        .execute();
+      const res = await signInWithGoogle(account);
+      expect(res.statusCode, res.body).toBe(200);
+      const result = GoogleSignInResult.parse(res.json());
+      if (result.status !== 'signed_in') throw new Error(`not signed in: ${res.body}`);
+      return { user: result.user, tokens: result.tokens, account };
     },
     async connect(accessToken, lastSeq) {
       const ws = await app.injectWS('/ws');

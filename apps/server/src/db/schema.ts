@@ -8,10 +8,9 @@ import type { Role } from '@hasbihal/protocol';
  */
 export interface Database {
   users: UsersTable;
-  credentials: CredentialsTable;
   sessions: SessionsTable;
-  invites: InvitesTable;
-  recovery_links: RecoveryLinksTable;
+  allowed_emails: AllowedEmailsTable;
+  access_requests: AccessRequestsTable;
   event_log: EventLogTable;
   rooms: RoomsTable;
   messages: MessagesTable;
@@ -44,12 +43,10 @@ export interface UsersTable {
   created_at: CreatedAt;
   removed_at: NullableTime;
   avatar_file_id: ColumnType<string | null, string | null | undefined, string | null>;
-}
-
-export interface CredentialsTable {
-  user_id: string;
-  password_hash: string;
-  password_changed_at: Generated<Date>;
+  /** Lowercase Google address; null for members made before Google sign-in until it's set. */
+  email: ColumnType<string | null, string | null | undefined, string | null>;
+  /** Google's permanent account id, set on the first Google sign-in. */
+  google_sub: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface SessionsTable {
@@ -63,25 +60,17 @@ export interface SessionsTable {
   revoked_at: NullableTime;
 }
 
-export interface InvitesTable {
-  id: string;
-  token_hash: Buffer;
+export interface AllowedEmailsTable {
+  email: string;
   role: Role;
-  created_by: string | null;
-  created_at: CreatedAt;
-  expires_at: Date;
-  used_by: ColumnType<string | null, string | null | undefined, string | null>;
-  used_at: NullableTime;
+  added_by: string | null;
+  added_at: CreatedAt;
 }
 
-export interface RecoveryLinksTable {
-  id: string;
-  user_id: string;
-  token_hash: Buffer;
-  created_by: string | null;
-  created_at: CreatedAt;
-  expires_at: Date;
-  used_at: NullableTime;
+export interface AccessRequestsTable {
+  email: string;
+  name: string;
+  requested_at: CreatedAt;
 }
 
 export interface EventLogTable {

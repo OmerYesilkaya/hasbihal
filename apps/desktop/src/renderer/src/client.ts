@@ -2,12 +2,12 @@ import {
   EventWindow,
   FileUrls,
   HangoutToken,
-  InviteList,
+  AccessList,
+  AllowedEmail,
   MemberList,
   Message,
   MessagePage,
   NudgeResult,
-  OneTimeLink,
   Room,
   RoomEvent,
   RoomList,
@@ -15,9 +15,8 @@ import {
   SearchResults,
   SessionList,
   User,
-  type ChangePasswordRequest,
   type ChangeRoleRequest,
-  type CreateInviteRequest,
+  type AllowEmailRequest,
   type CreateRoomRequest,
   type EditMessageRequest,
   type EventWindowQuery,
@@ -64,8 +63,6 @@ export function createClient(serverUrl: string) {
       setAvatar: (form: FormData) =>
         request(serverUrl, 'PUT', '/me/avatar', { body: form, schema: User }),
       removeAvatar: () => request(serverUrl, 'DELETE', '/me/avatar', { schema: User }),
-      changePassword: (body: ChangePasswordRequest) =>
-        request(serverUrl, 'POST', '/me/password', { body }),
       sessions: () => request(serverUrl, 'GET', '/me/sessions', { schema: SessionList }),
       revokeSession: (sessionId: string) =>
         request(serverUrl, 'DELETE', `/me/sessions/${segment(sessionId)}`),
@@ -149,23 +146,19 @@ export function createClient(serverUrl: string) {
       },
     },
 
-    invites: {
-      create: (body: CreateInviteRequest) =>
-        request(serverUrl, 'POST', '/invites', { body, schema: OneTimeLink }),
-    },
-
     admin: {
-      invites: () => request(serverUrl, 'GET', '/admin/invites', { schema: InviteList }),
-      revokeInvite: (inviteId: string) =>
-        request(serverUrl, 'DELETE', `/admin/invites/${segment(inviteId)}`),
+      /** Who may join (A25): the list, the requests, and each member's Google address. */
+      access: () => request(serverUrl, 'GET', '/admin/access', { schema: AccessList }),
+      allowEmail: (body: AllowEmailRequest) =>
+        request(serverUrl, 'POST', '/admin/allowed-emails', { body, schema: AllowedEmail }),
+      removeAllowedEmail: (email: string) =>
+        request(serverUrl, 'DELETE', `/admin/allowed-emails/${segment(email)}`),
+      dismissRequest: (email: string) =>
+        request(serverUrl, 'DELETE', `/admin/access-requests/${segment(email)}`),
       setRole: (userId: string, body: ChangeRoleRequest) =>
         request(serverUrl, 'PUT', `/admin/users/${segment(userId)}/role`, { body }),
       removeUser: (userId: string) =>
         request(serverUrl, 'POST', `/admin/users/${segment(userId)}/remove`),
-      recoveryLink: (userId: string) =>
-        request(serverUrl, 'POST', `/users/${segment(userId)}/recovery-link`, {
-          schema: OneTimeLink,
-        }),
     },
   };
 }

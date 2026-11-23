@@ -1,25 +1,22 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Locale } from '@hasbihal/core';
-import type { DeepLink } from '../shared/deep-link.ts';
 import {
   IPC,
   type AppInfo,
   type AuthBridge,
-  type DeepLinkBridge,
   type ScreenBridge,
   type ScreenSource,
   type SystemBridge,
 } from '../shared/app-info.ts';
 import type { HasbihalBridge } from './api';
 
-const takePending = () => ipcRenderer.invoke(IPC.deepLinkTakePending) as Promise<DeepLink | null>;
-
 const auth: AuthBridge = {
   restore: () => ipcRenderer.invoke(IPC.authRestore),
-  inviteInfo: (token) => ipcRenderer.invoke(IPC.authInviteInfo, token),
-  signUp: (request) => ipcRenderer.invoke(IPC.authSignUp, request),
-  signIn: (request) => ipcRenderer.invoke(IPC.authSignIn, request),
-  recover: (request) => ipcRenderer.invoke(IPC.authRecover, request),
+  signInWithGoogle: () => ipcRenderer.invoke(IPC.authGoogle),
+  cancelGoogleSignIn: () => {
+    ipcRenderer.send(IPC.authGoogleCancel);
+  },
+  requestAccess: () => ipcRenderer.invoke(IPC.authRequestAccess),
   accessToken: (refresh) => ipcRenderer.invoke(IPC.authAccessToken, refresh ?? false),
   signOut: () => ipcRenderer.invoke(IPC.authSignOut),
   onSessionEnded: (listener) => {
@@ -28,20 +25,6 @@ const auth: AuthBridge = {
     };
     ipcRenderer.on(IPC.authSessionEnded, handler);
     return () => ipcRenderer.off(IPC.authSessionEnded, handler);
-  },
-};
-
-const deepLinks: DeepLinkBridge = {
-  takePending,
-  onLink: (listener) => {
-    // The main process only pings; the link itself is taken, so it is handled exactly once.
-    const handler = () => {
-      void takePending().then((link) => {
-        if (link) listener(link);
-      });
-    };
-    ipcRenderer.on(IPC.deepLinkReceived, handler);
-    return () => ipcRenderer.off(IPC.deepLinkReceived, handler);
   },
 };
 
@@ -91,7 +74,6 @@ const screen: ScreenBridge = {
 const bridge: HasbihalBridge = {
   getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo) as Promise<AppInfo>,
   auth,
-  deepLinks,
   system,
   screen,
 };

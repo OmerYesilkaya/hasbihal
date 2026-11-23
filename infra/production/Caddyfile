@@ -7,6 +7,14 @@
 		reverse_proxy host.docker.internal:7880
 	}
 
+	# The home and privacy pages Google's sign-in screen links to (A25).
+	@site path / /privacy
+	handle @site {
+		root * /srv/site
+		rewrite /privacy /privacy.html
+		file_server
+	}
+
 	# Everything else is the Hasbihal API and gateway.
 	handle {
 		reverse_proxy server:8080

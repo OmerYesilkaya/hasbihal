@@ -1,7 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import type { Kysely, Transaction } from 'kysely';
 import { z } from 'zod';
-import { ChangeRoleRequest, Id, type InviteList, type User } from '@hasbihal/protocol';
+import {
+  AllowEmailRequest,
+  ChangeRoleRequest,
+  Email,
+  Id,
+  type AccessList,
+  type AllowedEmail,
+  type User,
+} from '@hasbihal/protocol';
 import type { AuthGuards } from '../auth/routes.ts';
 import { revokeAllSessions, toUser } from '../auth/sessions.ts';
 import type { Database } from '../db/schema.ts';
@@ -10,10 +18,11 @@ import { appendEvent } from '../gateway/events.ts';
 import type { GatewayHub } from '../gateway/hub.ts';
 
 const IdParam = z.object({ id: Id });
+const EmailParam = z.object({ email: Email });
 
 /**
- * The admin page's actions (A44) beyond what other modules offer (creating invites and recovery
- * links, managing rooms): pending invites, admin rights, and removing members.
+ * The admin page's actions (A44) beyond what other modules offer (managing rooms): who may join
+ * (A25), admin rights, and removing members.
  */
 export function registerAdmin(
   app: FastifyInstance,
@@ -57,39 +66,83 @@ export function registerAdmin(
     return user;
   };
 
-  // ---- invites ---------------------------------------------------------------------------------
+  // ---- who may join (A25) -----------------------------------------------------------------------
 
-  /** Unused, unexpired invites. Their links can't be shown again: only hashes are kept (§9). */
-  app.get('/admin/invites', { preHandler: requireAdmin }, async (): Promise<InviteList> => {
-    const rows = await db
-      .selectFrom('invites')
-      .select(['id', 'role', 'created_by', 'created_at', 'expires_at'])
-      .where('used_at', 'is', null)
-      .where('expires_at', '>', new Date())
-      .orderBy('created_at', 'desc')
-      .execute();
+  app.get('/admin/access', { preHandler: requireAdmin }, async (): Promise<AccessList> => {
+    const [allowed, requests, members] = await Promise.all([
+      db.selectFrom('allowed_emails').selectAll().orderBy('added_at', 'desc').execute(),
+      db.selectFrom('access_requests').selectAll().orderBy('requested_at', 'desc').execute(),
+      db.selectFrom('users').select(['id', 'email']).where('removed_at', 'is', null).execute(),
+    ]);
     return {
-      invites: rows.map((r) => ({
-        id: r.id,
+      allowed: allowed.map((r) => ({
+        email: r.email,
         role: r.role,
-        createdBy: r.created_by,
-        createdAt: r.created_at.toISOString(),
-        expiresAt: r.expires_at.toISOString(),
+        addedBy: r.added_by,
+        addedAt: r.added_at.toISOString(),
       })),
+      requests: requests.map((r) => ({
+        email: r.email,
+        name: r.name,
+        requestedAt: r.requested_at.toISOString(),
+      })),
+      memberEmails: Object.fromEntries(members.map((m) => [m.id, m.email])),
     };
   });
 
-  app.delete('/admin/invites/:id', { preHandler: requireAdmin }, async (request, reply) => {
-    const { id } = parseRequest(IdParam, request.params, 'params');
-    // Expiring it now makes it invalid everywhere, and keeps the record.
-    await db
-      .updateTable('invites')
-      .set({ expires_at: new Date() })
-      .where('id', '=', id)
-      .where('used_at', 'is', null)
-      .execute();
-    return reply.code(204).send();
-  });
+  /** Lets an address in; its owner's first Google sign-in makes the account. */
+  app.post(
+    '/admin/allowed-emails',
+    { preHandler: requireAdmin },
+    async (request, reply): Promise<AllowedEmail> => {
+      const { email, role } = parseRequest(AllowEmailRequest, request.body, 'body');
+      const member = await db
+        .selectFrom('users')
+        .select('id')
+        .where('email', '=', email)
+        .executeTakeFirst();
+      if (member) throw new AppError(409, 'conflict', 'This address is already a member’s.');
+      const row = await db.transaction().execute(async (trx) => {
+        await trx.deleteFrom('access_requests').where('email', '=', email).execute();
+        return trx
+          .insertInto('allowed_emails')
+          .values({ email, role, added_by: auth(request).userId })
+          .onConflict((oc) =>
+            oc.column('email').doUpdateSet({ role, added_by: auth(request).userId }),
+          )
+          .returningAll()
+          .executeTakeFirstOrThrow();
+      });
+      void reply.code(201);
+      return {
+        email: row.email,
+        role: row.role,
+        addedBy: row.added_by,
+        addedAt: row.added_at.toISOString(),
+      };
+    },
+  );
+
+  app.delete(
+    '/admin/allowed-emails/:email',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const { email } = parseRequest(EmailParam, request.params, 'params');
+      await db.deleteFrom('allowed_emails').where('email', '=', email).execute();
+      return reply.code(204).send();
+    },
+  );
+
+  /** Dismisses a request without letting them in. They may ask again. */
+  app.delete(
+    '/admin/access-requests/:email',
+    { preHandler: requireAdmin },
+    async (request, reply) => {
+      const { email } = parseRequest(EmailParam, request.params, 'params');
+      await db.deleteFrom('access_requests').where('email', '=', email).execute();
+      return reply.code(204).send();
+    },
+  );
 
   // ---- members ---------------------------------------------------------------------------------
 
@@ -104,7 +157,8 @@ export function registerAdmin(
 
   /**
    * Removes a member (A42): they're signed out everywhere and can't sign in again; their messages
-   * stay. Undoing it means a new invite.
+   * stay. Their address and Google account are let go, so adding the address again later makes
+   * them a new account.
    */
   app.post(
     '/admin/users/:id/remove',
@@ -117,7 +171,7 @@ export function registerAdmin(
         await keepAnAdmin(trx, id);
         await trx
           .updateTable('users')
-          .set({ removed_at: new Date() })
+          .set({ removed_at: new Date(), email: null, google_sub: null })
           .where('id', '=', id)
           .execute();
         await revokeAllSessions(trx, id);

@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type SubmitEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DisplayName, Password, User, AVATAR_MAX_BYTES } from '@hasbihal/protocol';
+import { DisplayName, User, AVATAR_MAX_BYTES } from '@hasbihal/protocol';
 import type { MessageKey } from '@hasbihal/core';
 import { Avatar } from '../components/Avatar.tsx';
 import { formatDateTime, useT } from '../i18n.tsx';
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Icon } from '../components/Icon.tsx';
 import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
 
-/** The profile view (A41): photo (A40), display name, password, and this member's devices. */
+/** The profile view (A41): photo (A40), display name, and this member's devices. */
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const { me } = useChatState();
@@ -27,7 +27,6 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
       </header>
       <PhotoSection me={me} />
       <NameSection me={me} />
-      <PasswordSection />
       <SessionsSection />
     </Modal>
   );
@@ -152,77 +151,6 @@ function NameSection({ me }: { me: User }) {
             ? t('error.unexpected')
             : `@${me.username}`}
       </p>
-    </form>
-  );
-}
-
-function PasswordSection() {
-  const t = useT();
-  const { client } = useChat();
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [message, setMessage] = useState<{ key: MessageKey; ok: boolean } | null>(null);
-
-  const save = async (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!Password.safeParse(next).success) {
-      setMessage({ key: 'error.passwordTooShort', ok: false });
-      return;
-    }
-    const result = await client.me.changePassword({ currentPassword: current, newPassword: next });
-    if (result.ok) {
-      setCurrent('');
-      setNext('');
-      setMessage({ key: 'profile.passwordChanged', ok: true });
-      return;
-    }
-    const code = result.error.issues?.[0]?.code;
-    setMessage({
-      key:
-        code === 'wrong_password'
-          ? 'profile.wrongPassword'
-          : code === 'password_too_common'
-            ? 'error.passwordTooCommon'
-            : code === 'password_contains_username'
-              ? 'error.passwordContainsUsername'
-              : 'error.unexpected',
-      ok: false,
-    });
-  };
-
-  return (
-    <form className="profile__section" onSubmit={(e) => void save(e)}>
-      <h2 className="profile__subtitle">{t('profile.password')}</h2>
-      <input
-        className="field__input"
-        type="password"
-        autoComplete="current-password"
-        placeholder={t('profile.currentPassword')}
-        aria-label={t('profile.currentPassword')}
-        value={current}
-        onChange={(e) => {
-          setCurrent(e.target.value);
-        }}
-      />
-      <input
-        className="field__input"
-        type="password"
-        autoComplete="new-password"
-        placeholder={t('auth.field.newPassword')}
-        aria-label={t('auth.field.newPassword')}
-        value={next}
-        onChange={(e) => {
-          setNext(e.target.value);
-        }}
-      />
-      <div className="profile__row">
-        <p className={message?.ok === false ? 'field__error' : 'field__hint'}>
-          {message ? t(message.key) : t('profile.passwordHint')}
-        </p>
-        <button type="submit" className="button" disabled={!current || !next}>
-          {t('profile.changePassword')}
-        </button>
-      </div>
     </form>
   );
 }

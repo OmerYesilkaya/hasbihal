@@ -195,6 +195,17 @@ export const ServerRoomPrefs = z.object({
 });
 export type ServerRoomPrefs = z.infer<typeof ServerRoomPrefs>;
 
+/**
+ * Someone not on the list asked to join (A25): sent to admins who are online. The admin page
+ * lists the request too, for admins who weren't.
+ */
+export const ServerAccessRequested = z.object({
+  type: z.literal('access_requested'),
+  email: z.string(),
+  name: z.string(),
+});
+export type ServerAccessRequested = z.infer<typeof ServerAccessRequested>;
+
 export const ServerUpgradeRequired = z.object({
   type: z.literal('upgrade_required'),
   minProtocolVersion: z.number().int(),
@@ -223,6 +234,7 @@ export const ServerMessage = z.discriminatedUnion('type', [
   ServerHangoutStarted,
   ServerNudge,
   ServerEventReminder,
+  ServerAccessRequested,
   ServerUpgradeRequired,
   ServerPong,
   ServerError,

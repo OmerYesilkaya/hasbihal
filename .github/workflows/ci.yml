@@ -38,7 +38,7 @@ jobs:
       - name: Native modules load in the image
         run: >
           docker run --rm hasbihal-server:ci node --disable-warning=ExperimentalWarning -e
-          "Promise.all([import('sharp'), import('argon2')]).then(() => console.log('ok'))"
+          "import('sharp').then(() => console.log('ok'))"
 
   # Backups (A31): back up, pass a restore drill, catch a damaged file, restore onto a fresh
   # database, all with throwaway containers.

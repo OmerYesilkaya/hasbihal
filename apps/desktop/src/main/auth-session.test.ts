@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AuthTokens, User } from '@hasbihal/protocol';
-import { AuthSession, type TokenStore } from './auth-session.ts';
+import { AuthSession, type GoogleIdentityProvider, type TokenStore } from './auth-session.ts';
+import type { GoogleSignInOutcome } from './google-sign-in.ts';
 
 const USER: User = {
   id: '0192f0c4-7b5e-7c8e-9a3b-1234567890ab',
@@ -35,6 +36,7 @@ class FakeServer {
   revoked = false;
   refreshCalls = 0;
   signOutCalls = 0;
+  accessRequests: string[] = [];
   #generation = 0;
   validRefresh = 'refresh-0';
 
@@ -64,10 +66,15 @@ class FakeServer {
     const denied = json(401, { error: { code: 'unauthorized', message: 'no' } });
 
     switch (url.pathname) {
-      case '/auth/sign-in':
-        return body.password === 'right password'
-          ? json(200, { user: USER, tokens: this.tokens() })
-          : json(401, { error: { code: 'unauthorized', message: 'Wrong username or password.' } });
+      case '/auth/google':
+        if (body.idToken === 'stranger')
+          return json(200, { status: 'not_allowed', email: 'yabanci@gmail.com', requested: false });
+        return body.idToken === 'member' && body.deviceName === 'Test Mac'
+          ? json(200, { status: 'signed_in', user: USER, tokens: this.tokens() })
+          : json(401, { error: { code: 'unauthorized', message: 'Google sign-in failed.' } });
+      case '/auth/access-requests':
+        this.accessRequests.push(body.idToken ?? '');
+        return json(204, null);
       case '/auth/refresh':
         this.refreshCalls++;
         if (this.revoked || body.refreshToken !== this.validRefresh) return denied;
@@ -83,37 +90,69 @@ class FakeServer {
   };
 }
 
+/** Google's half of the sign-in: what the browser comes back with next. */
+class FakeGoogle implements GoogleIdentityProvider {
+  next: GoogleSignInOutcome = { ok: true, idToken: 'member' };
+  run = () => Promise.resolve(this.next);
+  cancel = () => undefined;
+}
+
 function setup(stored: string | null = null) {
   const server = new FakeServer();
   if (stored) server.validRefresh = stored;
   const store = new MemoryStore(stored);
+  const google = new FakeGoogle();
   const session = new AuthSession({
     serverUrl: 'http://server.test',
     deviceName: 'Test Mac',
+    google,
     store,
     fetch: server.fetch,
     now: () => server.now,
   });
-  return { server, store, session };
+  return { server, store, session, google };
 }
 
 describe('AuthSession', () => {
-  it('signs in and keeps only the refresh token in the store', async () => {
+  it('signs in with Google and keeps only the refresh token in the store', async () => {
     const { session, store } = setup();
-    const result = await session.signIn({ username: 'omer', password: 'right password' });
-    expect(result).toEqual({ ok: true, value: USER });
+    const result = await session.signInWithGoogle();
+    expect(result).toEqual({ ok: true, value: { kind: 'signedIn', user: USER } });
     expect(store.token).toBe('refresh-1');
     expect(await session.accessToken()).toEqual({ ok: true, value: 'access-1' });
   });
 
   it('passes server errors through unchanged', async () => {
-    const { session, store } = setup();
-    const result = await session.signIn({ username: 'omer', password: 'wrong' });
+    const { session, store, google } = setup();
+    google.next = { ok: true, idToken: 'forged' };
+    const result = await session.signInWithGoogle();
     expect(result).toEqual({
       ok: false,
-      error: { code: 'unauthorized', message: 'Wrong username or password.' },
+      error: { code: 'unauthorized', message: 'Google sign-in failed.' },
     });
     expect(store.token).toBeNull();
+  });
+
+  it('tells a cancelled sign-in from a failed one', async () => {
+    const { session, google } = setup();
+    google.next = { ok: false, reason: 'timeout' };
+    expect(await session.signInWithGoogle()).toEqual({ ok: true, value: { kind: 'cancelled' } });
+    google.next = { ok: false, reason: 'failed' };
+    const failed = await session.signInWithGoogle();
+    expect(failed.ok ? null : failed.error.code).toBe('unavailable');
+  });
+
+  it('asks for access with the Google account that wasn’t on the list, and only then', async () => {
+    const { session, server, google, store } = setup();
+    expect((await session.requestAccess()).ok).toBe(false);
+    google.next = { ok: true, idToken: 'stranger' };
+    expect(await session.signInWithGoogle()).toEqual({
+      ok: true,
+      value: { kind: 'notAllowed', email: 'yabanci@gmail.com', requested: false },
+    });
+    expect(store.token).toBeNull();
+    expect(await session.requestAccess()).toEqual({ ok: true, value: null });
+    expect(server.accessRequests).toEqual(['stranger']);
   });
 
   it('restores a stored session on startup', async () => {
@@ -141,7 +180,7 @@ describe('AuthSession', () => {
 
   it('refreshes shortly before the access token expires', async () => {
     const { session, server } = setup();
-    await session.signIn({ username: 'omer', password: 'right password' });
+    await session.signInWithGoogle();
     server.now += 13 * 60_000; // 2 minutes left: still fine
     expect(await session.accessToken()).toEqual({ ok: true, value: 'access-1' });
     server.now += 90_000; // 30 seconds left: refresh now
@@ -175,7 +214,7 @@ describe('AuthSession', () => {
 
   it('signs out on the server and forgets the token', async () => {
     const { session, server, store } = setup();
-    await session.signIn({ username: 'omer', password: 'right password' });
+    await session.signInWithGoogle();
     let ended = 0;
     session.onSessionEnded(() => ended++);
     await session.signOut();

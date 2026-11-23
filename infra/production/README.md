@@ -49,6 +49,7 @@ Fill in `.env`:
 - `POSTGRES_PASSWORD`: the output of `openssl rand -hex 32`. It goes into the database URL, where base64's `/` and `+` would break it.
 - `LIVEKIT_API_SECRET`: the output of `openssl rand -base64 32`.
 - `AUTH_SIGNING_KEY`: generate it as shown below, and paste it in quotes.
+- `GOOGLE_CLIENT_ID`: the client id of the app's Google OAuth client (section 5).
 - `RESTIC_PASSWORD`: the output of `openssl rand -base64 32`. It encrypts the backups; **keep a copy in your password manager**, because without it the backups can't be read. Leave `RESTIC_REPOSITORY=/backups` for now (see Backups below).
 
 To generate the signing key, already in the one-line form `.env` needs:
@@ -72,25 +73,35 @@ curl https://$(grep HASBIHAL_HOST .env | cut -d= -f2)/health
 ## 4. The first admin (A52)
 
 ```bash
-docker compose exec server node src/cli/create-admin-invite.ts
+docker compose exec server node src/cli/allow-email.ts you@gmail.com --admin
 ```
 
-It prints a single-use `hasbihal://invite/…` link. Open it on your computer with the Hasbihal app installed, or paste the token on the sign-up screen. From then on, invite the family from within the app.
+Then sign in with Google in the app, as that address. From then on, add the family's addresses on the admin page (A25). The same command gets a lost last admin back in.
+
+Members made before Google sign-in (version 0.4 and older) get their address once, after which their first Google sign-in links their account:
+
+```bash
+docker compose exec server node src/cli/set-email.ts <username> <their gmail>
+```
 
 ## 5. The desktop app for this server
 
 The server address is built into the app (A30), so the installers are made for this server, by GitHub Actions (`.github/workflows/release.yml`):
 
-1. In the repository's **Settings → Secrets and variables → Actions**:
+1. Make the Google OAuth client people sign in with (A25), once, at console.cloud.google.com:
+   - create a project, then under **APIs & Services → OAuth consent screen** choose External, name the app Hasbihal, add only the `openid`, `email`, and `profile` scopes, and **publish** it (these scopes need no review by Google);
+   - under **Credentials**, create an **OAuth client ID** of type **Desktop app**. Put its client id in the server's `.env` as `GOOGLE_CLIENT_ID`. Google treats a desktop app's client secret as public: it ships inside the app.
+2. In the repository's **Settings → Secrets and variables → Actions**:
    - add the **variable** `HASBIHAL_SERVER_URL`, e.g. `https://hasbihal.duckdns.org`;
+   - add the **variables** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, from the OAuth client above;
    - add the **secrets** `MAC_CERT_P12` (the "Hasbihal Self-Signed" certificate and key, exported as .p12, then `base64 -i cert.p12 | pbcopy`) and `MAC_CERT_PASSWORD` (A50).
-2. Tag the version from `apps/desktop/package.json` and push it:
+3. Tag the version from `apps/desktop/package.json` and push it:
 
    ```bash
    git tag v1.0.0 && git push origin v1.0.0
    ```
 
-3. The workflow builds the macOS `.dmg` and the Windows `.exe` and puts them on a **draft release**, with the install guide (`docs/KURULUM.md`) as its notes. Try both installers, then publish it and send the family the link.
+4. The workflow builds the macOS `.dmg` and the Windows `.exe` and puts them on a **draft release**, with the install guide (`docs/KURULUM.md`) as its notes. Try both installers, then publish it and send the family the link.
 
 On GitHub's free plan for private repositories, a release uses about 150 of the 2,000 monthly minutes, because macOS minutes count ten times.
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { GatewayCloseCode, MemberList, SignedIn } from '@hasbihal/protocol';
-import { PASSWORD, startHarness, type Harness } from '../../test/harness.ts';
+import { GatewayCloseCode, GoogleSignInResult, MemberList } from '@hasbihal/protocol';
+import { startHarness, type Harness } from '../../test/harness.ts';
 import { logBounds } from './events.ts';
 
 let h: Harness;
@@ -153,15 +153,9 @@ describe('ending sessions', () => {
 
   it('closes connections of a revoked device, and only those', async () => {
     const member = await signUp();
-    const other = SignedIn.parse(
-      (
-        await h.app.inject({
-          method: 'POST',
-          url: '/auth/sign-in',
-          payload: { username: member.user.username, password: PASSWORD, deviceName: 'PC' },
-        })
-      ).json(),
-    );
+    // The same person signs in on a second computer.
+    const other = GoogleSignInResult.parse((await h.signInWithGoogle(member.account)).json());
+    if (other.status !== 'signed_in') throw new Error('not signed in');
     const mac = await connect(member.tokens.accessToken);
     const pc = await connect(other.tokens.accessToken);
     await mac.waitFor('welcome');

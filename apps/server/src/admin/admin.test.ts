@@ -1,13 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  AccessList,
+  AllowedEmail,
   GatewayCloseCode,
-  InviteList,
+  GoogleSignInResult,
   MemberList,
-  OneTimeLink,
   User,
   type SignedIn,
 } from '@hasbihal/protocol';
-import { PASSWORD, startHarness, type Harness } from '../../test/harness.ts';
+import { startHarness, type Harness } from '../../test/harness.ts';
 
 let h: Harness;
 let admin: SignedIn;
@@ -20,27 +21,86 @@ afterAll(async () => {
 });
 
 const as = (who: SignedIn) => who.tokens.accessToken;
+const accessList = async () =>
+  AccessList.parse((await h.request('GET', '/admin/access', as(admin))).json());
 
-describe('admin page (A44)', () => {
-  it('lists pending invites and revokes them', async () => {
-    const link = OneTimeLink.parse(
-      (await h.request('POST', '/invites', as(admin), { role: 'member' })).json(),
-    );
-    const listed = InviteList.parse((await h.request('GET', '/admin/invites', as(admin))).json());
-    const invite = listed.invites.find((i) => i.expiresAt === link.expiresAt);
-    if (!invite) throw new Error('invite not listed');
-    expect(invite).toMatchObject({ role: 'member', createdBy: admin.user.id });
+describe('who may join (A25)', () => {
+  it('lets an address in, lowercased, and lists it until its owner signs in', async () => {
+    const account = h.google.account('Zeynep');
+    const res = await h.request('POST', '/admin/allowed-emails', as(admin), {
+      email: `  ${account.email.toUpperCase()} `,
+    });
+    expect(res.statusCode).toBe(201);
+    expect(AllowedEmail.parse(res.json())).toMatchObject({
+      email: account.email,
+      role: 'member',
+      addedBy: admin.user.id,
+    });
+    expect((await accessList()).allowed.map((a) => a.email)).toContain(account.email);
 
-    expect((await h.request('DELETE', `/admin/invites/${invite.id}`, as(admin))).statusCode).toBe(
-      204,
-    );
-    const info = await h.app.inject({ method: 'GET', url: `/auth/invites/${link.token}` });
-    expect(info.statusCode).toBe(404);
+    const signedIn = GoogleSignInResult.parse((await h.signInWithGoogle(account)).json());
+    expect(signedIn.status).toBe('signed_in');
+    const list = await accessList();
+    expect(list.allowed.map((a) => a.email)).not.toContain(account.email);
+    if (signedIn.status === 'signed_in')
+      expect(list.memberEmails[signedIn.user.id]).toBe(account.email);
   });
 
+  it('takes an address off the list', async () => {
+    const account = h.google.account();
+    await h.request('POST', '/admin/allowed-emails', as(admin), { email: account.email });
+    const res = await h.request(
+      'DELETE',
+      `/admin/allowed-emails/${encodeURIComponent(account.email)}`,
+      as(admin),
+    );
+    expect(res.statusCode).toBe(204);
+    const result = GoogleSignInResult.parse((await h.signInWithGoogle(account)).json());
+    expect(result.status).toBe('not_allowed');
+  });
+
+  it('refuses a member’s own address', async () => {
+    const member = await h.signUp();
+    const res = await h.request('POST', '/admin/allowed-emails', as(admin), {
+      email: member.account.email,
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('lists access requests; letting the address in, or dismissing, clears them', async () => {
+    const asking = h.google.account('Kemal');
+    const dismissed = h.google.account('Bilinmeyen');
+    for (const account of [asking, dismissed]) {
+      const res = await h.app.inject({
+        method: 'POST',
+        url: '/auth/access-requests',
+        payload: { idToken: await h.google.idToken(account) },
+      });
+      expect(res.statusCode).toBe(204);
+    }
+    const requested = (await accessList()).requests;
+    expect(requested.find((r) => r.email === asking.email)).toMatchObject({ name: 'Kemal' });
+
+    await h.request('POST', '/admin/allowed-emails', as(admin), { email: asking.email });
+    await h.request(
+      'DELETE',
+      `/admin/access-requests/${encodeURIComponent(dismissed.email)}`,
+      as(admin),
+    );
+    const after = (await accessList()).requests.map((r) => r.email);
+    expect(after).not.toContain(asking.email);
+    expect(after).not.toContain(dismissed.email);
+  });
+});
+
+describe('admin page (A44)', () => {
   it('only lets admins in', async () => {
     const member = await h.signUp();
-    expect((await h.request('GET', '/admin/invites', as(member))).statusCode).toBe(403);
+    expect((await h.request('GET', '/admin/access', as(member))).statusCode).toBe(403);
+    expect(
+      (await h.request('POST', '/admin/allowed-emails', as(member), { email: 'a@gmail.com' }))
+        .statusCode,
+    ).toBe(403);
     expect(
       (await h.request('PUT', `/admin/users/${admin.user.id}/role`, as(member), { role: 'member' }))
         .statusCode,
@@ -67,7 +127,7 @@ describe('admin page (A44)', () => {
     ).toBe(409);
   });
 
-  it('removes a member: signed out at once, can’t sign in, still known for old messages', async () => {
+  it('removes a member: signed out at once, kept out, still known for old messages', async () => {
     const leaving = await h.signUp();
     const client = await h.connect(as(leaving));
     await client.waitFor('welcome');
@@ -77,12 +137,9 @@ describe('admin page (A44)', () => {
     );
     expect(removed.removedAt).not.toBeNull();
     expect(await client.closed).toBe(GatewayCloseCode.unauthorized);
-    const signIn = await h.app.inject({
-      method: 'POST',
-      url: '/auth/sign-in',
-      payload: { username: leaving.user.username, password: PASSWORD, deviceName: 'Test' },
-    });
-    expect(signIn.statusCode).toBe(401);
+    // Their Google account no longer gets in: they're just someone not on the list.
+    const again = GoogleSignInResult.parse((await h.signInWithGoogle(leaving.account)).json());
+    expect(again.status).toBe('not_allowed');
     const members = MemberList.parse((await h.request('GET', '/members', as(admin))).json());
     expect(members.members.find((m) => m.id === leaving.user.id)?.removedAt).toBe(
       removed.removedAt,
@@ -91,5 +148,14 @@ describe('admin page (A44)', () => {
     expect(
       (await h.request('POST', `/admin/users/${admin.user.id}/remove`, as(admin))).statusCode,
     ).toBe(409);
+  });
+
+  it('lets a removed member’s address in again, as a new account', async () => {
+    const leaving = await h.signUp();
+    await h.request('POST', `/admin/users/${leaving.user.id}/remove`, as(admin));
+    await h.request('POST', '/admin/allowed-emails', as(admin), { email: leaving.account.email });
+    const back = GoogleSignInResult.parse((await h.signInWithGoogle(leaving.account)).json());
+    if (back.status !== 'signed_in') throw new Error('not signed in');
+    expect(back.user.id).not.toBe(leaving.user.id);
   });
 });
