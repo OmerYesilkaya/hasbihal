@@ -8,15 +8,15 @@ Each milestone lists its **scope** and its **exit criteria**: what must be true 
 
 Everything below is built and covered by tests. The **exit criteria need real people on real machines**, which code and CI can't stand in for.
 
-| Milestone | Built in    | Still needs                                                                                                                   |
-| --------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| M0        | PRs #1–#4   | — (done)                                                                                                                      |
-| M1        | PRs #5–#12  | The first deployment (a VPS and a hostname), then the owner's test                                                            |
-| M2        | PRs #13–#14 | A call between two computers; DTLN fallback if old PCs need it (T7)                                                           |
-| M3        | PR #15      | Film and game sharing with sound on macOS and Windows; T8 codec policy after the old-PC test                                  |
-| M4        | PRs #16–#19 | A real photo dump; HEIC photos from iPhones show as files                                                                     |
-| M5        | PR #20      | A real reminder at a real time                                                                                                |
-| M6        | PRs #21–#27 | The VPS deployment and B2 storage, the release secrets, and the "10 minutes from invite to hangout" test with a family member |
+| Milestone | Built in    | Still needs                                                                                                                         |
+| --------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | PRs #1–#4   | — (done)                                                                                                                            |
+| M1        | PRs #5–#12  | The first deployment (a VPS and a hostname), then the owner's test                                                                  |
+| M2        | PRs #13–#14 | A call between two computers; DTLN fallback if old PCs need it (T7)                                                                 |
+| M3        | PR #15      | Film and game sharing with sound on macOS and Windows; T8 codec policy after the old-PC test                                        |
+| M4        | PRs #16–#19 | A real photo dump; HEIC photos from iPhones show as files                                                                           |
+| M5        | PR #20      | A real reminder at a real time                                                                                                      |
+| M6        | PRs #21–#27 | The VPS deployment and B2 storage, the release secrets, and the "10 minutes from being let in to hangout" test with a family member |
 
 M6's pieces: the admin page (#21), independent e2e tests (#22), notifications, tray, and startup (#23), backups and restore drills (#24), CI-built installers and the install guide (#25), e2e in CI (#26), and the app icon, empty states, and sidebar texture (#27). The remaining decoration ideas in DECISIONS §5 (tile-border dividers, star-shaped badges) wait for the owner's eye.
 
@@ -47,7 +47,7 @@ Prove the risky parts before building on them, and set up the skeleton everythin
 
 The app becomes useful as a text chat.
 
-- Invites, sign-up, sign-in, long-lived sessions, recovery links (A20, A25; §9).
+- Invites, sign-up, sign-in, long-lived sessions, recovery links (A20, A25; §9). Since replaced by Google sign-in and a list of who may join (A25, revised 2026-11-23).
 - Profile view: display name, avatar upload, initials fallback with 8 colors (A40, A41).
 - Rooms: create, rename, archive, and delete for admins; everyone sees every room (A8, A11, A12).
 - Messages: send, reply, edit ("düzenlendi"), delete ("Bu mesaj silindi."), reactions, @mentions and @everyone, typing indicator (A22).
@@ -125,13 +125,13 @@ The core experience.
 
 - Notification preferences per room, Busy mode, sounds (A28).
 - Tray/menu bar behaviour and launch at startup (A38, A39).
-- The admin page: invites, members, admin rights, rooms (A44).
+- The admin page: who may join (Google addresses and requests), members, admin rights, rooms (A44).
 - The visual identity pass: Ottoman decorative details, the logo, empty states (A45, §5 of DECISIONS).
 - Unsigned installers for macOS and Windows, built by CI, with install instructions for the "Open Anyway" and SmartScreen steps (A30).
 - Production deployment on the VPS: domain, TLS, firewall, LiveKit TURN (§10.1).
 - Nightly encrypted backups and a tested restore (A31).
 
-**Exit criteria:** a fresh family member can go from an invite link to talking in a hangout in under 10 minutes, with nothing but the written instructions. A restore drill brings the system back from backup. After that comes the **v1.0 release**.
+**Exit criteria:** a fresh family member can go from being let in to talking in a hangout in under 10 minutes, with nothing but the written instructions. A restore drill brings the system back from backup. After that comes the **v1.0 release**.
 
 ---
 
