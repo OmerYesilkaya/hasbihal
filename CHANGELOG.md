@@ -4,6 +4,15 @@ Her sürümde neler değişti. Yeni sürüm çıkarken buraya `## <sürüm>` ba�
 sayfasındaki notlar buradan alınır (`.github/workflows/release.yml`). Kurulum için:
 [docs/KURULUM.md](docs/KURULUM.md).
 
+## 0.5.0
+
+- **Google ile giriş:** parola, kullanıcı adı ve davet bağlantısı yok. **Google ile giriş yap**'a
+  bas, hesabını seç, hepsi bu. Adın ve fotoğrafın Google'dan gelir.
+- **Zaten hesabın varsa** değişen bir şey yok: hesabın, mesajların ve adın yerinde. Oturumun
+  açıksa hiçbir şey yapman gerekmez; değilse bir kez Google ile giriş yap.
+- **Yöneticiler** kimlerin katılabileceğini Yönetim → Erişim'de Gmail adresleriyle belirler.
+  Listede olmayan biri **Erişim iste**'ye basınca yöneticilere bildirim gider.
+
 ## 0.4.0
 
 - **Sesler:** sesli sohbete girince ve çıkınca (sen ya da başkası), mikrofonu ya da sesi kapatıp
