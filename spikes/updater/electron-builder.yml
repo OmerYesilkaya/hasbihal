@@ -1,0 +1,25 @@
+appId: com.hasbihal.spike.updater
+productName: Hasbihal Update Spike
+directories:
+  output: release
+files:
+  - src/**
+  - package.json
+mac:
+  # Squirrel.Mac installs from the zip; the dmg is what people download the first time.
+  target:
+    - target: zip
+      arch: [arm64]
+    - target: dmg
+      arch: [arm64]
+  # Same identity and settings as the app (DECISIONS A50): self-signed, not notarized.
+  identity: Hasbihal Self-Signed
+  hardenedRuntime: false
+  minimumSystemVersion: '14.2'
+  extendInfo:
+    NSMicrophoneUsageDescription: The update spike checks that the microphone permission survives an update.
+# A local feed, served by `python3 -m http.server` from release/<version>. The real app would use
+# GitHub Releases or our server; both are the same files.
+publish:
+  provider: generic
+  url: http://127.0.0.1:8765

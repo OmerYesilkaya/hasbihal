@@ -87,3 +87,38 @@ _Fill in after running, then copy the conclusions into DECISIONS.md._
 | S1 LiveKit H.264 profile | Owner's Mac, temporary LiveKit with a codec config | ✅ | By default LiveKit offers H.264 only as Constrained Baseline `42e01f` (plus High `640032`, which comes later in Chrome's offer), so Chrome picks software OpenH264. LiveKit also has Baseline `42001f` and Main `4d001f` built in, but they need an exact `fmtp_line` in `room.enabled_codecs`. A plain `mime: video/h264` entry must stay as well, otherwise the server swaps h264 for VP8 when a track is published. With `video/h264` plus `fmtp_line: level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f` (and 4d001f, 640032), the negotiated codec is `42001f`: **VideoToolbox hardware encoding**, 1660×1078 at 57 fps (and 1920×1080 at 60 from a canvas), ~7.9 Mbps, `limit=none`. The subscriber in the same run receives full size at 57–60 fps with **hardware decoding**. `42001f` is also hardware-encoded on the NVIDIA PC (probe), and a PC without a hardware encoder still sends it through OpenH264 in software. |
 | S1 signing | Owner's Mac | ✅ Pass | Signed with the "Hasbihal Self-Signed" certificate (A50). Designated requirement = bundle ID + certificate leaf, without the cdhash. After removing the stale entries once and granting again, a rebuild that changed the cdhash (`129b9ac8…` → `51033639…`) kept the screen, system audio, and microphone permissions without a prompt. |
 | S2 auto | Owner's Mac (M-series) | ✅ (owner listened: sounds good) | Automatic mode `--only=s2`: Turkish speech (macOS voice Yelda) with pauses, mixed with (a) fan (pink noise) + keyboard clicks, or (b) a TV voice 14 dB below the speaker, played through each model in a real-time AudioContext. The known clean speech gives SI-SDR and voice-level numbers. **DeepFilterNet3:** ready in 90–210 ms with no network; median load **0.19** of real time (p95 0.21), no overload; latency **70.7 ms** (30 model + 10.7 reframing + 30 pause-gate lookahead). Fan + keyboard: noise in true pauses −42 → −58 dBFS (−16 dB RMS), click peaks −22 → −45 dBFS (p90) and −15 → −39 dBFS (max); SI-SDR 23.8 → 28.1 dB; voice level −0.1 dB. `minSpeechFrames: 3` removes the fan from most pause frames (median frame peak −70 dBFS), +10 ms latency. On clean speech: SI-SDR 21.4 dB, voice −0.3 dB. **A TV voice is kept** (pause level unchanged, SI-SDR 14.4 → 12.0): a noise suppressor removes noise, not other people. **DTLN:** latency 24 ms, about half the suppression (−8 dB RMS, −13 dB click peaks), 16 kHz bandwidth. |
+
+## `updater/`: S3 (issue #50)
+
+Does `electron-updater` update the app in place on macOS when it's signed with our self-signed certificate (A50) and not notarized? A minimal Electron app with **Check**, **Download**, **Update**, **Ask for microphone**, and **Move to Applications** buttons. It logs its version, bundle path, translocation, quarantine mark, designated requirement, cdhash, and microphone permission to `~/Library/Logs/@hasbihal/spike-updater/spike.log`. Same Electron, electron-builder, and signing settings as `apps/desktop` (but arm64 only, without fuses or asar integrity).
+
+### Run it
+
+```bash
+pnpm --filter @hasbihal/spike-updater build 0.0.1
+pnpm --filter @hasbihal/spike-updater build 0.0.2
+cp "spikes/updater/release/0.0.1/Hasbihal Update Spike-0.0.1-arm64-mac.zip.blockmap" spikes/updater/release/0.0.2/
+# nginx, because differential downloads need HTTP range requests (Python's http.server has none)
+docker run --rm --name spike-feed -p 127.0.0.1:8765:80 -v "$PWD/spikes/updater/release/0.0.2:/usr/share/nginx/html:ro" nginx:alpine
+```
+
+The app's feed is `http://127.0.0.1:8765` (a `generic` provider; GitHub Releases or our server would serve the same `latest-mac.yml`, zip, and blockmaps). To install v0.0.1 the way a user does, mark the dmg as downloaded by a browser, then drag the app to /Applications **in Finder**:
+
+```bash
+xattr -w com.apple.quarantine "0083;$(printf %x $(date +%s));Safari;$(uuidgen)" "spikes/updater/release/0.0.1/Hasbihal Update Spike-0.0.1-arm64.dmg"
+```
+
+`open -n "<app>" --args --auto` checks, downloads, and installs without clicks.
+
+### Findings
+
+| Run | Machine | Result | Notes |
+|-----|---------|--------|-------|
+| Copied in place, no quarantine | Owner's Mac (macOS 26.6.2, Apple Silicon) | ✅ | `--auto`: 0.0.1 found 0.0.2, downloaded the zip, Squirrel.Mac accepted the self-signed bundle, replaced the app, and relaunched 0.0.2 about 15 s later, with no prompt. Squirrel.Mac checks the new bundle against the running app's designated requirement, `identifier "com.hasbihal.spike.updater" and certificate leaf = H"64e156f7…"`, which the same certificate satisfies; it doesn't need a Developer ID or notarization. |
+| Quarantined, copied with `ditto` (not Finder) | Owner's Mac | ❌ (expected) | After **Open Anyway**, macOS ran the app from a read-only random folder (App Translocation), and Squirrel.Mac refused: *Cannot update while running on a read-only volume*. A quarantined app is translocated unless the user moved it in Finder, so the same happens to anyone running the app from the dmg or from Downloads. Fix in the app: if `!app.isInApplicationsFolder()`, offer `app.moveToApplicationsFolder()` (not yet tried, because the Finder run below didn't need it). |
+| Quarantined dmg → dragged to /Applications in Finder | Owner's Mac | ✅ | The real install path. **Open Anyway** once (as today). Not translocated. Microphone granted in 0.0.1. **Update**: 0.0.2 installed in place and relaunched by itself; the updated app has **no quarantine mark** (so Gatekeeper doesn't check it again, and there's no prompt), a new cdhash (`f686e616…` → `df9f6a1d…`), and the **microphone permission survived** (A50). `spctl --assess` still says *rejected* (not notarized), which doesn't matter for an app without quarantine. A bug in the spike (logging to the closed window) crashed the quit; ending the old process let ShipIt finish. |
+| Differential download | Owner's Mac | ✅ (from the 2nd update on) | Feed served by nginx (`nginx:alpine` in Docker), which supports multi-range requests. **The first update after a dmg install is always full** (114 MB): on macOS electron-updater diffs against the zip it kept from the previous update (`~/Library/Caches/<app>-updater/update.zip`), and a dmg install has none. With Python's `http.server` (no HTTP ranges) it also falls back to a full download. **0.0.2 → 0.0.3**: it fetched both blockmaps, found 125 changed blocks, downloaded **2.9 MB of 114 MB (3 %)** in one `206` multi-range response, rebuilt the zip, checked its sha512, and Squirrel.Mac installed and relaunched it (microphone still granted). The two versions differ only in the version number; the 3 % is the signature, asar, and Info.plist. A real code change costs a little more, and an Electron upgrade about a full download. GitHub Releases as the feed not tried. |
+
+**Not tested here, left for the real app (issue for the implementation):** a universal build (the app ships `universal`, so the zip must be universal too), the real app's fuses and asar integrity, GitHub Releases as the feed (including its range support), and Windows. A macOS user who isn't an admin (who can't write to /Applications) doesn't matter: every family user is an admin.
+
+**Outcome:** A30 and A33 revised (in-app updates from published GitHub Releases).

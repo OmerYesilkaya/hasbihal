@@ -194,7 +194,15 @@ The embedded Chromium will age (A30), so the renderer is locked down from day on
 ### 4.4 Packaging (A30)
 
 - **electron-builder** produces an unsigned `.dmg` (universal: Apple Silicon and Intel, signed with the self-signed certificate of DECISIONS A50, not notarized) and an NSIS `.exe` installer.
-- There is no auto-updater. The update screen (A33) links to the download page.
+- Alongside the `.dmg`, a universal `.zip` for updates on macOS, and the update feeds (`latest-mac.yml`, `latest.yml`) and blockmaps on the same GitHub Release.
+
+### 4.5 Updates (A30, A33)
+
+- **electron-updater** reads the published GitHub Releases of the repository. Drafts are invisible to it, so nothing reaches anyone until the owner publishes a release.
+- The main process checks at startup and every few hours. When a newer version exists, the renderer shows a banner with an **Update** button: download, install, restart. Nothing installs without the user's click, except that a downloaded update installs when the app quits.
+- **macOS:** Squirrel.Mac installs the update after checking that the new bundle satisfies the running app's designated requirement (bundle ID + the A50 certificate), so no Developer ID or notarization is needed (spike S3). An app that runs from the dmg or Downloads is translocated by macOS and can't update itself: the app checks `app.isInApplicationsFolder()` and offers to move itself there (`app.moveToApplicationsFolder()`).
+- **Differential downloads:** after the first update (always a full download on macOS), only the changed blocks are downloaded, a few MB instead of ~115 MB (spike S3).
+- **Required updates** are the A33 check: the server's minimum supported version. Its screen offers the same **Update** button.
 - Builds run in CI on macOS and Windows runners (§9).
 
 ---
@@ -204,7 +212,7 @@ The embedded Chromium will age (A30), so the renderer is locked down from day on
 ### 5.1 Connection
 
 1. The client opens `wss://<host>/ws` and sends `hello { accessToken, clientVersion, protocolVersion, lastSeq? }`.
-2. The server checks the token and the versions. If the client is too old, it replies `upgrade_required { minVersion, downloadUrl }` and closes the connection (A33).
+2. The server checks the protocol version first. If it doesn't support it, it replies `upgrade_required { minProtocolVersion, maxProtocolVersion }` and closes the connection (A33); the app then offers to update itself (§4.5).
 3. Otherwise it replies `welcome { seq, me, … }`, then either replays missed events (§5.3) or tells the client to resync.
 4. Heartbeats run every 20 s. The client reconnects with jittered exponential backoff.
 
@@ -340,7 +348,7 @@ One VPS, located close to Turkey: **4 vCPU, 8 GB RAM, ≥160 GB disk, 1 Gbps** w
 GitHub Actions:
 
 - On every push: lint, type-check, and unit plus integration tests.
-- On a tag: build the `.dmg` (macOS runner) and `.exe` (Windows runner) and attach them to a GitHub Release, which is the download page linked by A33.
+- On a tag: build the `.dmg` (macOS runner) and `.exe` (Windows runner) and attach them, with the `.zip`, update feeds, and blockmaps, to a draft GitHub Release. Publishing it makes it the download page and the update every app picks up (§4.5).
 - The server image is built and pushed to the GitHub Container Registry. Deployment is `docker compose pull && up -d` on the VPS.
 
 ---
