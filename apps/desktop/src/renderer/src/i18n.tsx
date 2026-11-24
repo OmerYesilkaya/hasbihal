@@ -30,6 +30,13 @@ function formatsFor(locale: Locale) {
       month: 'short',
       timeZone: TIME_ZONE,
     }),
+    shortDate: new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      timeZone: TIME_ZONE,
+    }),
+    list: new Intl.ListFormat(locale, { type: 'conjunction' }),
+    locale,
   };
 }
 
@@ -112,18 +119,42 @@ const keyFormat = new Intl.DateTimeFormat('en-CA', { dateStyle: 'short', timeZon
 /** A key that is equal for two timestamps on the same Istanbul day. */
 export const dayKey = (iso: string) => keyFormat.format(new Date(iso));
 
+/** A calendar page's parts, in Istanbul time: { month: 'ARA', day: '1', weekday: 'Sal' }. */
+export function formatDateParts(iso: string): { month: string; day: string; weekday: string } {
+  const parts = formats.weekday.formatToParts(new Date(iso));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value.replace(/\.$/, '') ?? '';
+  return {
+    month: toUpper(part('month')),
+    day: part('day'),
+    weekday: part('weekday'),
+  };
+}
+
+/** Upper case by the language's rules ("Bugün" → "BUGÜN", with the dotted İ in Turkish). */
+export const toUpper = (text: string) => text.toLocaleUpperCase(formats.locale);
+
+/** "1 Ara". */
+export const formatShortDate = (iso: string) => formats.shortDate.format(new Date(iso));
+
+/** "Ahmet, Zeynep ve Elif", in the language in use. */
+export const formatList = (items: string[]) => formats.list.format(items);
+
+/** Whether a time falls on today, or tomorrow, in Istanbul. */
+export function relativeDay(iso: string): 'today' | 'tomorrow' | null {
+  const key = dayKey(iso);
+  const now = Date.now();
+  if (key === dayKey(new Date(now).toISOString())) return 'today';
+  if (key === dayKey(new Date(now + 86_400_000).toISOString())) return 'tomorrow';
+  return null;
+}
+
 /**
  * When an event happens, as people say it: "Bugün 09:00", "Yarın 09:00", "Pzt 23 Kas 09:00".
  * `today` and `tomorrow` are the translated words.
  */
 export function formatWhen(iso: string, words: { today: string; tomorrow: string }): string {
-  const key = dayKey(iso);
-  const now = Date.now();
-  const day =
-    key === dayKey(new Date(now).toISOString())
-      ? words.today
-      : key === dayKey(new Date(now + 86_400_000).toISOString())
-        ? words.tomorrow
-        : formats.weekday.format(new Date(iso));
+  const relative = relativeDay(iso);
+  const day = relative ? words[relative] : formats.weekday.format(new Date(iso));
   return `${day} ${formatTime(iso)}`;
 }

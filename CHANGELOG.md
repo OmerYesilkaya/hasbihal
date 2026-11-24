@@ -4,6 +4,22 @@ Her sürümde neler değişti. Yeni sürüm çıkarken buraya `## <sürüm>` ba�
 sayfasındaki notlar buradan alınır (`.github/workflows/release.yml`). Kurulum için:
 [docs/KURULUM.md](docs/KURULUM.md).
 
+## 0.8.0
+
+- **Ekran paylaşımı büyük gelir:** biri ekranını paylaşınca, paylaşım sesli sohbet alanını kendiliğinden
+  doldurur; herkes altta küçük bir şeritte durur. Henüz izlemiyorsan büyük alanda **İzle** düğmesi
+  çıkar.
+- **Sabitle:** bir kameranın ya da paylaşımın üstüne gelip **Sabitle**'ye basarsan o büyük alana geçer.
+  **Sabitlemeyi kaldır** ile geri alırsın. Sabitlemeyi yalnızca sen görürsün.
+- Kendi paylaşımın artık büyümez ve tam ekran olmaz; küçük bir kutu olarak kalır. Büyük alandaki bir
+  kamerayı da çift tıklayıp tam ekran yapabilirsin.
+- **Yeni etkinlikler penceresi:** her etkinlik bir davetiye kartı. Solda takvim yaprağı, altta kimlerin
+  geldiği ve **Geliyorum / Gelemiyorum** düğmeleri. Diğer tarihler kartın üstünde; birine basınca kart
+  o tarihe geçer.
+- Odanın başlığındaki etkinlik düğmesi incelip renklendi: sürüyorsa yeşil, bugünse kırmızı, daha
+  sonraysa altın renk. Davetliysen ve cevap vermediysen yanında küçük bir nokta çıkar.
+- Sesli sohbete girerken çalan ses artık cızırdamıyor.
+
 ## 0.7.0
 
 - **Mahrem odalar:** bir odanın sesli sohbetini belirli kişilere ayırabilirsin. Odanın **⋯**

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { User } from '@hasbihal/protocol';
 import { Avatar } from '../components/Avatar.tsx';
 import { useChat, useChatState, useHangout, useKnocking } from '../chat/context.tsx';
@@ -16,6 +16,8 @@ import {
   Mic,
   MicOff,
   PhoneOff,
+  Pin,
+  PinOff,
   ScreenShare,
   ScreenShareOff,
   Settings,
@@ -53,9 +55,6 @@ export function HangoutPanel({ roomId }: { roomId: string }) {
     if (result.value.delivered) knocking.start(roomId);
     else toastError(t('mahrem.knockNoOne'));
   };
-  // A14: one share can fill the hangout area; by user id.
-  const [focused, setFocused] = useState<string | null>(null);
-
   if (call.roomId !== roomId) {
     return (
       <div className="hangout-bar">
@@ -97,45 +96,132 @@ export function HangoutPanel({ roomId }: { roomId: string }) {
     );
   }
 
-  const focusedShare = call.shares.find((s) => s.userId === focused && s.track);
-  const tiles = call.participants.length + call.shares.length;
+  return <Stage />;
+}
+
+/** A tile on the stage: someone's camera (or avatar), or a screen share. */
+type TileKey = `camera:${string}` | `share:${string}`;
+
+/**
+ * The call's picture (#58). One tile can fill the stage, with everyone else in a strip below:
+ * the tile you pinned, or else the newest share by someone else (not watched yet, it offers to
+ * watch). Your own share never fills it by itself. With neither, everyone shares a grid.
+ */
+function Stage() {
+  const t = useT();
+  const call = useHangout();
+  const state = useChatState();
+  const [pinned, setPinned] = useState<TileKey | null>(null);
+  const keys: TileKey[] = [
+    ...call.shares.map((s): TileKey => `share:${s.userId}`),
+    ...call.participants.map((p): TileKey => `camera:${p.userId}`),
+  ];
+  // Whoever was pinned left (or stopped sharing): unpin, so they don't come back pinned.
+  if (pinned && !keys.includes(pinned)) setPinned(null);
+  const newestShare = call.shares.findLast((s) => !s.isLocal);
+  const main =
+    pinned && keys.includes(pinned)
+      ? pinned
+      : newestShare
+        ? (`share:${newestShare.userId}` as const)
+        : null;
+
+  const tile = (key: TileKey, isMain: boolean) => {
+    const pin = {
+      pinned: key === pinned,
+      onPin: () => {
+        setPinned((current) => (current === key ? null : key));
+      },
+      isMain,
+    };
+    if (key.startsWith('share:')) {
+      const share = call.shares.find((s) => `share:${s.userId}` === key);
+      return share ? (
+        <ShareTile key={key} share={share} member={state.members.get(share.userId)} {...pin} />
+      ) : null;
+    }
+    const participant = call.participants.find((p) => `camera:${p.userId}` === key);
+    return participant ? (
+      <Tile
+        key={key}
+        participant={participant}
+        member={state.members.get(participant.userId)}
+        {...pin}
+      />
+    ) : null;
+  };
+
   return (
-    <section
-      className={focusedShare ? 'stage stage--focused' : 'stage'}
-      aria-label={t('hangout.join')}
-    >
+    <section className="stage" aria-label={t('hangout.join')}>
       {call.status !== 'connected' && (
         <p className="stage__status">
           {call.status === 'reconnecting' ? t('hangout.reconnecting') : t('hangout.connecting')}
         </p>
       )}
-      <div className="stage__grid" data-count={Math.min(tiles, 9)}>
-        {call.shares.map((share) => (
-          <ShareTile
-            key={`share:${share.userId}`}
-            share={share}
-            member={state.members.get(share.userId)}
-            focused={focusedShare === share}
-            onFocus={(on) => {
-              setFocused(on ? share.userId : null);
-            }}
-          />
-        ))}
-        {call.participants.map((p) => (
-          <Tile key={p.userId} participant={p} member={state.members.get(p.userId)} />
-        ))}
+      {/* One container either way: a tile moving between the stage and the strip keeps its
+          element, so its video doesn't restart. */}
+      <div
+        className="stage__grid"
+        data-focus={main ? true : undefined}
+        data-count={Math.min(keys.length, 9)}
+      >
+        {main && tile(main, true)}
+        {keys.filter((k) => k !== main).map((k) => tile(k, false))}
       </div>
       <Controls />
     </section>
   );
 }
 
-function Tile({ participant, member }: { participant: ParticipantView; member: User | undefined }) {
+interface PinProps {
+  pinned: boolean;
+  onPin: () => void;
+  /** Filling the stage. */
+  isMain: boolean;
+}
+
+/** Full screen for one tile; Esc or the system's own controls can leave it too. */
+function useFullscreen(tile: RefObject<HTMLDivElement | null>): [boolean, () => void] {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const follow = () => {
+      setIsFullscreen(document.fullscreenElement === tile.current);
+    };
+    document.addEventListener('fullscreenchange', follow);
+    return () => {
+      document.removeEventListener('fullscreenchange', follow);
+    };
+  }, [tile]);
+  const toggle = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void tile.current?.requestFullscreen();
+  };
+  return [isFullscreen, toggle];
+}
+
+function PinAction({ pinned, onPin }: Pick<PinProps, 'pinned' | 'onPin'>) {
+  const t = useT();
+  return (
+    <button type="button" className="tile__action" aria-pressed={pinned} onClick={onPin}>
+      <Icon icon={pinned ? PinOff : Pin} /> {pinned ? t('hangout.unpin') : t('hangout.pin')}
+    </button>
+  );
+}
+
+function Tile({
+  participant,
+  member,
+  pinned,
+  onPin,
+  isMain,
+}: { participant: ParticipantView; member: User | undefined } & PinProps) {
   const t = useT();
   const { hangout } = useChat();
   const call = useHangout();
+  const tile = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const track = participant.camera;
+  const [isFullscreen, toggleFullscreen] = useFullscreen(tile);
 
   useEffect(() => {
     const el = video.current;
@@ -148,11 +234,19 @@ function Tile({ participant, member }: { participant: ParticipantView; member: U
 
   const name = participant.isLocal ? t('hangout.you') : (member?.displayName ?? '?');
   const volume = call.settings.volumes[participant.userId] ?? 1;
+  // Someone else's camera, big enough to want bigger.
+  const canFullscreen = track !== null && !participant.isLocal && isMain;
   return (
     <div
+      ref={tile}
       className="tile"
+      data-main={isMain ? true : undefined}
       data-speaking={participant.speaking ? true : undefined}
+      data-pinned={pinned ? true : undefined}
       data-testid="tile"
+      onDoubleClick={() => {
+        if (canFullscreen) toggleFullscreen();
+      }}
     >
       {track ? (
         <video
@@ -166,10 +260,19 @@ function Tile({ participant, member }: { participant: ParticipantView; member: U
         member && <Avatar user={member} large />
       )}
       <div className="tile__label">
+        {pinned && <Icon icon={Pin} />}
         {participant.micMuted && (
           <Icon icon={MicOff} label={t('hangout.muted')} data-testid="tile-muted" />
         )}
         <span>{name}</span>
+      </div>
+      <div className="tile__actions">
+        <PinAction pinned={pinned} onPin={onPin} />
+        {canFullscreen && (
+          <button type="button" className="tile__action" onClick={toggleFullscreen}>
+            {isFullscreen ? t('share.exitFullscreen') : t('share.fullscreen')}
+          </button>
+        )}
       </div>
       {!participant.isLocal && (
         // A29: a volume per person, remembered.
@@ -189,40 +292,25 @@ function Tile({ participant, member }: { participant: ParticipantView; member: U
   );
 }
 
-/** A screen share's tile (A14): watch it, enlarge it, take it full screen, set its sound. */
+/**
+ * A screen share's tile (A14): watch it, pin it, take it full screen, set its sound. Your own
+ * is only a reminder that you're sharing (#58): never full screen, never enlarged by itself.
+ */
 function ShareTile({
   share,
   member,
-  focused,
-  onFocus,
-}: {
-  share: ShareView;
-  member: User | undefined;
-  focused: boolean;
-  onFocus: (on: boolean) => void;
-}) {
+  pinned,
+  onPin,
+  isMain,
+}: { share: ShareView; member: User | undefined } & PinProps) {
   const t = useT();
   const { hangout } = useChat();
   const call = useHangout();
   const tile = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const { track } = share;
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  // Esc, or the system's own controls, can leave full screen too: follow the document.
-  useEffect(() => {
-    const follow = () => {
-      setIsFullscreen(document.fullscreenElement === tile.current);
-    };
-    document.addEventListener('fullscreenchange', follow);
-    return () => {
-      document.removeEventListener('fullscreenchange', follow);
-    };
-  }, []);
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void tile.current?.requestFullscreen();
-  };
+  const [isFullscreen, toggleFullscreen] = useFullscreen(tile);
+  const canFullscreen = track !== null && !share.isLocal;
 
   useEffect(() => {
     const el = video.current;
@@ -240,11 +328,12 @@ function ShareTile({
     <div
       ref={tile}
       className="tile tile--share"
-      data-focused={focused ? true : undefined}
+      data-main={isMain ? true : undefined}
+      data-pinned={pinned ? true : undefined}
       data-testid="share-tile"
       data-fullscreen={isFullscreen ? true : undefined}
       onDoubleClick={() => {
-        if (track) toggleFullscreen();
+        if (canFullscreen) toggleFullscreen();
       }}
     >
       {track ? (
@@ -264,36 +353,28 @@ function ShareTile({
         </div>
       )}
       <div className="tile__label">
+        {pinned && <Icon icon={Pin} />}
         <span>{label}</span>
       </div>
-      {track && (
-        <div className="tile__actions">
+      <div className="tile__actions">
+        <PinAction pinned={pinned} onPin={onPin} />
+        {canFullscreen && (
+          <button type="button" className="tile__action" onClick={toggleFullscreen}>
+            {isFullscreen ? t('share.exitFullscreen') : t('share.fullscreen')}
+          </button>
+        )}
+        {track && !share.isLocal && (
           <button
             type="button"
             className="tile__action"
             onClick={() => {
-              onFocus(!focused);
+              hangout.watch(share.userId, false);
             }}
           >
-            {focused ? t('share.shrink') : t('share.enlarge')}
+            {t('share.stopWatching')}
           </button>
-          <button type="button" className="tile__action" onClick={toggleFullscreen}>
-            {isFullscreen ? t('share.exitFullscreen') : t('share.fullscreen')}
-          </button>
-          {!share.isLocal && (
-            <button
-              type="button"
-              className="tile__action"
-              onClick={() => {
-                onFocus(false);
-                hangout.watch(share.userId, false);
-              }}
-            >
-              {t('share.stopWatching')}
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
       {track && !share.isLocal && share.hasAudio && (
         <Slider
           className="tile__volume"

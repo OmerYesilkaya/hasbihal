@@ -30,7 +30,7 @@ export interface ParticipantView {
   camera: VideoTrack | null;
 }
 
-/** A screen share (A14): one tile each; viewers choose which ones to watch. */
+/** A screen share (A14): one tile each; viewers choose which ones to watch. Oldest first. */
 export interface ShareView {
   userId: string;
   isLocal: boolean;
@@ -146,6 +146,9 @@ export class HangoutSession {
   #screen: { video: LocalVideoTrack; audio: LocalAudioTrack | null } | null = null;
   /** Whose shares this viewer watches (A14); the rest aren't downloaded at all. */
   readonly #watching = new Set<string>();
+  /** When each share was first seen (a running count), so the newest one can fill the stage. */
+  readonly #shareOrder = new Map<string, number>();
+  #shareCount = 0;
   /** Remote audio elements, by track sid. */
   readonly #audioElements = new Map<string, HTMLMediaElement[]>();
 
@@ -301,13 +304,15 @@ export class HangoutSession {
     if (this.#room !== room) return; // left while connecting
     this.#set({ status: 'connected' });
     stopRing(); // whoever called us here, we're here now
-    playSound('joined');
     for (const participant of room.remoteParticipants.values())
       this.#syncSubscriptions(participant);
     this.#startSpeakingCheck();
     this.#refresh(); // show the call at once; the mic can take a moment to load
     await this.#openMic();
     this.#refresh();
+    // Only now: loading noise suppression starves the speakers for most of a second, which made
+    // a chime played on connecting stutter. Once the mic is up, it also says "they hear you".
+    if (this.#room === room) playSound('joined');
   }
 
   async leave(): Promise<void> {
@@ -321,6 +326,7 @@ export class HangoutSession {
     this.#camera = null;
     this.#stopScreenTracks();
     this.#watching.clear();
+    this.#shareOrder.clear();
     for (const elements of this.#audioElements.values()) for (const el of elements) el.remove();
     this.#audioElements.clear();
     if (room) {
@@ -644,6 +650,13 @@ export class HangoutSession {
         watching,
       });
     }
+    for (const id of this.#shareOrder.keys())
+      if (!shares.some((share) => share.userId === id)) this.#shareOrder.delete(id);
+    for (const share of shares)
+      if (!this.#shareOrder.has(share.userId))
+        this.#shareOrder.set(share.userId, ++this.#shareCount);
+    const order = (share: ShareView) => this.#shareOrder.get(share.userId) ?? 0;
+    shares.sort((a, b) => order(a) - order(b));
     this.#set({
       participants: [
         view(room.localParticipant, true),

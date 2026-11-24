@@ -9,37 +9,45 @@ test('plans a weekly event: create, RSVP, skip one (A15, A16)', async ({ desktop
   const dialog = page.getByTestId('events-dialog');
   await expect(dialog).toContainText('Önümüzdeki dört haftada etkinlik yok.');
 
-  await dialog.getByRole('button', { name: 'Etkinlik ekle' }).click();
+  await dialog.getByRole('button', { name: 'Yeni etkinlik' }).click();
   await dialog.getByLabel('Başlık').fill('Ders');
   await dialog.getByLabel('Açıklama').fill('Matematik, 5. ünite');
-  await dialog.getByRole('combobox', { name: 'Tekrar' }).click();
-  await page.getByRole('option', { name: 'Her hafta' }).click();
-  await dialog.getByLabel('Ece Test').check();
+  await dialog.getByRole('button', { name: 'Her hafta' }).click();
+  await dialog.getByRole('button', { name: 'Ece Test' }).click();
+  await snap(page, '16-event-form');
   await dialog.getByRole('button', { name: 'Kaydet' }).click();
 
-  // Only the next time shows, saying how it repeats (#40); the rest of the four weeks open on
-  // request.
-  const occurrences = dialog.getByTestId('occurrence');
-  await expect(occurrences).toHaveCount(1);
-  await expect(occurrences.first()).toContainText('Ders');
-  await expect(dialog.getByTestId('event-repeat')).toContainText('Her hafta');
-  await dialog.getByRole('button', { name: /sonraki tarih/ }).click();
-  expect(await occurrences.count()).toBeGreaterThanOrEqual(4);
+  // One card per event, at its next date, saying how it repeats (#40); its other dates in the
+  // four weeks are pills on the card.
+  const cards = dialog.getByTestId('event-card');
+  await expect(cards).toHaveCount(1);
+  const card = cards.first();
+  await expect(card).toContainText('Ders');
+  await expect(card.getByTestId('event-repeat')).toContainText('Her hafta');
+  const dates = card.getByTestId('event-date');
+  expect(await dates.count()).toBeGreaterThanOrEqual(4);
+  await expect(dates.first()).toHaveAttribute('aria-pressed', 'true');
 
-  await occurrences.first().getByRole('button', { name: 'Geliyorum' }).click();
-  await expect(occurrences.first().getByRole('button', { name: 'Geliyorum' })).toHaveAttribute(
+  await card.getByRole('button', { name: 'Geliyorum' }).click();
+  await expect(card.getByRole('button', { name: 'Geliyorum' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(occurrences.first().getByTestId('rsvp-coming')).toHaveText('Emre Test');
+  await expect(card.getByTestId('rsvp-coming')).toHaveText('Emre Test geliyor');
 
-  const second = occurrences.nth(1);
-  await second.getByRole('button', { name: 'Etkinliği yönet' }).click();
+  // The second date: the card switches to it, and it can be skipped on its own.
+  await dates.nth(1).click();
+  await expect(card.getByRole('button', { name: 'Geliyorum' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  await card.getByRole('button', { name: 'Etkinliği yönet' }).click();
   await page.getByRole('menuitem', { name: 'Bu seferlik atla' }).click();
-  await expect(second).toHaveAttribute('data-skipped', 'true');
-  await expect(second).toContainText('yapılmayacak');
+  await expect(card).toHaveAttribute('data-skipped', 'true');
+  await expect(card).toContainText('Bu tarih atlandı');
+  await expect(dates.nth(1)).toHaveAttribute('data-skipped', 'true');
   await snap(page, '17-events');
 
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('event-chip')).toContainText(/Ders · (Bugün|Yarın) \d\d:00/);
+  await expect(page.getByTestId('event-chip')).toContainText(/(Bugün|Yarın) \d\d:00\s*Ders/);
 });

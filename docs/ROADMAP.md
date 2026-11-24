@@ -91,7 +91,7 @@ The core experience.
 ## M3: Screen sharing
 
 - Share a screen or window at up to 1080p60, with system audio on macOS and Windows (A14), using what S1 proved.
-- Several simultaneous shares, each in its own grid tile. Viewers pick what to watch, and can enlarge it to fill the hangout area.
+- Several simultaneous shares, each in its own tile. Viewers pick what to watch. The newest share by someone else fills the hangout area by itself, with people in a strip below; anyone's camera or share can be pinned there instead (#58). Your own share is never enlarged.
 - A "CANLI" (live) indicator in the sidebar and member list.
 - Quality presets: motion (games, video) and detail (text, code).
 

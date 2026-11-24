@@ -2375,29 +2375,89 @@ input::-webkit-calendar-picker-indicator:hover {
   border-radius: 0;
 }
 
-/* One share enlarged (A14): it fills the hangout area, everyone else in a strip below. */
-.stage--focused .stage__grid {
+/*
+ * One tile fills the stage (#58): the pinned one, or the newest share; everyone else in a strip
+ * below it, wrapping (and scrolling) if there are many.
+ */
+.stage__grid[data-focus] {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
   justify-content: center;
+  gap: 8px;
+  overflow-y: auto;
 }
 
-.stage--focused .tile[data-focused] {
+.stage__grid[data-focus] > .tile[data-main] {
   flex: 0 0 100%;
-  height: calc(100% - 120px);
+  height: calc(100% - 104px);
+  min-height: 160px;
 }
 
-.stage--focused .tile:not([data-focused]) {
-  flex: 0 0 180px;
-  height: 110px;
+/* A camera this big shows the whole picture, not a crop of it. */
+.stage__grid[data-focus] > .tile[data-main] .tile__video {
+  object-fit: contain;
+  background: #1c1512;
+}
+
+.stage__grid[data-focus] > .tile:not([data-main]) {
+  flex: 0 0 160px;
+  height: 96px;
   min-height: 0;
 }
 
-.stage--focused .tile:not([data-focused]) .avatar--large {
-  width: 48px;
-  height: 48px;
-  font-size: 18px;
+.stage__grid[data-focus] > .tile:not([data-main]) .avatar--large {
+  width: 44px;
+  height: 44px;
+  font-size: 16px;
+}
+
+.stage__grid[data-focus] > .tile:not([data-main]) .tile__label {
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  font-size: 11px;
+}
+
+.stage__grid[data-focus] > .tile:not([data-main]) .tile__label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage__grid[data-focus] > .tile:not([data-main]) .tile__actions {
+  top: 6px;
+  right: 6px;
+}
+
+/* Too small for a slider; pin the tile to reach it. */
+.stage__grid[data-focus] > .tile:not([data-main]) .tile__volume {
+  display: none;
+}
+
+.stage__grid[data-focus] > .tile:not([data-main]) .tile__watch {
+  gap: 6px;
+}
+
+.stage__grid[data-focus] > .tile:not([data-main]) .tile__watch .button {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.tile__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tile__action svg,
+.tile__label svg {
+  width: 12px;
+  height: 12px;
+}
+
+.tile:fullscreen .tile__video {
+  object-fit: contain;
 }
 
 .member__status .live-badge {
@@ -3043,14 +3103,20 @@ input::-webkit-calendar-picker-indicator:hover {
   margin-left: 6px;
 }
 
+/* The room's next event, in its header: a coloured when, then the title. */
 .event-chip {
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  max-width: 300px;
+  padding: 0 10px 0 3px;
   border: 1px solid var(--hb-border);
-  border-radius: 14px;
-  background: var(--hb-bg);
+  border-radius: 13px;
+  background: var(--hb-members);
   color: var(--hb-text);
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -3059,134 +3125,470 @@ input::-webkit-calendar-picker-indicator:hover {
   border-color: var(--hb-accent);
 }
 
+.event-chip[data-empty] {
+  padding-left: 9px;
+  color: var(--hb-text-secondary);
+}
+
+.event-chip__when {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--hb-mention);
+  color: var(--hb-accent-text);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.event-chip[data-soon] .event-chip__when {
+  background: var(--hb-primary);
+  color: var(--hb-on-primary);
+}
+
 .event-chip[data-running] {
-  border-color: var(--hb-secondary);
-  color: var(--hb-secondary);
-  font-weight: 600;
+  border-color: color-mix(in srgb, var(--hb-secondary) 55%, var(--hb-border));
 }
 
-.events-dialog {
+.event-chip[data-running] .event-chip__when {
+  background: var(--hb-secondary);
+  color: #fff;
+}
+
+.event-chip__live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentcolor;
+  animation: event-chip-live 1.6s ease-in-out infinite;
+}
+
+@keyframes event-chip-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.event-chip__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Invited and not answered yet. */
+.event-chip__ask {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--hb-accent);
+}
+
+/* The events dialog (A15, A16): invitation cards. */
+.modal.events-dialog {
+  display: flex;
+  flex-direction: column;
   width: 620px;
+  max-height: 85vh;
+  overflow: hidden;
+  border: 1px solid var(--hb-border);
+  border-radius: 16px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.3);
 }
 
-.events-dialog__add {
-  flex-direction: row;
-}
-
-.occurrences {
+.events-dialog__header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 16px 12px 24px;
+}
+
+.events-dialog__header > .icon-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.events-dialog__header > .icon-button:first-child {
+  margin-left: -10px;
+}
+
+.events-dialog__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.events-dialog__heading h2 {
   margin: 0;
-  padding: 0;
-  list-style: none;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
-.occurrence {
-  display: grid;
-  grid-template-columns: 120px 1fr auto;
-  gap: 12px;
-  align-items: start;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--hb-border);
+.events-dialog__heading p {
+  margin: 3px 0 0;
+  color: var(--hb-text-secondary);
+  font-size: 12.5px;
 }
 
-.occurrence:last-child {
-  border-bottom: none;
-}
-
-/* One event (#40): its next date, then the later ones on request. */
-.event-group {
+.events-dialog__body {
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid var(--hb-border);
+  gap: 10px;
+  min-height: 0;
+  padding: 4px 16px 18px;
+  overflow: auto;
 }
 
-.event-group:last-child {
-  border-bottom: none;
+.button--small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 7px;
+  font-size: 12.5px;
 }
 
-.event-group__more {
-  align-self: flex-start;
-  /* Under the event's title, past the date column. */
-  margin: -4px 0 10px 136px;
-  font-size: 12px;
+.tag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: 10px;
+  background: var(--hb-mention);
+  color: var(--hb-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.occurrence[data-skipped] .occurrence__when,
-.occurrence[data-skipped] .occurrence__title {
+.tag--warn {
+  background: color-mix(in srgb, var(--hb-primary) 20%, transparent);
+  color: color-mix(in srgb, var(--hb-primary) 45%, var(--hb-text));
+}
+
+.event-card {
+  border: 1px solid var(--hb-border);
+  border-radius: 14px;
+  background: var(--hb-members);
+}
+
+.event-card[data-next]:first-child {
+  border-color: color-mix(in srgb, var(--hb-accent) 55%, var(--hb-border));
+}
+
+.event-card__top {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px 12px 12px 14px;
+}
+
+/* A calendar page: month (or Bugün / Yarın / Şimdi), day, weekday. */
+.event-card__page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--hb-border);
+  border-radius: 10px;
+  background: var(--hb-bg);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.event-card__month {
+  padding: 3px 0;
+  background: var(--hb-primary);
+  color: var(--hb-on-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.event-card[data-running] .event-card__month {
+  background: var(--hb-secondary);
+  color: #fff;
+}
+
+.event-card[data-skipped] .event-card__month {
+  background: var(--hb-chip);
+  color: var(--hb-text-secondary);
+}
+
+.event-card__day {
+  padding: 5px 0 1px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.event-card__weekday {
+  padding-bottom: 5px;
+  color: var(--hb-text-secondary);
+  font-size: 11px;
+}
+
+.event-card__what {
+  min-width: 0;
+}
+
+.event-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.event-card__title > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-card[data-skipped] .event-card__title > span:first-child {
   color: var(--hb-text-secondary);
   text-decoration: line-through;
 }
 
-.occurrence__when {
+.event-card__meta {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  color: var(--hb-text-secondary);
   font-size: 13px;
+  line-height: 20px;
   font-variant-numeric: tabular-nums;
 }
 
-.occurrence__when span {
-  color: var(--hb-text-secondary);
+.event-card__meta svg {
+  width: 13px;
+  height: 13px;
 }
 
-.occurrence__what {
+.event-card__description {
+  margin: 6px 0 0;
+  color: var(--hb-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.event-card__dates {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.occurrence__title {
-  font-weight: 600;
-}
-
-.occurrence__title em,
-.occurrence__invited {
-  color: var(--hb-text-secondary);
-  font-weight: 400;
-}
-
-.occurrence__repeat,
-.occurrence__description,
-.occurrence__rsvps {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 9px;
   color: var(--hb-text-secondary);
   font-size: 12px;
 }
 
-.occurrence__rsvps {
+.event-card__dates > span {
+  margin-right: 2px;
+}
+
+.event-card__date {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--hb-border);
+  border-radius: 11px;
+  background: none;
+  color: var(--hb-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.event-card__date:hover {
+  border-color: var(--hb-accent);
+  color: var(--hb-text);
+}
+
+.event-card__date[aria-pressed='true'] {
+  border-color: var(--hb-accent);
+  background: var(--hb-mention);
+  color: var(--hb-accent-text);
+  font-weight: 600;
+}
+
+.event-card__date[data-skipped] {
+  text-decoration: line-through;
+}
+
+.event-card__extra {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 14px 12px 86px;
+}
+
+.event-card__extra .field__error {
+  margin: 0;
+}
+
+.event-card__move {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.occurrence__move {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.occurrence__actions {
-  display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.chip {
-  padding: 4px 10px;
+.event-card__move .field__input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.event-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 8px 12px 8px 14px;
+  border-top: 1px solid var(--hb-border);
+}
+
+.event-card__who {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--hb-text-secondary);
+  font-size: 12.5px;
+}
+
+.event-card__who > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-card__faces {
+  display: inline-flex;
+  flex: none;
+}
+
+.event-card__faces .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
+  box-shadow: 0 0 0 2px var(--hb-members);
+}
+
+.event-card__faces .avatar + .avatar {
+  margin-left: -6px;
+}
+
+.event-card__note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--hb-text-secondary);
+  font-size: 12.5px;
+}
+
+/* Coming or not: one segmented switch, the same on every card. */
+.rsvp {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
   border: 1px solid var(--hb-border);
-  border-radius: 14px;
-  background: var(--hb-bg);
-  color: var(--hb-text);
+  border-radius: 9px;
+  background: var(--hb-chip);
+}
+
+.rsvp button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--hb-text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 
+.rsvp button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rsvp button:hover {
+  color: var(--hb-text);
+}
+
+.rsvp__yes[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--hb-status-online) 22%, var(--hb-bg));
+  color: var(--hb-status-online);
+}
+
+.rsvp__no[aria-pressed='true'] {
+  background: var(--hb-bg);
+  color: var(--hb-text);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--hb-border);
+  border-radius: 15px;
+  background: none;
+  color: var(--hb-text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: color-mix(in srgb, var(--hb-accent) 60%, var(--hb-border));
+  color: var(--hb-text);
+}
+
 .chip[aria-pressed='true'] {
-  border-color: var(--hb-secondary);
-  background: var(--hb-secondary);
-  color: #fff;
+  border-color: var(--hb-accent);
+  background: var(--hb-mention);
+  color: var(--hb-accent-text);
+  font-weight: 600;
+}
+
+.chip--day {
+  justify-content: center;
+  width: 46px;
+  padding: 0;
+}
+
+.chip--person {
+  padding-left: 4px;
+}
+
+.chip--person .avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
 }
 
 .link--danger {
@@ -3196,7 +3598,33 @@ input::-webkit-calendar-picker-indicator:hover {
 .event-form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  min-height: 0;
+}
+
+.event-form__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 6px 24px 16px;
+  overflow: auto;
+}
+
+.event-form__field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.event-form__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.event-form__field textarea {
+  resize: vertical;
 }
 
 .event-form__row {
@@ -3204,33 +3632,43 @@ input::-webkit-calendar-picker-indicator:hover {
   gap: 10px;
 }
 
-.event-form__row > label {
-  display: flex;
+.event-form__row > * {
   flex: 1;
-  flex-direction: column;
-  gap: 4px;
 }
 
-.event-form__days,
-.event-form__invitees {
+/* Date, time and the dropdowns beside them: one height, whatever the browser's own controls. */
+.event-form__row :is(.field__input, .select) {
+  box-sizing: border-box;
+  height: 40px;
+  padding-block: 0;
+}
+
+.event-form__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 12px;
-  margin: 4px 0 0;
+  gap: 6px;
+  margin: 0;
   padding: 0;
   border: none;
 }
 
-.event-form__invitees .field__hint {
+.event-form__chips legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.event-form__chips .field__hint {
   flex-basis: 100%;
-  margin: 0;
+  margin: 2px 0 0;
 }
 
 .event-form__actions {
   display: flex;
+  flex: none;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 8px;
+  padding: 14px 24px 18px;
+  border-top: 1px solid var(--hb-border);
 }
 
 /* Admin page (A44) */
