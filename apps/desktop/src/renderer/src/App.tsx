@@ -157,8 +157,10 @@ function Shell({ info, user, onSignOut }: ShellProps) {
     if (!notice.notify) return;
     if (notice.sound) {
       if (occasion.kind === 'nudge') ring();
-      else playSound('alert');
+      else playSound(occasion.kind === 'knock' ? 'knock' : 'alert');
     }
+    // A knock is answered from its in-app prompt: no system notification over the room it's for.
+    if (occasion.kind === 'knock' && viewingRoom) return;
     const notification = new Notification(title, { body, silent: true });
     notification.onclick = () => {
       stopRing();

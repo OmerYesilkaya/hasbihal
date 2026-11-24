@@ -2,6 +2,7 @@ import alertUrl from './sounds/alert.mp3';
 import clickUrl from './sounds/click.mp3';
 import errorUrl from './sounds/error.mp3';
 import joinedUrl from './sounds/joined-call.mp3';
+import knockUrl from './sounds/knock.mp3';
 import leftUrl from './sounds/left-call.mp3';
 import ring0Url from './sounds/ring0.mp3';
 import ring1Url from './sounds/ring1.mp3';
@@ -21,6 +22,8 @@ const FILES = {
   joined: joinedUrl,
   /** You, or someone else, left your call. */
   left: leftUrl,
+  /** Someone knocks on a Mahrem room you're on the list of (A55). */
+  knock: knockUrl,
   /** Ringtones, for someone calling you to their call (a nudge); one is chosen in Settings. */
   ring0: ring0Url,
   ring1: ring1Url,
