@@ -1,6 +1,7 @@
 import { sql, type Kysely, type Selectable } from 'kysely';
 import { z } from 'zod';
 import type { Occurrence, RoomEvent } from '@hasbihal/protocol';
+import { mahremList } from '../chat/model.ts';
 import type { Database, EventsTable } from '../db/schema.ts';
 import type { GatewayHub } from '../gateway/hub.ts';
 import { enqueueJob, type JobHandler } from '../jobs/queue.ts';
@@ -170,7 +171,9 @@ export function eventReminderJob(deps: { db: Kysely<Database>; hub: GatewayHub }
     if (exception?.kind !== 'skipped') {
       const startsAt = (exception?.new_starts_at ?? start).toISOString();
       const invitees = (await inviteesOf(db, [event.id])).get(event.id) ?? [];
-      for (const userId of invitees)
+      // A55: the room may have become Mahrem since; remind only those who may join.
+      const list = await mahremList(db, event.room_id);
+      for (const userId of invitees.filter((id) => !list.length || list.includes(id)))
         hub.sendToUser(userId, {
           type: 'event_reminder',
           eventId: event.id,

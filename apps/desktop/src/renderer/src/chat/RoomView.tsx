@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import { roomMessages } from '@hasbihal/core';
 import type { Message } from '@hasbihal/protocol';
+import { Lock } from 'lucide-react';
+import { Icon } from '../components/Icon.tsx';
 import { useT } from '../i18n.tsx';
 import { EventChip } from '../events/EventChip.tsx';
 import { EventsDialog } from '../events/EventsDialog.tsx';
@@ -98,7 +100,12 @@ export function RoomView({ roomId }: { roomId: string }) {
       <header className="content__header room-view__header">
         <PanelToggle side="rooms" />
         <h1 className="room-view__name">
-          <span aria-hidden>#</span> {room.name}
+          {room.mahremMemberIds.length > 0 ? (
+            <Icon icon={Lock} label={t('mahrem.label')} />
+          ) : (
+            <span aria-hidden>#</span>
+          )}{' '}
+          {room.name}
         </h1>
         {room.topic && <p className="room-view__topic">{room.topic}</p>}
         <div className="room-view__actions">

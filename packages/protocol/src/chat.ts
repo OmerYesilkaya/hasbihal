@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ATTACHMENTS_MAX, Attachment, LinkPreview } from './files.ts';
 import { Id } from './id.ts';
 
-// Rooms and messages (ARCHITECTURE §3.3, DECISIONS A8, A11, A12, A22).
+// Rooms and messages (ARCHITECTURE §3.3, DECISIONS A8, A11, A12, A22, A55).
 
 export const ROOM_NAME_MAX = 50;
 export const ROOM_TOPIC_MAX = 200;
@@ -36,6 +36,11 @@ export const Room = z.object({
   createdAt: z.iso.datetime(),
   /** Archived rooms are read-only and listed separately. */
   archivedAt: z.iso.datetime().nullable(),
+  /**
+   * Mahrem (A55): who may join the room's call without knocking, in the order they were added.
+   * Empty for an open room. Defaults to empty, so a newer app still reads an older server.
+   */
+  mahremMemberIds: z.array(Id).default([]),
 });
 export type Room = z.infer<typeof Room>;
 

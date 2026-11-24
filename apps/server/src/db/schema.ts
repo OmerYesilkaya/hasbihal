@@ -17,6 +17,7 @@ export interface Database {
   message_mentions: MessageMentionsTable;
   reactions: ReactionsTable;
   room_user_prefs: RoomUserPrefsTable;
+  room_mahrem: RoomMahremTable;
   files: FilesTable;
   attachments: AttachmentsTable;
   jobs: JobsTable;
@@ -89,6 +90,14 @@ export interface RoomsTable {
   created_by: string | null;
   created_at: CreatedAt;
   archived_at: NullableTime;
+}
+
+/** A55: a room is Mahrem while it has rows here. */
+export interface RoomMahremTable {
+  room_id: string;
+  user_id: string;
+  added_by: string | null;
+  added_at: CreatedAt;
 }
 
 export interface MessagesTable {

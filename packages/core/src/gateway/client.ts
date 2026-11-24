@@ -9,6 +9,9 @@ import {
   type PresenceMode,
   type PresenceStatus,
   type RoomPrefs,
+  type ServerKnock,
+  type ServerKnockAnswered,
+  type ServerMahremChanged,
   type ServerWelcome,
 } from '@hasbihal/protocol';
 import { DEFAULT_BACKOFF, reconnectDelay, type BackoffOptions } from './backoff.ts';
@@ -79,6 +82,12 @@ export interface GatewayClientOptions {
   }) => void;
   /** Admins only: someone not on the list asked to join (A25). */
   onAccessRequested?: (request: { email: string; name: string }) => void;
+  /** Someone knocks on a Mahrem room this member is on the list of (A55). */
+  onKnock?: (knock: ServerKnock) => void;
+  /** A knock was answered: this member's own, or one on a room they're on the list of. */
+  onKnockAnswered?: (answer: ServerKnockAnswered) => void;
+  /** Someone else changed a Mahrem list this member is (or was) on. */
+  onMahremChanged?: (change: ServerMahremChanged) => void;
   backoff?: BackoffOptions;
   pingIntervalMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -231,6 +240,15 @@ export class GatewayClient {
           return;
         case 'access_requested':
           this.options.onAccessRequested?.({ email: message.email, name: message.name });
+          return;
+        case 'knock':
+          this.options.onKnock?.(message);
+          return;
+        case 'knock_answered':
+          this.options.onKnockAnswered?.(message);
+          return;
+        case 'mahrem_changed':
+          this.options.onMahremChanged?.(message);
           return;
         case 'upgrade_required':
           this.halt({ kind: 'upgrade_required' });

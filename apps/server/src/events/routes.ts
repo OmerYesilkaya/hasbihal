@@ -13,6 +13,7 @@ import {
   type RoomEvent,
 } from '@hasbihal/protocol';
 import type { AuthGuards } from '../auth/routes.ts';
+import { mahremList } from '../chat/model.ts';
 import type { Database } from '../db/schema.ts';
 import { AppError, parseRequest } from '../errors.ts';
 import { appendEvent } from '../gateway/events.ts';
@@ -92,6 +93,12 @@ export function registerEvents(
         .execute();
       if (found.length !== invitees.length)
         throw new AppError(400, 'validation_failed', 'An invitee is not a member.');
+      // A55: in a Mahrem room, a reminder would only send outsiders to knock.
+      const list = await mahremList(trx, body.roomId);
+      if (list.length && invitees.some((id) => !list.includes(id)))
+        throw new AppError(400, 'validation_failed', 'Invite only people on the Mahrem list.', [
+          { path: ['body', 'inviteeIds'], message: 'Not on the list.', code: 'not_mahrem' },
+        ]);
     }
     return invitees;
   };

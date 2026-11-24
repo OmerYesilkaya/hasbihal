@@ -2,6 +2,7 @@ import {
   AudioPresets,
   ConnectionState,
   createLocalVideoTrack,
+  DisconnectReason,
   LocalAudioTrack,
   Room,
   RoomEvent,
@@ -279,9 +280,14 @@ export class HangoutSession {
           this.#set({ status: 'reconnecting' });
         else if (state === ConnectionState.Connected) this.#set({ status: 'connected' });
       })
-      .on(RoomEvent.Disconnected, () => {
+      .on(RoomEvent.Disconnected, (reason) => {
         // Kicked (e.g. the same user joined elsewhere) or connection lost for good.
-        if (this.#room === room) void this.leave();
+        if (this.#room !== room) return;
+        void this.leave().then(() => {
+          // The server removes people only from Mahrem calls they may not be in (A55).
+          if (reason === DisconnectReason.PARTICIPANT_REMOVED)
+            this.#set({ notice: 'hangout.removedMahrem' });
+        });
       });
 
     try {

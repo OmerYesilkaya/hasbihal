@@ -38,12 +38,16 @@ import { useGateway } from './useGateway.ts';
 import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
 import { SettingsDialog } from './settings/SettingsDialog.tsx';
 import { LogOut, Settings, UserRound } from 'lucide-react';
-import { Toaster } from 'sonner';
+import { toast, Toaster } from 'sonner';
+import { Knocking } from './mahrem/knocking.ts';
 import { toastError } from './components/toast.ts';
 import { ConfirmHost } from './components/confirm.tsx';
 import { Icon } from './components/Icon.tsx';
 import { Tip, TipProvider } from './components/Tip.tsx';
 import { Menu, MenuItem, MenuLabel, MenuRadioGroup, MenuSeparator } from './components/Popover.tsx';
+
+/** The in-app prompt for one knock (A55), so whoever answers can close it everywhere. */
+const knockToast = (roomId: string, userId: string) => `knock:${roomId}:${userId}`;
 
 export function App({ info }: { info: AppInfo }) {
   return (
@@ -62,6 +66,9 @@ export function App({ info }: { info: AppInfo }) {
             title: 'toast__title',
             error: 'toast--error',
             success: 'toast--success',
+            description: 'toast__description',
+            actionButton: 'button button--primary',
+            cancelButton: 'button',
           },
         }}
       />
@@ -118,6 +125,7 @@ function Shell({ info, user, onSignOut }: ShellProps) {
   const [adminOpen, setAdminOpen] = useState(false);
   // One call per signed-in session too; signing out leaves it.
   const [hangout] = useState(() => new HangoutSession(client));
+  const [knocking] = useState(() => new Knocking());
   const hangoutState = useSyncExternalStore(hangout.subscribe, hangout.getSnapshot);
   const [chosenRoom, setChosenRoom] = useState<string | null>(null);
 
@@ -209,6 +217,68 @@ function Shell({ info, user, onSignOut }: ShellProps) {
         },
       );
     },
+    // A55: someone knocks on a Mahrem room this member is on the list of. Anyone on the list
+    // answers; the prompt closes everywhere once someone has (knockAnswered).
+    knock: ({ roomId, userId }) => {
+      const answer = async (admit: boolean) => {
+        const result = await client.rooms.answerKnock(roomId, userId, { admit });
+        if (!result.ok)
+          toastError(t(result.error.code === 'conflict' ? 'mahrem.answered' : 'error.unexpected'));
+      };
+      toast(t('mahrem.knockTitle', { name: nameOf(userId) }), {
+        id: knockToast(roomId, userId),
+        description: t('mahrem.knockBody', { room: roomName(roomId) }),
+        duration: Infinity,
+        action: {
+          label: t('mahrem.admit'),
+          onClick: () => void answer(true),
+        },
+        cancel: {
+          label: t('mahrem.decline'),
+          onClick: () => void answer(false),
+        },
+      });
+      notify(
+        { kind: 'knock' },
+        roomId,
+        t('mahrem.knockTitle', { name: nameOf(userId) }),
+        t('mahrem.knockBody', { room: roomName(roomId) }),
+        () => {
+          setChosenRoom(roomId);
+        },
+      );
+    },
+    knockAnswered: ({ roomId, userId, admit, byUserId }) => {
+      toast.dismiss(knockToast(roomId, userId));
+      if (userId !== store.getSnapshot().me?.id) return;
+      // My own knock: in I go, or not.
+      knocking.stop(roomId);
+      if (admit) {
+        toast.success(t('mahrem.admitted', { name: nameOf(byUserId) }));
+        setChosenRoom(roomId);
+        void hangout.join(roomId);
+      } else {
+        toast(t('mahrem.declined', { name: nameOf(byUserId) }));
+      }
+    },
+    mahremChanged: ({ roomId, byUserId, memberIds, added, removed }) => {
+      const myId = store.getSnapshot().me?.id;
+      const names = (ids: string[]) =>
+        ids.map((id) => (id === myId ? t('mahrem.you') : nameOf(id))).join(', ');
+      const values = { room: roomName(roomId), name: nameOf(byUserId) };
+      if (!memberIds.length) {
+        toast(t('mahrem.turnedOff', values));
+        return;
+      }
+      const turnedOn = added.length === memberIds.length;
+      const description = [
+        ...(!turnedOn && added.length ? [t('mahrem.added', { names: names(added) })] : []),
+        ...(removed.length ? [t('mahrem.removed', { names: names(removed) })] : []),
+      ].join(' · ');
+      toast(t(turnedOn ? 'mahrem.turnedOn' : 'mahrem.listChanged', values), {
+        ...(description ? { description } : {}),
+      });
+    },
     // A25: "Kemal (kemal@gmail.com) wants to join". The admin page lists it, with a badge.
     accessRequested: ({ email, name }) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.access });
@@ -234,8 +304,8 @@ function Shell({ info, user, onSignOut }: ShellProps) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.events });
   }, [state.eventsRevision, queryClient]);
   const chat = useMemo(
-    (): Chat => ({ info, client, store, typing, hangout }),
-    [info, client, store, typing, hangout],
+    (): Chat => ({ info, client, store, typing, hangout, knocking }),
+    [info, client, store, typing, hangout, knocking],
   );
 
   useEffect(
