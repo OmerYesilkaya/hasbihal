@@ -73,10 +73,15 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
   const share = omer.getByTestId('share-tile');
   await expect(share).toContainText('Zeynep Test · ekran');
   await expect(share.locator('video')).toHaveCount(0);
-  await expect(omer.locator('.room__voice')).toContainText('CANLI');
-  await expect(omer.getByTestId('member').filter({ hasText: 'Zeynep Test' })).toContainText(
-    'CANLI',
-  );
+  // #58: someone else's share fills the stage by itself, people in the strip below; your own
+  // never does, and can't go full screen.
+  const omerMain = omer.locator('.stage__grid > [data-main]');
+  await expect(omerMain).toHaveAttribute('data-testid', 'share-tile');
+  await expect(omer.locator('[data-testid="tile"]:not([data-main])')).toHaveCount(2);
+  await expect(zeynep.locator('[data-main]')).toHaveCount(0);
+  const ownShare = zeynep.getByTestId('share-tile');
+  await ownShare.hover();
+  await expect(ownShare.getByRole('button', { name: 'Tam ekran' })).toHaveCount(0);
   await share.getByRole('button', { name: 'İzle' }).click();
   await expect(share.locator('video')).toBeVisible();
   // Real frames arrive, not just an element.
@@ -85,10 +90,17 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
       share.locator('video').evaluate((v) => (v as unknown as { videoWidth: number }).videoWidth),
     )
     .toBeGreaterThan(0);
-  await share.hover();
-  await share.getByRole('button', { name: 'Büyüt' }).click();
-  await expect(omer.locator('.stage--focused')).toBeVisible();
   await snap(omer, '11-screen-share');
+  // Pinning a camera puts it on the stage instead; unpinning gives it back to the share.
+  const zeynepCamera = omer.getByTestId('tile').filter({ hasText: 'Zeynep Test' });
+  await zeynepCamera.hover();
+  await zeynepCamera.getByRole('button', { name: 'Sabitle' }).click();
+  await expect(omerMain).toContainText('Zeynep Test');
+  await expect(omer.getByTestId('share-tile')).not.toHaveAttribute('data-main');
+  await snap(omer, '12-pinned-camera');
+  await zeynepCamera.hover();
+  await zeynepCamera.getByRole('button', { name: 'Sabitlemeyi kaldır' }).click();
+  await expect(omerMain).toHaveAttribute('data-testid', 'share-tile');
   // Full screen (#34): the share fills the display.
   const fullscreen = () =>
     omer.evaluate(
@@ -109,9 +121,16 @@ test('talks in a hangout: join, speaking, mute, camera, screen share, nudge, lea
   await expect(share).toHaveCount(0);
   await expect(omer.locator('.room__voice')).not.toContainText('CANLI');
 
+  // With no share, everyone is back in the grid. A pin on Zeynep goes when she leaves.
+  await expect(omer.locator('[data-main]')).toHaveCount(0);
+  await zeynepCamera.hover();
+  await zeynepCamera.getByRole('button', { name: 'Sabitle' }).click();
+  await expect(omerMain).toContainText('Zeynep Test');
+
   // Zeynep leaves; Ömer calls her back in with a nudge.
   await zeynep.getByRole('button', { name: 'Ayrıl' }).click();
   await expect(omer.getByTestId('tile')).toHaveCount(1);
+  await expect(omer.locator('[data-main]')).toHaveCount(0);
   const zeynepRow = omer.getByTestId('member').filter({ hasText: 'Zeynep Test' });
   await zeynepRow.hover();
   await zeynepRow.getByRole('button', { name: 'Sohbete çağır' }).click();

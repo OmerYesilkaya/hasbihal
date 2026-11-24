@@ -1,24 +1,46 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import type { Occurrence, RoomEvent, RsvpResponse } from '@hasbihal/protocol';
+import type { Occurrence, RoomEvent, RsvpResponse, User } from '@hasbihal/protocol';
+import { Avatar } from '../components/Avatar.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Menu, MenuItem, MenuSeparator } from '../components/Popover.tsx';
 import { useChat, useChatState } from '../chat/context.tsx';
 import type { ApiResult } from '../api.ts';
 import { unwrap } from '../queries.ts';
-import { formatWhen, formatTime, useT } from '../i18n.tsx';
+import {
+  formatDateParts,
+  formatList,
+  formatShortDate,
+  formatTime,
+  relativeDay,
+  toUpper,
+  useT,
+} from '../i18n.tsx';
 import { EventForm, fromInputs, toInputs } from './EventForm.tsx';
-import { useRefreshEvents, type EventsView } from './useEvents.ts';
-import { CalendarClock, CalendarX, Check, Ellipsis, Pencil, Trash2, Undo2, X } from 'lucide-react';
+import { useNow, useRefreshEvents, type EventsView } from './useEvents.ts';
+import {
+  CalendarClock,
+  CalendarX,
+  Check,
+  ChevronLeft,
+  Clock,
+  Ellipsis,
+  Pencil,
+  Plus,
+  Repeat,
+  Trash2,
+  Undo2,
+  X,
+} from 'lucide-react';
 import { Icon } from '../components/Icon.tsx';
 import { Modal, ModalClose, ModalTitle } from '../components/Modal.tsx';
 import { confirm } from '../components/confirm.tsx';
 import { Tip } from '../components/Tip.tsx';
 
 /**
- * A room's events (A15, A16): each event once, at its next time, with RSVPs for everyone, and
- * for admins adding, editing, skipping, moving, and deleting. Later dates (four weeks ahead)
- * open on request, so two weekly events don't fill the dialog (#40).
+ * A room's events (A15, A16) as invitation cards: each event once, at its next date, with the
+ * RSVP in the same place on every card; its other dates in the four weeks are pills that switch
+ * the card to them (#40). Admins add from the header and manage each date from the card's menu.
  */
 export function EventsDialog({
   roomId,
@@ -34,65 +56,79 @@ export function EventsDialog({
   const [editing, setEditing] = useState<RoomEvent | 'new' | null>(null);
   const isAdmin = me?.role === 'admin';
   const occurrences = view.occurrences.filter((o) => view.events.get(o.eventId)?.roomId === roomId);
+  const close = t('events.close');
 
   return (
-    <Modal className="profile events-dialog" testId="events-dialog" onClose={onClose}>
-      <header className="profile__header">
-        <ModalTitle>
-          {t('events.heading')} · #{rooms.get(roomId)?.name ?? ''}
-        </ModalTitle>
-        <ModalClose className="link">{t('attachment.close')}</ModalClose>
+    <Modal className="events-dialog" testId="events-dialog" onClose={onClose}>
+      <header className="events-dialog__header">
+        {editing && (
+          <Tip label={t('events.back')}>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={t('events.back')}
+              onClick={() => {
+                setEditing(null);
+              }}
+            >
+              <Icon icon={ChevronLeft} />
+            </button>
+          </Tip>
+        )}
+        <div className="events-dialog__heading">
+          <ModalTitle>
+            {editing === 'new' ? t('events.new') : editing ? t('events.edit') : t('events.heading')}
+          </ModalTitle>
+          {!editing && <p>{t('events.subtitle', { room: rooms.get(roomId)?.name ?? '' })}</p>}
+        </div>
+        {!editing && isAdmin && (
+          <button
+            type="button"
+            className="button button--small"
+            onClick={() => {
+              setEditing('new');
+            }}
+          >
+            <Icon icon={Plus} /> {t('events.new')}
+          </button>
+        )}
+        <Tip label={close}>
+          <ModalClose className="icon-button" aria-label={close}>
+            <Icon icon={X} />
+          </ModalClose>
+        </Tip>
       </header>
       {editing ? (
-        <section className="profile__section">
-          <EventForm
-            roomId={roomId}
-            event={editing === 'new' ? null : editing}
-            onDone={() => {
-              setEditing(null);
-            }}
-          />
-        </section>
+        <EventForm
+          roomId={roomId}
+          event={editing === 'new' ? null : editing}
+          onDone={() => {
+            setEditing(null);
+          }}
+        />
       ) : (
-        <>
-          {isAdmin && (
-            <section className="profile__section events-dialog__add">
-              <button
-                type="button"
-                className="button button--primary"
-                onClick={() => {
-                  setEditing('new');
-                }}
-              >
-                {t('events.add')}
-              </button>
-            </section>
+        <div className="events-dialog__body">
+          {!view.loaded ? (
+            <p className="field__hint">{t('room.loading')}</p>
+          ) : occurrences.length === 0 ? (
+            <EmptyState>{t('events.none')}</EmptyState>
+          ) : (
+            groupByEvent(occurrences).map(([eventId, list]) => {
+              const event = view.events.get(eventId);
+              return event ? (
+                <EventCard
+                  key={eventId}
+                  event={event}
+                  occurrences={list}
+                  isAdmin={isAdmin}
+                  onEdit={() => {
+                    setEditing(event);
+                  }}
+                />
+              ) : null;
+            })
           )}
-          <section className="profile__section">
-            {!view.loaded ? (
-              <p className="field__hint">{t('room.loading')}</p>
-            ) : occurrences.length === 0 ? (
-              <EmptyState>{t('events.none')}</EmptyState>
-            ) : (
-              <ul className="occurrences">
-                {groupByEvent(occurrences).map(([eventId, list]) => {
-                  const event = view.events.get(eventId);
-                  return event ? (
-                    <EventGroup
-                      key={eventId}
-                      event={event}
-                      occurrences={list}
-                      isAdmin={isAdmin}
-                      onEdit={() => {
-                        setEditing(event);
-                      }}
-                    />
-                  ) : null;
-                })}
-              </ul>
-            )}
-          </section>
-        </>
+        </div>
       )}
     </Modal>
   );
@@ -106,10 +142,11 @@ function groupByEvent(occurrences: Occurrence[]): [string, Occurrence[]][] {
     if (list) list.push(o);
     else groups.set(o.eventId, [o]);
   }
-  return [...groups];
+  const next = (list: Occurrence[]) => (list.find((o) => !o.skipped) ?? list[0])?.startsAt ?? '';
+  return [...groups].sort(([, a], [, b]) => Date.parse(next(a)) - Date.parse(next(b)));
 }
 
-/** "Her hafta · Çar, Cum · 09:00"; null for a one-off event. */
+/** "Her hafta · Çar, Cum"; null for a one-off event. */
 function describeRepeat(event: RoomEvent, t: ReturnType<typeof useT>): string | null {
   const r = event.recurrence;
   if (!r) return null;
@@ -119,14 +156,11 @@ function describeRepeat(event: RoomEvent, t: ReturnType<typeof useT>): string | 
       : t(`events.repeat.${r.freq}`);
   const names = t('events.weekdays').split(',');
   const days = r.freq === 'weekly' ? r.weekdays.map((d) => names[d] ?? '').join(', ') : '';
-  return [how, days, formatTime(event.startsAt)].filter(Boolean).join(' · ');
+  return [how, days].filter(Boolean).join(' · ');
 }
 
-/**
- * One event: its next occurrence (and any skipped ones before it, so a skip stays visible),
- * then its later dates when asked for.
- */
-function EventGroup({
+/** One event: the card for its next date, or for the date picked from its pills. */
+function EventCard({
   event,
   occurrences,
   isAdmin,
@@ -138,70 +172,84 @@ function EventGroup({
   onEdit: () => void;
 }) {
   const t = useT();
-  const [expanded, setExpanded] = useState(false);
-  const next = occurrences.findIndex((o) => !o.skipped);
-  const shownCount = next === -1 ? occurrences.length : next + 1;
-  const later = occurrences.length - shownCount;
-  const shown = expanded ? occurrences : occurrences.slice(0, shownCount);
-  const repeat = describeRepeat(event, t);
-  return (
-    <li className="event-group" data-testid="event-group">
-      <ul className="occurrences">
-        {shown.map((o, i) => (
-          <OccurrenceRow
+  const next = occurrences.find((o) => !o.skipped) ?? occurrences[0];
+  const [picked, setPicked] = useState<string | null>(null);
+  const shown = occurrences.find((o) => o.start === picked) ?? next;
+  if (!shown) return null;
+  const dates =
+    occurrences.length > 1 ? (
+      <div className="event-card__dates">
+        <span>{t('events.otherDates')}</span>
+        {occurrences.map((o) => (
+          <button
             key={o.start}
-            event={event}
-            occurrence={o}
-            repeat={i === 0 ? repeat : null}
-            isAdmin={isAdmin}
-            onEdit={onEdit}
-          />
+            type="button"
+            className="event-card__date"
+            aria-pressed={o === shown}
+            data-skipped={o.skipped ? true : undefined}
+            data-testid="event-date"
+            title={o.skipped ? t('events.skipped') : undefined}
+            onClick={() => {
+              setPicked(o.start);
+            }}
+          >
+            {formatShortDate(o.startsAt)}
+          </button>
         ))}
-      </ul>
-      {later > 0 && (
-        <button
-          type="button"
-          className="link event-group__more"
-          aria-expanded={expanded}
-          onClick={() => {
-            setExpanded((v) => !v);
-          }}
-        >
-          {expanded ? t('events.fewerDates') : t('events.laterDates', { count: later })}
-        </button>
-      )}
-    </li>
+      </div>
+    ) : null;
+  return (
+    <OccurrenceCard
+      // A fresh card per date, so a half-done move doesn't carry over to another date.
+      key={shown.start}
+      event={event}
+      occurrence={shown}
+      isNext={shown === next}
+      dates={dates}
+      isAdmin={isAdmin}
+      onEdit={onEdit}
+    />
   );
 }
 
-function OccurrenceRow({
+function OccurrenceCard({
   event,
   occurrence,
-  repeat,
+  isNext,
+  dates,
   isAdmin,
   onEdit,
 }: {
   event: RoomEvent;
   occurrence: Occurrence;
-  /** How the event repeats, on its first row. */
-  repeat: string | null;
+  isNext: boolean;
+  dates: ReactNode;
   isAdmin: boolean;
   onEdit: () => void;
 }) {
   const t = useT();
   const { client } = useChat();
   const { me, members } = useChatState();
+  const now = useNow();
   const [moving, setMoving] = useState(false);
   const [moveTo, setMoveTo] = useState(() => toInputs(occurrence.startsAt));
   const date = client.events.occurrence(event.id, occurrence.start);
   const mine = occurrence.rsvps.find((r) => r.userId === me?.id)?.response;
-  const names = (response: RsvpResponse) =>
+  const people = (response: RsvpResponse) =>
     occurrence.rsvps
       .filter((r) => r.response === response)
-      .map((r) => members.get(r.userId)?.displayName ?? '?');
-  const coming = names('yes');
-  const notComing = names('no');
+      .map((r) => members.get(r.userId))
+      .filter((m): m is User => m !== undefined);
+  const coming = people('yes');
+  const notComing = people('no');
   const invited = me ? event.inviteeIds.includes(me.id) : false;
+  const running =
+    !occurrence.skipped &&
+    Date.parse(occurrence.startsAt) <= now &&
+    now < Date.parse(occurrence.endsAt);
+  const relative = relativeDay(occurrence.startsAt);
+  const parts = formatDateParts(occurrence.startsAt);
+  const repeat = describeRepeat(event, t);
 
   const refreshEvents = useRefreshEvents();
   // Any change to this date or its event: on success every event window reloads.
@@ -217,110 +265,65 @@ function OccurrenceRow({
   const rsvp = (response: RsvpResponse) =>
     call(() => (mine === response ? date.clearRsvp() : date.rsvp({ response })));
 
+  const names = coming.map((m) => m.displayName);
+  const comingText =
+    names.length === 0
+      ? t('events.comingNone')
+      : t('events.coming', {
+          count: names.length,
+          names: formatList(
+            names.length <= 3
+              ? names
+              : [...names.slice(0, 2), t('events.comingMore', { count: names.length - 2 })],
+          ),
+        });
+  const whoTip = [
+    names.length ? names.join(', ') : null,
+    notComing.length
+      ? t('events.notComing', { names: notComing.map((m) => m.displayName).join(', ') })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    <li
-      className="occurrence"
+    <article
+      className="event-card"
+      data-next={isNext ? true : undefined}
+      data-running={running ? true : undefined}
       data-skipped={occurrence.skipped ? true : undefined}
-      data-testid="occurrence"
+      data-testid="event-card"
     >
-      <div className="occurrence__when">
-        <strong>
-          {formatWhen(occurrence.startsAt, {
-            today: t('events.today'),
-            tomorrow: t('events.tomorrow'),
-          })}
-        </strong>
-        <span>–{formatTime(occurrence.endsAt)}</span>
-      </div>
-      <div className="occurrence__what">
-        <span className="occurrence__title">
-          {event.title}
-          {occurrence.skipped && <em> · {t('events.skipped')}</em>}
-          {occurrence.moved && <em> · {t('events.moved')}</em>}
-          {invited && <span className="occurrence__invited"> · {t('events.invited')}</span>}
-        </span>
-        {repeat && (
-          <span className="occurrence__repeat" data-testid="event-repeat">
-            {repeat}
+      <div className="event-card__top">
+        <div className="event-card__page" aria-hidden>
+          <span className="event-card__month">
+            {running
+              ? toUpper(t('events.now'))
+              : relative
+                ? toUpper(t(`events.${relative}`))
+                : parts.month}
           </span>
-        )}
-        {event.description && <span className="occurrence__description">{event.description}</span>}
-        {!occurrence.skipped && (
-          <span className="occurrence__rsvps">
-            {coming.length > 0 && (
-              <Tip label={coming.join(', ')}>
-                <span data-testid="rsvp-coming">
-                  <Icon icon={Check} /> {coming.join(', ')}
-                </span>
-              </Tip>
-            )}
-            {notComing.length > 0 && (
-              <Tip label={notComing.join(', ')}>
-                <span data-testid="rsvp-not-coming">
-                  <Icon icon={X} /> {notComing.join(', ')}
-                </span>
-              </Tip>
-            )}
-          </span>
-        )}
-        {change.isError && <span className="field__error">{t('error.unexpected')}</span>}
-        {moving && (
-          <form
-            className="occurrence__move"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void call(() => date.change({ kind: 'moved', startsAt: fromInputs(moveTo) })).then(
-                (ok) => {
-                  if (ok) setMoving(false);
-                },
-              );
-            }}
-          >
-            <input
-              type="date"
-              className="field__input"
-              aria-label={t('events.date')}
-              value={moveTo.date}
-              onChange={(e) => {
-                setMoveTo({ ...moveTo, date: e.target.value });
-              }}
-            />
-            <input
-              type="time"
-              className="field__input"
-              aria-label={t('events.time')}
-              value={moveTo.time}
-              onChange={(e) => {
-                setMoveTo({ ...moveTo, time: e.target.value });
-              }}
-            />
-            <button type="submit" className="button button--primary">
-              {t('events.save')}
-            </button>
-          </form>
-        )}
-      </div>
-      <div className="occurrence__actions">
-        {!occurrence.skipped && (
-          <>
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={mine === 'yes'}
-              onClick={() => void rsvp('yes')}
-            >
-              {t('events.going')}
-            </button>
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={mine === 'no'}
-              onClick={() => void rsvp('no')}
-            >
-              {t('events.notGoing')}
-            </button>
-          </>
-        )}
+          <span className="event-card__day">{parts.day}</span>
+          <span className="event-card__weekday">{parts.weekday}</span>
+        </div>
+        <div className="event-card__what">
+          <div className="event-card__title">
+            <span>{event.title}</span>
+            {invited && <span className="tag">{t('events.invited')}</span>}
+            {occurrence.moved && <span className="tag tag--warn">{t('events.moved')}</span>}
+          </div>
+          <div className="event-card__meta">
+            <Icon icon={Clock} />
+            <span>
+              {formatTime(occurrence.startsAt)}–{formatTime(occurrence.endsAt)}
+            </span>
+            <span aria-hidden>·</span>
+            {repeat && <Icon icon={Repeat} />}
+            <span data-testid="event-repeat">{repeat ?? t('events.oneOff')}</span>
+          </div>
+          {event.description && <p className="event-card__description">{event.description}</p>}
+          {dates}
+        </div>
         {isAdmin && (
           <Menu
             label={t('events.manage')}
@@ -378,6 +381,95 @@ function OccurrenceRow({
           </Menu>
         )}
       </div>
-    </li>
+      {(moving || change.isError) && (
+        <div className="event-card__extra">
+          {change.isError && <p className="field__error">{t('error.unexpected')}</p>}
+          {moving && (
+            <form
+              className="event-card__move"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void call(() => date.change({ kind: 'moved', startsAt: fromInputs(moveTo) })).then(
+                  (ok) => {
+                    if (ok) setMoving(false);
+                  },
+                );
+              }}
+            >
+              <input
+                type="date"
+                className="field__input"
+                aria-label={t('events.date')}
+                value={moveTo.date}
+                onChange={(e) => {
+                  setMoveTo({ ...moveTo, date: e.target.value });
+                }}
+              />
+              <input
+                type="time"
+                className="field__input"
+                aria-label={t('events.time')}
+                value={moveTo.time}
+                onChange={(e) => {
+                  setMoveTo({ ...moveTo, time: e.target.value });
+                }}
+              />
+              <button
+                type="button"
+                className="button button--small"
+                onClick={() => {
+                  setMoving(false);
+                }}
+              >
+                {t('composer.cancel')}
+              </button>
+              <button type="submit" className="button button--small button--primary">
+                {t('events.save')}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+      <div className="event-card__foot">
+        {occurrence.skipped ? (
+          <p className="event-card__note">
+            <Icon icon={CalendarX} /> {t('events.skippedNote')}
+          </p>
+        ) : (
+          <>
+            <Tip label={whoTip || comingText}>
+              <div className="event-card__who">
+                {coming.length > 0 && (
+                  <span className="event-card__faces">
+                    {coming.slice(0, 4).map((m) => (
+                      <Avatar key={m.id} user={m} />
+                    ))}
+                  </span>
+                )}
+                <span data-testid="rsvp-coming">{comingText}</span>
+              </div>
+            </Tip>
+            <div className="rsvp">
+              <button
+                type="button"
+                className="rsvp__yes"
+                aria-pressed={mine === 'yes'}
+                onClick={() => void rsvp('yes')}
+              >
+                <Icon icon={Check} /> {t('events.going')}
+              </button>
+              <button
+                type="button"
+                className="rsvp__no"
+                aria-pressed={mine === 'no'}
+                onClick={() => void rsvp('no')}
+              >
+                <Icon icon={X} /> {t('events.notGoing')}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </article>
   );
 }
