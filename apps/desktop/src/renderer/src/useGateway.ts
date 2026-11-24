@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GatewayClient, type ChatStore, type GatewayStatus } from '@hasbihal/core';
-import type { Message, PresenceMode } from '@hasbihal/protocol';
+import type {
+  Message,
+  PresenceMode,
+  ServerKnock,
+  ServerKnockAnswered,
+  ServerMahremChanged,
+} from '@hasbihal/protocol';
 import type { AppInfo } from '../../shared/app-info.ts';
 import type { Client } from './client.ts';
 
@@ -23,6 +29,12 @@ export interface GatewayNotices {
   eventReminder: (reminder: { roomId: string; title: string; startsAt: string }) => void;
   /** Admins: someone asked to join (A25). */
   accessRequested: (request: { email: string; name: string }) => void;
+  /** Someone knocks on a Mahrem room this member is on the list of (A55). */
+  knock: (knock: ServerKnock) => void;
+  /** A knock was answered: this member's own, or one they were asked about. */
+  knockAnswered: (answer: ServerKnockAnswered) => void;
+  /** Someone else changed a Mahrem list this member is or was on. */
+  mahremChanged: (change: ServerMahremChanged) => void;
 }
 
 export function useGateway(info: AppInfo, api: Client, store: ChatStore, notices: GatewayNotices) {
@@ -100,6 +112,15 @@ export function useGateway(info: AppInfo, api: Client, store: ChatStore, notices
       },
       onAccessRequested: (request) => {
         latestNotices.current.accessRequested(request);
+      },
+      onKnock: (knock) => {
+        latestNotices.current.knock(knock);
+      },
+      onKnockAnswered: (answer) => {
+        latestNotices.current.knockAnswered(answer);
+      },
+      onMahremChanged: (change) => {
+        latestNotices.current.mahremChanged(change);
       },
     });
     client.current = gateway;

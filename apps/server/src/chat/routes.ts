@@ -25,7 +25,14 @@ import { AppError, parseRequest } from '../errors.ts';
 import { appendEvent } from '../gateway/events.ts';
 import type { GatewayHub } from '../gateway/hub.ts';
 import { linkMessage } from '../previews/service.ts';
-import { hydrateMessages, loadMessage, resolveMentions, roomsWithState, toRoom } from './model.ts';
+import {
+  hydrateMessages,
+  loadMessage,
+  mahremList,
+  resolveMentions,
+  roomsWithState,
+  toRoom,
+} from './model.ts';
 
 export interface ChatDeps {
   db: Kysely<Database>;
@@ -118,7 +125,7 @@ export function registerChat(
         })
         .returningAll()
         .executeTakeFirstOrThrow();
-      const created = toRoom(row);
+      const created = toRoom(row, []);
       await appendEvent(trx, { type: 'room_created', room: created });
       return created;
     });
@@ -139,7 +146,7 @@ export function registerChat(
         .where('id', '=', id)
         .returningAll()
         .executeTakeFirstOrThrow();
-      const room = toRoom(row);
+      const room = toRoom(row, await mahremList(trx, id));
       await appendEvent(trx, { type: 'room_updated', room });
       return room;
     });

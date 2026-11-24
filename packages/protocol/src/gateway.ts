@@ -164,6 +164,39 @@ export type ServerHangoutStarted = z.infer<typeof ServerHangoutStarted>;
 export const ServerNudge = z.object({ type: z.literal('nudge'), fromUserId: Id, roomId: Id });
 export type ServerNudge = z.infer<typeof ServerNudge>;
 
+/** Someone not on a Mahrem room's list knocks (A55): sent to the list's online members. */
+export const ServerKnock = z.object({ type: z.literal('knock'), roomId: Id, userId: Id });
+export type ServerKnock = z.infer<typeof ServerKnock>;
+
+/**
+ * A knock was answered (A55): sent to the knocker, who joins when admitted, and to the list, so
+ * everyone else's prompt closes.
+ */
+export const ServerKnockAnswered = z.object({
+  type: z.literal('knock_answered'),
+  roomId: Id,
+  /** Who knocked. */
+  userId: Id,
+  admit: z.boolean(),
+  byUserId: Id,
+});
+export type ServerKnockAnswered = z.infer<typeof ServerKnockAnswered>;
+
+/**
+ * Someone changed a Mahrem list (A55): told to everyone on it before or after, except them. The
+ * room itself arrives as `room_updated`.
+ */
+export const ServerMahremChanged = z.object({
+  type: z.literal('mahrem_changed'),
+  roomId: Id,
+  byUserId: Id,
+  /** The list now; empty when it was turned off. */
+  memberIds: z.array(Id),
+  added: z.array(Id),
+  removed: z.array(Id),
+});
+export type ServerMahremChanged = z.infer<typeof ServerMahremChanged>;
+
 /** An event the member is invited to starts soon (A15): a reminder notification. */
 export const ServerEventReminder = z.object({
   type: z.literal('event_reminder'),
@@ -233,6 +266,9 @@ export const ServerMessage = z.discriminatedUnion('type', [
   ServerHangout,
   ServerHangoutStarted,
   ServerNudge,
+  ServerKnock,
+  ServerKnockAnswered,
+  ServerMahremChanged,
   ServerEventReminder,
   ServerAccessRequested,
   ServerUpgradeRequired,

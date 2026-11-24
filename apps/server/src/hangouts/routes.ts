@@ -14,6 +14,7 @@ import type { Database } from '../db/schema.ts';
 import { AppError, parseRequest } from '../errors.ts';
 import type { GatewayHub } from '../gateway/hub.ts';
 import { hangoutToken, trackKind, type LiveKitConfig, type LiveKitRooms } from './livekit.ts';
+import type { MahremGate } from '../mahrem/gate.ts';
 import type { HangoutTracker } from './tracker.ts';
 
 /** How often the server re-reads LiveKit's state, in case a webhook went missing. */
@@ -25,12 +26,14 @@ export interface HangoutDeps {
   tracker: HangoutTracker;
   livekit: LiveKitConfig;
   rooms: LiveKitRooms;
+  /** Mahrem rooms (A55): who may be in a call. */
+  gate: MahremGate;
   guards: AuthGuards;
 }
 
 /** Hangouts (ARCHITECTURE §6): tokens to join, LiveKit webhooks, and nudges (A13, A19). */
 export async function registerHangouts(app: FastifyInstance, deps: HangoutDeps): Promise<void> {
-  const { db, hub, tracker, livekit, rooms, guards } = deps;
+  const { db, hub, tracker, livekit, rooms, gate, guards } = deps;
   const { requireAuth, auth } = guards;
 
   app.post(
@@ -45,10 +48,16 @@ export async function registerHangouts(app: FastifyInstance, deps: HangoutDeps):
         .executeTakeFirst();
       if (!room) throw new AppError(404, 'not_found', 'No such room.');
       if (room.archived_at) throw new AppError(409, 'conflict', 'This room is archived.');
+      const { userId } = auth(request);
+      // A55: a Mahrem room's call is for its list, and whoever they let in. Admins too knock.
+      if (!(await gate.mayJoin(id, userId)))
+        throw new AppError(403, 'forbidden', 'This room is Mahrem: knock to join.', [
+          { path: ['params', 'id'], message: 'Mahrem.', code: 'mahrem' },
+        ]);
       const user = await db
         .selectFrom('users')
         .select(['id', 'display_name'])
-        .where('id', '=', auth(request).userId)
+        .where('id', '=', userId)
         .executeTakeFirstOrThrow();
       return {
         url: livekit.url,
@@ -123,10 +132,14 @@ export async function registerHangouts(app: FastifyInstance, deps: HangoutDeps):
               userId,
               new Date(Number(event.participant?.joinedAt ?? 0n) * 1000 || Date.now()),
             );
+            // A55: a token from before the room became Mahrem must not get anyone in.
+            gate.joined(roomId, userId);
+            await gate.enforce(roomId, [userId]);
             break;
           case 'participant_left':
           case 'participant_connection_aborted':
             tracker.leave(roomId, userId);
+            gate.left(roomId, userId);
             break;
           case 'track_published':
           case 'track_unpublished': {
@@ -147,14 +160,20 @@ export async function registerHangouts(app: FastifyInstance, deps: HangoutDeps):
   // ---- reconciliation ----------------------------------------------------------------------
 
   const reconcile = () =>
-    rooms.list().then(
-      (snapshot) => {
+    rooms
+      .list()
+      .then(async (snapshot) => {
         tracker.reconcile(snapshot);
-      },
-      (error: unknown) => {
-        app.log.warn({ err: error }, 'could not read hangouts from LiveKit');
-      },
-    );
+        // A55: anyone a lost webhook let slip into a Mahrem call.
+        for (const [roomId, people] of snapshot)
+          await gate.enforce(
+            roomId,
+            people.map((p) => p.userId),
+          );
+      })
+      .catch((error: unknown) => {
+        app.log.warn({ err: error }, 'could not reconcile hangouts with LiveKit');
+      });
   void reconcile();
   const timer = setInterval(() => void reconcile(), RECONCILE_EVERY_MS);
   timer.unref();

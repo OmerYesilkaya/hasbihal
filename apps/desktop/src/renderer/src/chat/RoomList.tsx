@@ -4,7 +4,7 @@ import { Avatar } from '../components/Avatar.tsx';
 import { nextOccurrence, useEvents } from '../events/useEvents.ts';
 import { dayKey, formatTime, useT } from '../i18n.tsx';
 import { useChat, useChatState, useHangout } from './context.tsx';
-import { BellOff, Calendar } from 'lucide-react';
+import { BellOff, Calendar, Lock } from 'lucide-react';
 import { RoomMenu } from '../rooms/RoomMenu.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Tip } from '../components/Tip.tsx';
@@ -70,9 +70,19 @@ export function RoomList({
             onSelect(room.id);
           }}
         >
-          <span className="room__hash" aria-hidden>
-            #
-          </span>
+          {room.mahremMemberIds.length > 0 ? (
+            // A55: the call is for its list.
+            <Icon
+              icon={Lock}
+              className="room__lock"
+              label={t('mahrem.label')}
+              data-testid="room-mahrem-lock"
+            />
+          ) : (
+            <span className="room__hash" aria-hidden>
+              #
+            </span>
+          )}
           <span className="room__name">{room.name}</span>
           {(() => {
             const next = nextOccurrence(events, room.id);

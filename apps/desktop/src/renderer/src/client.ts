@@ -2,6 +2,7 @@ import {
   EventWindow,
   FileUrls,
   HangoutToken,
+  KnockResult,
   AccessList,
   AllowedEmail,
   MemberList,
@@ -15,6 +16,7 @@ import {
   SearchResults,
   SessionList,
   User,
+  type AnswerKnockRequest,
   type ChangeRoleRequest,
   type AllowEmailRequest,
   type CreateRoomRequest,
@@ -29,6 +31,7 @@ import {
   type SaveEventRequest,
   type SearchQuery,
   type SendMessageRequest,
+  type SetMahremRequest,
   type UpdateProfileRequest,
   type UpdateRoomRequest,
 } from '@hasbihal/protocol';
@@ -98,6 +101,19 @@ export function createClient(serverUrl: string) {
       hangoutToken: (roomId: string) =>
         request(serverUrl, 'POST', `/rooms/${segment(roomId)}/hangout/token`, {
           schema: HangoutToken,
+        }),
+      /** A55: turn Mahrem on, or change its list. */
+      setMahrem: (roomId: string, body: SetMahremRequest) =>
+        request(serverUrl, 'PUT', `/rooms/${segment(roomId)}/mahrem`, { body, schema: Room }),
+      clearMahrem: (roomId: string) =>
+        request(serverUrl, 'DELETE', `/rooms/${segment(roomId)}/mahrem`, { schema: Room }),
+      knock: (roomId: string) =>
+        request(serverUrl, 'POST', `/rooms/${segment(roomId)}/mahrem/knock`, {
+          schema: KnockResult,
+        }),
+      answerKnock: (roomId: string, userId: string, body: AnswerKnockRequest) =>
+        request(serverUrl, 'POST', `/rooms/${segment(roomId)}/mahrem/knocks/${segment(userId)}`, {
+          body,
         }),
     },
 

@@ -68,6 +68,7 @@ describe('ChatStore rooms and messages', () => {
     position: 1,
     createdAt: '2026-11-15T10:00:00.000Z',
     archivedAt: null,
+    mahremMemberIds: [] as string[],
   };
   let n = 0;
   const message = (authorId: string, extra: Partial<Message> = {}): Message => ({

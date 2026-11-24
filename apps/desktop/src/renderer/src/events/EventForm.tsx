@@ -42,7 +42,9 @@ export function EventForm({
   const t = useT();
   const id = useId();
   const { client } = useChat();
-  const { members } = useChatState();
+  const { members, rooms } = useChatState();
+  // A55: in a Mahrem room, only its list can be invited.
+  const mahrem = rooms.get(roomId)?.mahremMemberIds ?? [];
   const startInputs = toInputs(event?.startsAt ?? nextHour());
   const [title, setTitle] = useState(event?.title ?? '');
   const [description, setDescription] = useState(event?.description ?? '');
@@ -93,14 +95,14 @@ export function EventForm({
       durationMin: duration,
       recurrence: recurrence(),
       reminderMin: reminder,
-      inviteeIds: invitees,
+      inviteeIds: invitees.filter((id) => !mahrem.length || mahrem.includes(id)),
     };
     saveEvent.mutate(body);
   };
 
-  const people = [...members.values()].sort((a, b) =>
-    a.displayName.localeCompare(b.displayName, 'tr'),
-  );
+  const people = [...members.values()]
+    .filter((m) => !mahrem.length || mahrem.includes(m.id))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'tr'));
   return (
     <form
       className="event-form"
@@ -231,7 +233,9 @@ export function EventForm({
       )}
       <fieldset className="event-form__invitees">
         <legend className="field__label">{t('events.invitees')}</legend>
-        <p className="field__hint">{t('events.inviteesHint')}</p>
+        <p className="field__hint">
+          {t(mahrem.length ? 'events.inviteesMahrem' : 'events.inviteesHint')}
+        </p>
         {people.map((m) => (
           <Checkbox
             key={m.id}

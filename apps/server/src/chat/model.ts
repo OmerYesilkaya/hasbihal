@@ -12,11 +12,13 @@ import { toAttachment } from '../files/routes.ts';
 /** How much of a replied-to message is quoted above the reply. */
 const REPLY_EXCERPT = 120;
 
+/** A room's row as the API shows it, with its Mahrem list (A55; empty when it's open). */
 export function toRoom(
   row: Pick<
     Selectable<RoomsTable>,
     'id' | 'name' | 'topic' | 'position' | 'created_at' | 'archived_at'
   >,
+  mahremMemberIds: string[],
 ): Room {
   return {
     id: row.id,
@@ -25,7 +27,26 @@ export function toRoom(
     position: row.position,
     createdAt: row.created_at.toISOString(),
     archivedAt: row.archived_at?.toISOString() ?? null,
+    mahremMemberIds,
   };
+}
+
+/** A room's Mahrem list (A55), in the order people were added; empty when it's open. */
+export async function mahremList(db: Kysely<Database>, roomId: string): Promise<string[]> {
+  const rows = await db
+    .selectFrom('room_mahrem')
+    .select('user_id')
+    .where('room_id', '=', roomId)
+    .orderBy('added_at')
+    .orderBy('user_id')
+    .execute();
+  return rows.map((r) => r.user_id);
+}
+
+/** A room as the API shows it, read fresh; undefined when there's no such room. */
+export async function loadRoom(db: Kysely<Database>, roomId: string): Promise<Room | undefined> {
+  const row = await db.selectFrom('rooms').selectAll().where('id', '=', roomId).executeTakeFirst();
+  return row && toRoom(row, await mahremList(db, roomId));
 }
 
 /** Messages with their mentions, reactions, and reply previews, in the order given. */
@@ -201,11 +222,17 @@ export async function roomsWithState(
     sound_on_message: boolean | null;
     hangout_start_alerts: boolean | null;
     favorite: boolean | null;
+    mahrem: string[];
     unread: string;
     unread_mentions: string;
   }>`
     select r.id, r.name, r.topic, r.position, r.created_at, r.archived_at, p.last_read_message_id,
       p.notify_level, p.sound_on_message, p.hangout_start_alerts, p.favorite,
+      coalesce(
+        (select array_agg(rm.user_id::text order by rm.added_at, rm.user_id)
+          from room_mahrem rm where rm.room_id = r.id),
+        '{}'
+      ) as mahrem,
       count(m.id) as unread,
       count(m.id) filter (
         where m.mentions_everyone
@@ -226,7 +253,7 @@ export async function roomsWithState(
     order by r.position, r.created_at
   `.execute(db);
   return result.rows.map((row) => ({
-    ...toRoom(row),
+    ...toRoom(row, row.mahrem),
     lastReadMessageId: row.last_read_message_id,
     // No row yet: the defaults (A28).
     prefs: {

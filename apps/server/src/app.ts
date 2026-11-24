@@ -28,6 +28,8 @@ import { registerProfile } from './profile/routes.ts';
 import { liveKitRooms, type LiveKitRooms } from './hangouts/livekit.ts';
 import { registerHangouts } from './hangouts/routes.ts';
 import { HangoutTracker } from './hangouts/tracker.ts';
+import { MahremGate } from './mahrem/gate.ts';
+import { registerMahrem } from './mahrem/routes.ts';
 
 /** What the app needs from outside. The caller owns these and closes them. */
 export interface AppDeps {
@@ -176,14 +178,18 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
       );
     },
   });
+  const livekitRooms = deps.livekitRooms ?? liveKitRooms(config.livekit);
+  const gate = new MahremGate({ db: deps.db, rooms: livekitRooms, log: app.log });
   await registerHangouts(app, {
     db: deps.db,
     hub,
     tracker,
     livekit: config.livekit,
-    rooms: deps.livekitRooms ?? liveKitRooms(config.livekit),
+    rooms: livekitRooms,
+    gate,
     guards,
   });
+  registerMahrem(app, { db: deps.db, hub, tracker, gate, guards });
   registerGateway(app, config, { db: deps.db, keys, hub, hangouts: () => tracker.snapshot() });
 
   return app;

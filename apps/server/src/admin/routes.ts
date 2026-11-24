@@ -14,6 +14,7 @@ import type { AuthGuards } from '../auth/routes.ts';
 import { revokeAllSessions, toUser } from '../auth/sessions.ts';
 import type { Database } from '../db/schema.ts';
 import { AppError, parseRequest } from '../errors.ts';
+import { loadRoom } from '../chat/model.ts';
 import { appendEvent } from '../gateway/events.ts';
 import type { GatewayHub } from '../gateway/hub.ts';
 
@@ -175,6 +176,16 @@ export function registerAdmin(
           .where('id', '=', id)
           .execute();
         await revokeAllSessions(trx, id);
+        // A55: off every Mahrem list; a list left empty makes its room open again.
+        const lists = await trx
+          .deleteFrom('room_mahrem')
+          .where('user_id', '=', id)
+          .returning('room_id')
+          .execute();
+        for (const { room_id } of lists) {
+          const room = await loadRoom(trx, room_id);
+          if (room) await appendEvent(trx, { type: 'room_updated', room });
+        }
       });
       hub.closeUserSessions(id);
       return user;
