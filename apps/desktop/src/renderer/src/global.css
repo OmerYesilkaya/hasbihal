@@ -3271,6 +3271,109 @@ input::-webkit-calendar-picker-indicator:hover {
   min-height: 420px;
 }
 
+/* A room's Mahrem setting (mahrem/MahremDialog.tsx, A55). */
+.mahrem {
+  width: 440px;
+  max-height: 85vh;
+  padding: 20px;
+  border: 1px solid var(--hb-border);
+  border-top: 3px solid var(--hb-accent);
+  border-radius: 14px;
+  background: var(--hb-bg);
+  color: var(--hb-text);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.2);
+}
+
+.mahrem__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mahrem__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+}
+
+.mahrem__form .field__hint,
+.mahrem__form .field__error {
+  margin: 0;
+}
+
+.mahrem__people {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 12px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: none;
+}
+
+.mahrem__people > .field__label,
+.mahrem__people > .field__hint {
+  grid-column: 1 / -1;
+}
+
+.mahrem__readonly {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.mahrem__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mahrem__spacer {
+  flex: 1;
+}
+
+.button[data-danger]:not(.button--primary) {
+  color: var(--hb-primary);
+}
+
+/* A Mahrem room in the sidebar, and its call bar (A55). */
+.room__lock {
+  flex: none;
+  color: var(--hb-text-muted);
+}
+
+.hangout-bar__mahrem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--hb-text-muted);
+  font-size: 12px;
+}
+
+/* A toast with answers, e.g. a knock on a Mahrem room (App.tsx, A55). */
+.toast:has([data-button]) {
+  width: 440px;
+}
+
+.toast [data-button] {
+  flex: none;
+  white-space: nowrap;
+}
+
+.toast [data-button]:first-of-type {
+  margin-left: auto;
+}
+
+.toast__description {
+  color: var(--hb-text-secondary);
+  font-size: 12px;
+}
+
 /* The call's voice settings (hangout/HangoutPanel.tsx). */
 .voice-settings__popover {
   width: 320px;

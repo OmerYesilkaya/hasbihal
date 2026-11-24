@@ -78,7 +78,7 @@ export async function startHarness(
       db: testDb.db,
       hub,
       files: new LocalFileStore(filesDir),
-      livekitRooms: { list: () => Promise.resolve(new Map()) },
+      livekitRooms: { list: () => Promise.resolve(new Map()), remove: () => Promise.resolve() },
       // Tests run jobs when they choose (app.jobs.runDue()), so nothing races them.
       runJobs: false,
       google: google.verifier,

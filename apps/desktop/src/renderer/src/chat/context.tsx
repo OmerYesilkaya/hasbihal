@@ -4,6 +4,7 @@ import type { User } from '@hasbihal/protocol';
 import type { AppInfo } from '../../../shared/app-info.ts';
 import type { Client } from '../client.ts';
 import type { HangoutSession, HangoutState } from '../hangout/session.ts';
+import type { Knocking } from '../mahrem/knocking.ts';
 
 /** What the chat screens share: the store, the server, and the live connection. */
 export interface Chat {
@@ -15,6 +16,8 @@ export interface Chat {
   typing: (roomId: string) => void;
   /** The voice and video call this app is in, if any. */
   hangout: HangoutSession;
+  /** Mahrem rooms this app knocked on and waits at (A55). */
+  knocking: Knocking;
 }
 
 const ChatContext = createContext<Chat | null>(null);
@@ -39,6 +42,12 @@ export function useChatState(): ChatState {
 export function useMembersByUsername(): ReadonlyMap<string, User> {
   const { members } = useChatState();
   return useMemo(() => new Map([...members.values()].map((m) => [m.username, m])), [members]);
+}
+
+/** The Mahrem rooms this app waits at (A55); re-renders on every change. */
+export function useKnocking(): ReadonlySet<string> {
+  const { knocking } = useChat();
+  return useSyncExternalStore(knocking.subscribe, knocking.getSnapshot);
 }
 
 /** The hangout's current state; re-renders on every change. */

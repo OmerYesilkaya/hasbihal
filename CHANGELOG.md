@@ -4,6 +4,16 @@ Her sürümde neler değişti. Yeni sürüm çıkarken buraya `## <sürüm>` ba�
 sayfasındaki notlar buradan alınır (`.github/workflows/release.yml`). Kurulum için:
 [docs/KURULUM.md](docs/KURULUM.md).
 
+## 0.7.0
+
+- **Mahrem odalar:** bir odanın sesli sohbetini belirli kişilere ayırabilirsin. Odanın **⋯**
+  menüsünden **Mahremiyet…**'i seç, listeyi belirle ve **Mahrem yap**'a bas. Mahrem odalar
+  kilitle görünür; yazışma herkese açık kalır.
+- Listede olmayanlar sesli sohbete doğrudan giremez, **Kapıyı çal**'a basar. Listedekiler kapı
+  sesini duyar; biri **İçeri al** derse o görüşmeye katılırlar.
+- Listeyi yalnızca listedekiler değiştirir ya da mahremiyeti kaldırır. Yöneticiler dahil başka
+  kimse değiştiremez.
+
 ## 0.6.0
 
 - **Kendi kendine güncelleme:** yeni sürüm çıkınca Hasbihal sol tarafta haber verir. **Güncelle**'ye

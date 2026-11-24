@@ -53,7 +53,7 @@ describe('notification rules (A28)', () => {
     ).toBe(false);
   });
 
-  it('announces hangouts unless turned off or muted, and always nudges and reminders', () => {
+  it('announces hangouts unless turned off or muted, and always nudges, knocks and reminders', () => {
     expect(noticeFor({ kind: 'hangout_started', prefs: prefs() }, at).notify).toBe(true);
     expect(
       noticeFor({ kind: 'hangout_started', prefs: prefs({ hangoutAlerts: false }) }, at).notify,
@@ -62,6 +62,7 @@ describe('notification rules (A28)', () => {
       noticeFor({ kind: 'hangout_started', prefs: prefs({ notify: 'muted' }) }, at).notify,
     ).toBe(false);
     expect(noticeFor({ kind: 'nudge' }, at)).toEqual({ notify: true, sound: true });
+    expect(noticeFor({ kind: 'knock' }, at)).toEqual({ notify: true, sound: true });
     expect(noticeFor({ kind: 'event_reminder' }, at)).toEqual({ notify: true, sound: true });
   });
 
@@ -74,6 +75,7 @@ describe('notification rules (A28)', () => {
     const busy = { ...at, busy: true };
     expect(forMessage(message({ mentions: [ME] }), prefs(), busy).notify).toBe(false);
     expect(noticeFor({ kind: 'nudge' }, busy).notify).toBe(false);
+    expect(noticeFor({ kind: 'knock' }, busy).notify).toBe(false);
     expect(noticeFor({ kind: 'event_reminder' }, busy).notify).toBe(false);
   });
 });

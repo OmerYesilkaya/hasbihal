@@ -102,6 +102,7 @@ allowed_emails   email, role, added_by?, added_at
 access_requests  email, name, requested_at
 
 rooms            id, name, topic?, position, created_by, archived_at?
+room_mahrem      room_id, user_id, added_by?, added_at        (A55: the room is Mahrem while it has rows)
 room_user_prefs  room_id, user_id, notify_level ('mentions'|'all'|'muted'),
                  sound_on_message bool, hangout_start_alerts bool, last_read_message_id?
 
@@ -249,6 +250,12 @@ The embedded Chromium will age (A30), so the renderer is locked down from day on
 1. The client calls `POST /rooms/:id/hangout/token`.
 2. The server checks membership and returns a short-lived **LiveKit access token**: room = our room id, identity = our user id, with publish/subscribe grants.
 3. The client connects to LiveKit directly. Media never passes through our Node server.
+
+**Mahrem rooms (A55).** A room is Mahrem while `room_mahrem` lists anyone. The token is then only for people on the list, or with a pass:
+
+- `PUT /rooms/:id/mahrem { memberIds }` sets the list (turning it on, or changing it); `DELETE /rooms/:id/mahrem` turns it off. Only people on the list may change it, except that anyone may turn it on with themselves on the list. The room's `mahremMemberIds` reach everyone in `room_updated`; everyone on the old or new list also gets an ephemeral `mahrem_changed` naming who changed what.
+- `POST /rooms/:id/mahrem/knock` sends an ephemeral `knock` to everyone on the list who is online (30 s cooldown per person and room). `POST /rooms/:id/mahrem/knocks/:userId { admit }` answers it; `knock_answered` goes to the knocker and the list, so other prompts close. Admitting gives an in-memory pass for one call: it ends when they leave, or after 2 minutes unused.
+- After the list changes, and whenever LiveKit reports a join (§6.3), anyone in the call without the right is removed through LiveKit's API, so a token issued earlier can't be used to slip in.
 
 ### 6.2 Media settings (A29, A14)
 

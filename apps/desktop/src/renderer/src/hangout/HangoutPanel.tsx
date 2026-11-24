@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { User } from '@hasbihal/protocol';
 import { Avatar } from '../components/Avatar.tsx';
-import { useChat, useChatState, useHangout } from '../chat/context.tsx';
+import { useChat, useChatState, useHangout, useKnocking } from '../chat/context.tsx';
+import { toastError } from '../components/toast.ts';
 import { useT } from '../i18n.tsx';
 import { screenVolumeKey, type ParticipantView, type ShareView } from './session.ts';
 import { SharePicker } from './SharePicker.tsx';
 import { VoiceSettingsFields } from './VoiceSettings.tsx';
 import { Popover } from '../components/Popover.tsx';
 import {
+  DoorClosed,
   HeadphoneOff,
   Headphones,
+  Lock,
   Mic,
   MicOff,
   PhoneOff,
@@ -29,10 +32,27 @@ import { Tip } from '../components/Tip.tsx';
  */
 export function HangoutPanel({ roomId }: { roomId: string }) {
   const t = useT();
-  const { hangout } = useChat();
+  const { hangout, client, knocking } = useChat();
   const call = useHangout();
   const state = useChatState();
+  const waiting = useKnocking().has(roomId);
   const here = state.hangouts.get(roomId) ?? [];
+  // A55: a Mahrem room's call is for its list; everyone else knocks.
+  const list = state.rooms.get(roomId)?.mahremMemberIds ?? [];
+  const mahrem = list.length > 0;
+  const mustKnock = mahrem && !list.includes(state.me?.id ?? '');
+
+  const knock = async () => {
+    const result = await client.rooms.knock(roomId);
+    if (!result.ok) {
+      toastError(
+        t(result.error.code === 'rate_limited' ? 'mahrem.knockTooSoon' : 'error.unexpected'),
+      );
+      return;
+    }
+    if (result.value.delivered) knocking.start(roomId);
+    else toastError(t('mahrem.knockNoOne'));
+  };
   // A14: one share can fill the hangout area; by user id.
   const [focused, setFocused] = useState<string | null>(null);
 
@@ -48,14 +68,31 @@ export function HangoutPanel({ roomId }: { roomId: string }) {
             <span>{t('hangout.inRoom', { count: here.length })}</span>
           </div>
         )}
-        <button
-          type="button"
-          className={here.length ? 'button button--primary' : 'button'}
-          disabled={call.status === 'connecting'}
-          onClick={() => void hangout.join(roomId)}
-        >
-          <Icon icon={Headphones} /> {t('hangout.join')}
-        </button>
+        {mustKnock ? (
+          <button
+            type="button"
+            className="button"
+            disabled={waiting}
+            data-testid="knock"
+            onClick={() => void knock()}
+          >
+            <Icon icon={DoorClosed} /> {waiting ? t('mahrem.waiting') : t('mahrem.knock')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={here.length ? 'button button--primary' : 'button'}
+            disabled={call.status === 'connecting'}
+            onClick={() => void hangout.join(roomId)}
+          >
+            <Icon icon={Headphones} /> {t('hangout.join')}
+          </button>
+        )}
+        {mahrem && (
+          <span className="hangout-bar__mahrem" data-testid="mahrem-hint">
+            <Icon icon={Lock} /> {t('mahrem.callHint')}
+          </span>
+        )}
       </div>
     );
   }

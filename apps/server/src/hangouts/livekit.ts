@@ -1,4 +1,4 @@
-import { AccessToken, RoomServiceClient, TrackSource } from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient, TrackSource, ServerError } from 'livekit-server-sdk';
 import { Id, type HangoutParticipant } from '@hasbihal/protocol';
 import type { Snapshot } from './tracker.ts';
 
@@ -15,6 +15,8 @@ export interface LiveKitConfig {
 export interface LiveKitRooms {
   /** Everyone in every LiveKit room, keyed by our room id. */
   list(): Promise<Snapshot>;
+  /** Drops someone from a room's call (A55); nothing happens if they aren't in it. */
+  remove(roomId: string, userId: string): Promise<void>;
 }
 
 /** Joining a room's hangout (ARCHITECTURE §6.1): 10 minutes to connect; LiveKit renews it after. */
@@ -68,6 +70,13 @@ export function liveKitRooms(config: LiveKitConfig): LiveKitRooms {
         if (people.length) snapshot.set(room.name, people);
       }
       return snapshot;
+    },
+    async remove(roomId, userId) {
+      await client.removeParticipant(roomId, userId).catch((error: unknown) => {
+        // Already gone (left, or the room closed): that's what we wanted.
+        if (error instanceof ServerError && error.status === 404) return;
+        throw error;
+      });
     },
   };
 }
