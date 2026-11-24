@@ -43,11 +43,10 @@ One monorepo using **pnpm workspaces**, so every TypeScript package shares types
 hasbihal/
 ├─ apps/
 │  ├─ desktop/        Electron main + preload + React renderer (electron-vite)
-│  ├─ server/         Node server: HTTP API, WebSocket gateway, scheduler, workers
-│  └─ mobile/         (later, A5) React Native / Expo
+│  └─ server/         Node server: HTTP API, WebSocket gateway, scheduler, workers
 ├─ packages/
 │  ├─ protocol/       Wire contract: zod schemas, event types, error codes, PROTOCOL_VERSION
-│  ├─ core/           Client logic shared by desktop + mobile: API client, sync engine,
+│  ├─ core/           Client logic kept apart from the UI: API client, sync engine,
 │  │                  stores, Markdown parser, i18n catalogs, formatting helpers
 │  └─ config/         Shared tsconfig bases (ESLint and Prettier config live at the repo root)
 ├─ infra/             docker-compose.yml, Caddyfile, livekit.yaml, backup scripts
@@ -297,7 +296,7 @@ LiveKit **webhooks** (`participant_joined`, `participant_left`, `track_published
 - Occurrences are expanded on read for a time window. They are never stored.
 - After every event change, the scheduler computes the next reminder time (`occurrence_start − reminder_offset_min`) and enqueues a job. When the job fires, it sends the reminder to online invitees and schedules the next one.
 - RSVPs are per occurrence, so "can't make it this Monday" doesn't affect next Monday.
-- **Limitation:** on desktop, a reminder only arrives if the app is running. Tray mode and launch at startup (A38, A39) make that the normal case. Mobile push comes with A5.
+- **Limitation:** on desktop, a reminder only arrives if the app is running. Tray mode and launch at startup (A38, A39) make that the normal case. There is no mobile push (A5: desktop only).
 
 ---
 
