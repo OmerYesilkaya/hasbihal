@@ -409,6 +409,31 @@ export const tr = {
   'events.notComing': 'Gelemiyor: {names}',
   'events.skippedNote': 'Bu tarih atlandı',
   'events.chipEmpty': 'Etkinlik yok',
+  'feedback.open': 'Geri bildirim gönder',
+  'feedback.title': 'Geri bildirim',
+  'feedback.close': 'Kapat',
+  'feedback.intro':
+    'Bir hata mı buldun, aklına bir fikir mi geldi? Hasbihal’i birlikte geliştirelim.',
+  'feedback.kind': 'Ne hakkında?',
+  'feedback.kind.bug': 'Hata',
+  'feedback.kind.idea': 'Öneri',
+  'feedback.kind.other': 'Diğer',
+  'feedback.subject': 'Başlık',
+  'feedback.subject.bug': 'Kısaca ne oldu?',
+  'feedback.subject.idea': 'Kısaca önerin ne?',
+  'feedback.subject.other': 'Kısaca konu ne?',
+  'feedback.details': 'Ayrıntılar',
+  'feedback.details.bug': 'Ne yapıyordun, ne bekliyordun, ne oldu?',
+  'feedback.details.idea': 'Ne istersin, sana nasıl yardımı olur?',
+  'feedback.details.other': 'Aklındakini yaz.',
+  'feedback.diagnostics': 'Uygulama ve işletim sistemi sürümünü ekle ({app}, {os})',
+  'feedback.public':
+    'Geri bildirimin GitHub’da herkese açık olarak yayımlanır. Adın orada yazmaz; yine de kişisel bilgi paylaşma.',
+  'feedback.send': 'Gönder',
+  'feedback.cancel': 'Vazgeç',
+  'feedback.sent': 'Teşekkürler! Geri bildirimin iletildi.',
+  'feedback.tooMany':
+    'Bir saatte en fazla 5 geri bildirim gönderebilirsin. Biraz sonra yeniden dene.',
 } as const;
 
 export type MessageKey = keyof typeof tr;

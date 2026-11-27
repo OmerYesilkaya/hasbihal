@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { createServer, type AddressInfo } from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { E2E_FEEDBACK_REPO, E2E_GITHUB_TOKEN, startFakeGithub } from './fake-github.ts';
 import { E2E_GOOGLE_CLIENT_ID, startFakeGoogle } from './fake-google.ts';
 import { allowEmailOnServer, googleAccount, SERVER_DIR, signInWithGoogle } from './support.ts';
 
@@ -228,6 +229,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const database = await startPostgres();
   const site = await startSite();
   const google = await startFakeGoogle();
+  const github = await startFakeGithub();
   const port = await freePort();
   const serverUrl = `http://127.0.0.1:${String(port)}`;
   const livekit = await startLiveKit(port);
@@ -248,6 +250,10 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     GOOGLE_CLIENT_ID: E2E_GOOGLE_CLIENT_ID,
     GOOGLE_ISSUER: google.url,
     GOOGLE_JWKS_URL: `${google.url}/certs`,
+    // Feedback issues go to the stand-in GitHub (fake-github.ts).
+    FEEDBACK_GITHUB_REPO: E2E_FEEDBACK_REPO,
+    FEEDBACK_GITHUB_TOKEN: E2E_GITHUB_TOKEN,
+    FEEDBACK_GITHUB_API_URL: github.url,
   };
   const server = spawn(process.execPath, ['src/main.ts'], {
     cwd: SERVER_DIR,
@@ -261,10 +267,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_DATABASE_URL = database.url;
   process.env.E2E_SITE_URL = site.url;
   process.env.E2E_GOOGLE_URL = google.url;
+  process.env.E2E_GITHUB_URL = github.url;
   process.env.E2E_SEED_EMAIL = await createSeedAdmin(serverUrl, database.url, google.url);
 
   return async () => {
     server.kill('SIGTERM');
-    await Promise.all([database.stop(), livekit.stop(), site.stop(), google.stop()]);
+    await Promise.all([database.stop(), livekit.stop(), site.stop(), google.stop(), github.stop()]);
   };
 }

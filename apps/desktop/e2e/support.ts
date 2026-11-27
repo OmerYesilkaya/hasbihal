@@ -10,6 +10,7 @@ import {
   type Page,
 } from '@playwright/test';
 import { newId } from '@hasbihal/core';
+import type { FakeIssue } from './fake-github.ts';
 import { Attachment, GoogleSignInResult, Message, Room, type Role } from '@hasbihal/protocol';
 
 // Shared by every spec: each test makes its own people and rooms through the API (milliseconds),
@@ -74,6 +75,14 @@ export const uniqueEmail = (name: string) =>
     .normalize('NFD')
     .replace(/[^a-z]/g, '')
     .slice(0, 10)}.${String(process.pid % 1000)}.${String(++counter)}@gmail.com`;
+
+// ---- GitHub, as the stand-in plays it (fake-github.ts) -----------------------------------------
+
+/** The issues the server has opened so far, oldest first. */
+export async function githubIssues(): Promise<FakeIssue[]> {
+  const response = await fetch(new URL('/test/issues', process.env.E2E_GITHUB_URL ?? ''));
+  return (await response.json()) as FakeIssue[];
+}
 
 // ---- the server's API, for setting the scene -------------------------------------------------
 
@@ -255,7 +264,8 @@ export { expect } from '@playwright/test';
  */
 export async function snap(page: Page, name: string): Promise<void> {
   const dir = process.env.E2E_SCREENSHOTS;
-  if (dir) await page.screenshot({ path: path.join(dir, `${name}.png`) });
+  // Transitions finished first: a shot right after a change would catch colors mid-fade.
+  if (dir) await page.screenshot({ path: path.join(dir, `${name}.png`), animations: 'disabled' });
 }
 
 /** The member list row for a display name. */

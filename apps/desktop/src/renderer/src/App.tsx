@@ -37,7 +37,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useGateway } from './useGateway.ts';
 import { PanelsProvider, PanelToggle, usePanelsState } from './layout/panels.tsx';
 import { SettingsDialog } from './settings/SettingsDialog.tsx';
-import { LogOut, Settings, UserRound } from 'lucide-react';
+import { FeedbackDialog } from './feedback/FeedbackDialog.tsx';
+import { LogOut, MessageSquareHeart, Settings, UserRound } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { Knocking } from './mahrem/knocking.ts';
 import { toastError } from './components/toast.ts';
@@ -366,6 +367,7 @@ function Shell({ info, user, onSignOut }: ShellProps) {
   // The chosen room, or the first one; a deleted or archived choice falls back the same way.
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   // ⌘, (Ctrl+, on Windows) opens Settings, as in most desktop apps.
   useEffect(() => {
     const open = (e: KeyboardEvent) => {
@@ -439,6 +441,9 @@ function Shell({ info, user, onSignOut }: ShellProps) {
                 onOpenSettings={() => {
                   setSettingsOpen(true);
                 }}
+                onOpenFeedback={() => {
+                  setFeedbackOpen(true);
+                }}
               />
             </aside>
 
@@ -490,6 +495,13 @@ function Shell({ info, user, onSignOut }: ShellProps) {
             }}
           />
         )}
+        {feedbackOpen && (
+          <FeedbackDialog
+            onClose={() => {
+              setFeedbackOpen(false);
+            }}
+          />
+        )}
         {profileOpen && (
           <ProfileDialog
             onClose={() => {
@@ -509,6 +521,7 @@ interface UserPanelProps {
   onSignOut: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
+  onOpenFeedback: () => void;
 }
 
 function UserPanel({
@@ -518,6 +531,7 @@ function UserPanel({
   onSignOut,
   onOpenProfile,
   onOpenSettings,
+  onOpenFeedback,
 }: UserPanelProps) {
   const t = useT();
   const mode = presence === 'busy' ? 'busy' : 'available';
@@ -564,6 +578,9 @@ function UserPanel({
         </MenuItem>
         <MenuItem icon={<Icon icon={Settings} />} onSelect={onOpenSettings}>
           {t('settings.open')}
+        </MenuItem>
+        <MenuItem icon={<Icon icon={MessageSquareHeart} />} onSelect={onOpenFeedback}>
+          {t('feedback.open')}
         </MenuItem>
         <MenuSeparator />
         <MenuItem icon={<Icon icon={LogOut} />} danger onSelect={onSignOut}>

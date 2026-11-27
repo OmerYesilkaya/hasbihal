@@ -19,6 +19,9 @@ import { collectOrphanFiles } from './files/gc.ts';
 import { registerFiles } from './files/routes.ts';
 import { FileUrlSigner } from './files/signing.ts';
 import { registerEvents } from './events/routes.ts';
+import { githubIssues, type IssueTracker } from './feedback/issues.ts';
+import { registerFeedback } from './feedback/routes.ts';
+import { FEEDBACK_ISSUE_JOB, feedbackIssueJob } from './feedback/service.ts';
 import { EVENT_REMINDER_JOB, eventReminderJob } from './events/service.ts';
 import { JobQueue } from './jobs/queue.ts';
 import { SafeFetcher, type Fetcher } from './previews/fetcher.ts';
@@ -46,6 +49,8 @@ export interface AppDeps {
   livekitRooms?: LiveKitRooms;
   /** Defaults to checking ID tokens against Google's keys (`config.google`); tests sign their own. */
   google?: GoogleVerifier;
+  /** Defaults to GitHub (`config.feedbackGithub`), or none; tests record the issues instead. */
+  issues?: IssueTracker;
 }
 
 /**
@@ -97,6 +102,8 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
 
   const files = deps.files ?? new LocalFileStore(config.filesDir);
   const fetcher = deps.fetcher ?? new SafeFetcher({ allowPrivate: config.linkPreviewAllowPrivate });
+  const issues =
+    deps.issues ?? (config.feedbackGithub ? githubIssues(config.feedbackGithub) : undefined);
   const jobs = new JobQueue(deps.db, app.log, {
     [LINK_PREVIEW_JOB]: linkPreviewJob({
       db: deps.db,
@@ -108,6 +115,13 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
     }),
     [EVENT_REMINDER_JOB]: eventReminderJob({ db: deps.db, hub }),
     [GOOGLE_PHOTO_JOB]: googlePhotoJob({ db: deps.db, store: files, hub, fetcher }),
+    ...(issues && {
+      [FEEDBACK_ISSUE_JOB]: feedbackIssueJob({
+        db: deps.db,
+        issues,
+        serverVersion: config.serverVersion,
+      }),
+    }),
   });
   app.decorate('jobs', jobs);
   if (deps.runJobs !== false) {
@@ -137,6 +151,9 @@ export async function buildApp(config: Config, deps: AppDeps): Promise<FastifyIn
   registerAdmin(app, { db: deps.db, hub, guards });
   registerChat(app, { db: deps.db, hub, guards, jobsQueued });
   registerEvents(app, { db: deps.db, hub, guards, jobsQueued });
+  registerFeedback(app, { db: deps.db, guards, publish: issues !== undefined, jobsQueued });
+  if (!issues)
+    app.log.warn('FEEDBACK_GITHUB_REPO is not set; feedback is kept but not published as issues');
   registerFiles(app, {
     db: deps.db,
     store: files,

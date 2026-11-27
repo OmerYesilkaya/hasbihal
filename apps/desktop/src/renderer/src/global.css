@@ -3704,6 +3704,17 @@ input::-webkit-calendar-picker-indicator:hover {
   width: 560px;
 }
 
+/* Send feedback (A56). */
+.feedback {
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+}
+
+.feedback__intro {
+  margin: 0;
+}
+
 /* Every tab keeps the same height, so the dialog doesn't jump between them. */
 .settings__body {
   min-height: 420px;

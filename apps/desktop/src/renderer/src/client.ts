@@ -1,5 +1,6 @@
 import {
   EventWindow,
+  FeedbackReceipt,
   FileUrls,
   HangoutToken,
   KnockResult,
@@ -30,6 +31,7 @@ import {
   type RsvpRequest,
   type SaveEventRequest,
   type SearchQuery,
+  type SendFeedbackRequest,
   type SendMessageRequest,
   type SetMahremRequest,
   type UpdateProfileRequest,
@@ -136,6 +138,10 @@ export function createClient(serverUrl: string) {
       urls: (body: FileUrlsRequest) =>
         request(serverUrl, 'POST', '/files/urls', { body, schema: FileUrls }),
     },
+
+    /** A56: becomes a public GitHub issue, without the sender's name. */
+    feedback: (body: SendFeedbackRequest) =>
+      request(serverUrl, 'POST', '/feedback', { body, schema: FeedbackReceipt }),
 
     nudge: (body: NudgeRequest) =>
       request(serverUrl, 'POST', '/nudges', { body, schema: NudgeResult }),

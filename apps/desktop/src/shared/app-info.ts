@@ -5,6 +5,8 @@ import type { Locale } from '@hasbihal/core';
 export interface AppInfo {
   appVersion: string;
   platform: 'darwin' | 'win32' | 'linux';
+  /** The operating system's version, e.g. `15.1.0` on macOS or `10.0.22631` on Windows. */
+  osVersion: string;
   /** Base URL of the Hasbihal server, e.g. https://hasbihal.duckdns.org */
   serverUrl: string;
 }

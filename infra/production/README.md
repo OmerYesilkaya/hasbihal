@@ -50,6 +50,7 @@ Fill in `.env`:
 - `LIVEKIT_API_SECRET`: the output of `openssl rand -base64 32`.
 - `AUTH_SIGNING_KEY`: generate it as shown below, and paste it in quotes.
 - `GOOGLE_CLIENT_ID`: the client id of the app's Google OAuth client (section 5).
+- `FEEDBACK_GITHUB_TOKEN` (optional): lets feedback from the app become GitHub issues. See "Feedback from the app" below.
 - `RESTIC_PASSWORD`: the output of `openssl rand -base64 32`. It encrypts the backups; **keep a copy in your password manager**, because without it the backups can't be read. Leave `RESTIC_REPOSITORY=/backups` for now (see Backups below).
 
 To generate the signing key, already in the one-line form `.env` needs:
@@ -104,6 +105,20 @@ The server address is built into the app (A30), so the installers are made for t
 4. The workflow builds the macOS `.dmg` and the Windows `.exe` and puts them on a **draft release**, with the install guide (`docs/KURULUM.md`) as its notes. Try both installers, then publish it and send the family the link.
 
 On GitHub's free plan for private repositories, a release uses about 150 of the 2,000 monthly minutes, because macOS minutes count ten times.
+
+## Feedback from the app (A56)
+
+People send bugs, ideas, and other feedback from their menu (**Geri bildirim gönder**). The server keeps each one in its database, then opens a **public** issue for it in `FEEDBACK_GITHUB_REPO`, without the sender's name. Issues carry the `feedback` label, plus `bug` or `enhancement`. Who sent what stays in the `feedback` table, for you only.
+
+To turn it on, once:
+
+1. On GitHub, go to **Settings → Developer settings → Personal access tokens → Fine-grained tokens** and generate a token:
+   - **Repository access:** only `FEEDBACK_GITHUB_REPO` (e.g. `OmerYesilkaya/hasbihal`);
+   - **Permissions:** **Issues: Read and write**, nothing else;
+   - an expiry date you'll remember to renew (feedback is kept, but not published, once it expires).
+2. Put it in `.env` as `FEEDBACK_GITHUB_TOKEN`, and restart: `docker compose up -d`.
+
+If GitHub can't be reached, the server tries again for about 40 minutes. Feedback whose issue never got opened stays in the table with no `issue_number`.
 
 ## Backups (A31)
 
