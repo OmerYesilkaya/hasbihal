@@ -449,7 +449,8 @@ input::-webkit-calendar-picker-indicator:hover {
   height: 56px;
   display: flex;
   align-items: center;
-  padding: 0 16px 0 20px;
+  /* The right end stays clear for the connection state drawn over it (.content__status). */
+  padding: 0 140px 0 20px;
   border-bottom: 1px solid var(--hb-border);
 }
 
@@ -1195,7 +1196,6 @@ input::-webkit-calendar-picker-indicator:hover {
 
 .room-view__header {
   gap: 12px;
-  padding-right: 140px; /* room for the connection state */
 }
 
 .room-view__name {

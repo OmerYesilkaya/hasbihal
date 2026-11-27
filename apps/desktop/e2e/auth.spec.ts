@@ -28,6 +28,11 @@ test('signs in with Google: name and photo come from Google; stays signed in aft
   // The Google photo arrives a moment later, copied by the server (A40).
   await expect(page.locator('.user-panel img.avatar__photo')).toBeVisible();
   await snap(page, '2-signed-in');
+  // No room is open; the connection state must leave the header's controls clickable.
+  const membersToggle = page.getByTestId('toggle-members');
+  await membersToggle.click();
+  await expect(membersToggle).toHaveAccessibleName('Üye listesini göster');
+  await membersToggle.click();
 
   const again = await desktop.restart(page);
   await expect(again.getByTestId('current-user')).toHaveText('Ömer Test');
