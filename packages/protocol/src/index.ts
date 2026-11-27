@@ -6,5 +6,6 @@ export * from './chat.ts';
 export * from './files.ts';
 export * from './events.ts';
 export * from './hangout.ts';
+export * from './feedback.ts';
 export * from './http.ts';
 export * from './gateway.ts';

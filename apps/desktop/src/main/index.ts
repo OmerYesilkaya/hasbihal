@@ -203,6 +203,7 @@ void app.whenReady().then(async () => {
     appVersion: app.getVersion(),
     platform:
       process.platform === 'darwin' || process.platform === 'win32' ? process.platform : 'linux',
+    osVersion: process.getSystemVersion(),
     serverUrl,
   }));
   handle(IPC.authRestore, z.undefined(), () => auth.restore());

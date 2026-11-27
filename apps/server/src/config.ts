@@ -3,6 +3,10 @@ import { z } from 'zod';
 import pkg from '../package.json' with { type: 'json' };
 import { GOOGLE_ISSUERS, GOOGLE_JWKS_URL } from './auth/google.ts';
 
+/** An optional setting that may arrive as '' (set but blank), which then means unset. */
+const unsetIfEmpty = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema);
+
 const Env = z.object({
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().min(0).max(65535).default(8080),
@@ -47,6 +51,18 @@ const Env = z.object({
   // A stand-in for Google (end-to-end tests): its issuer and signing keys. Refused in production.
   GOOGLE_ISSUER: z.url().optional(),
   GOOGLE_JWKS_URL: z.url().optional(),
+  // Feedback from the app becomes issues here (A56): `owner/name`, with a fine-grained token that
+  // may only write this repository's issues. Without both, feedback is only kept in the database.
+  // Empty counts as unset: the production compose file passes them through even when blank.
+  FEEDBACK_GITHUB_REPO: unsetIfEmpty(
+    z
+      .string()
+      .regex(/^[\w.-]+\/[\w.-]+$/, 'owner/name')
+      .optional(),
+  ),
+  FEEDBACK_GITHUB_TOKEN: unsetIfEmpty(z.string().min(1).optional()),
+  // A stand-in for GitHub's API (end-to-end tests). Refused in production.
+  FEEDBACK_GITHUB_API_URL: z.url().optional(),
 });
 
 export interface Config {
@@ -64,6 +80,8 @@ export interface Config {
   authRateLimitPerMinute: number;
   google: { clientId: string | undefined; issuers: string[]; jwksUrl: string };
   linkPreviewAllowPrivate: boolean;
+  /** Where feedback is published (A56), or undefined to only keep it. */
+  feedbackGithub: { repo: string; token: string; apiUrl: string } | undefined;
   serverVersion: string;
 }
 
@@ -108,6 +126,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       if (parsed.LINK_PREVIEW_ALLOW_PRIVATE && parsed.NODE_ENV === 'production')
         throw new Error('LINK_PREVIEW_ALLOW_PRIVATE is never allowed in production');
       return parsed.LINK_PREVIEW_ALLOW_PRIVATE;
+    })(),
+    feedbackGithub: (() => {
+      const { FEEDBACK_GITHUB_REPO: repo, FEEDBACK_GITHUB_TOKEN: token } = parsed;
+      if (!repo !== !token)
+        throw new Error('FEEDBACK_GITHUB_REPO and FEEDBACK_GITHUB_TOKEN go together');
+      if (parsed.FEEDBACK_GITHUB_API_URL && parsed.NODE_ENV === 'production')
+        throw new Error('FEEDBACK_GITHUB_API_URL is never allowed in production');
+      const apiUrl = parsed.FEEDBACK_GITHUB_API_URL ?? 'https://api.github.com';
+      return repo && token ? { repo, token, apiUrl } : undefined;
     })(),
     serverVersion: pkg.version,
   };

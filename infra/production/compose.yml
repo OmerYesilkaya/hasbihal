@@ -35,6 +35,9 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}
       # The app's Google OAuth client (A25): only ID tokens issued to it are accepted.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env}
+      # Feedback becomes GitHub issues (A56). Optional: blank keeps it in the database only.
+      FEEDBACK_GITHUB_REPO: ${FEEDBACK_GITHUB_REPO:-}
+      FEEDBACK_GITHUB_TOKEN: ${FEEDBACK_GITHUB_TOKEN:-}
       # Behind Caddy: rate limits must see the client's address, not Caddy's.
       TRUST_PROXY: 'true'
       # The packaged desktop app's origin (A30: there is no web client).

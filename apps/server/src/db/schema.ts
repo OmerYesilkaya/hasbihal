@@ -1,5 +1,5 @@
 import type { ColumnType, Generated } from 'kysely';
-import type { Role } from '@hasbihal/protocol';
+import type { FeedbackDiagnostics, FeedbackKind, Role } from '@hasbihal/protocol';
 
 /**
  * The database schema as Kysely sees it: one entry per table, added together with the migration
@@ -27,6 +27,7 @@ export interface Database {
   event_invitees: EventInviteesTable;
   event_exceptions: EventExceptionsTable;
   event_rsvps: EventRsvpsTable;
+  feedback: FeedbackTable;
 }
 
 /** A timestamp with a database default: optional on insert, never updated by hand. */
@@ -217,4 +218,17 @@ export interface EventRsvpsTable {
   user_id: string;
   response: 'yes' | 'no';
   updated_at: CreatedAt;
+}
+
+export interface FeedbackTable {
+  id: string;
+  author_id: string | null;
+  kind: FeedbackKind;
+  title: string;
+  body: string;
+  /** jsonb: written as JSON text, read back as the object. */
+  diagnostics: ColumnType<FeedbackDiagnostics | null, string | null, string | null>;
+  issue_number: number | null;
+  issue_url: string | null;
+  created_at: CreatedAt;
 }

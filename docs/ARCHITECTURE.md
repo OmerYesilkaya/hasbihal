@@ -125,6 +125,9 @@ event_invitees   event_id, user_id
 event_exceptions event_id, occurrence_start, kind ('skipped'|'moved'), new_starts_at?
 event_rsvps      event_id, occurrence_start, user_id, response ('yes'|'no'), updated_at
 
+feedback         id, author_id?, kind ('bug'|'idea'|'other'), title, body, diagnostics? jsonb,
+                 issue_number?, issue_url?, created_at       (A56: published without author)
+
 event_log        seq (bigserial), type, payload jsonb, created_at     (§5.3 replay)
 jobs             (scheduler queue, §3.6)
 ```
