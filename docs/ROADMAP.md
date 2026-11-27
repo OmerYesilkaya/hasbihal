@@ -137,5 +137,4 @@ The core experience.
 
 ## Later (after v1.0)
 
-- Mobile apps for iOS and Android (A5, T2), including push notifications. This needs a privacy-conscious design for Apple/Google push.
 - Anything the family asks for once they live with it.

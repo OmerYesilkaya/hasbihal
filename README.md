@@ -85,12 +85,12 @@ In Windows PowerShell:
 $env:HASBIHAL_SERVER_URL="http://192.168.1.20:8080"; $env:HASBIHAL_LIVEKIT_URL="ws://192.168.1.20:7880"; pnpm --filter @hasbihal/desktop dev
 ```
 
-| Path                | What                                              |
-| ------------------- | ------------------------------------------------- |
-| `apps/desktop`      | Electron + React desktop app                      |
-| `apps/server`       | Node server: HTTP API and WebSocket gateway       |
-| `packages/protocol` | Wire contract shared by client and server         |
-| `packages/core`     | Client logic shared by desktop and (later) mobile |
-| `packages/config`   | Shared TypeScript configuration                   |
-| `infra`             | Docker Compose for local development              |
-| `spikes`            | Throwaway experiments (not part of the product)   |
+| Path                | What                                            |
+| ------------------- | ----------------------------------------------- |
+| `apps/desktop`      | Electron + React desktop app                    |
+| `apps/server`       | Node server: HTTP API and WebSocket gateway     |
+| `packages/protocol` | Wire contract shared by client and server       |
+| `packages/core`     | Client logic kept apart from the UI             |
+| `packages/config`   | Shared TypeScript configuration                 |
+| `infra`             | Docker Compose for local development            |
+| `spikes`            | Throwaway experiments (not part of the product) |
