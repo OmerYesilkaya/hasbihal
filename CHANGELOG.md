@@ -4,6 +4,16 @@ Her sürümde neler değişti. Yeni sürüm çıkarken buraya `## <sürüm>` ba�
 sayfasındaki notlar buradan alınır (`.github/workflows/release.yml`). Kurulum için:
 [docs/KURULUM.md](docs/KURULUM.md).
 
+## 0.9.0
+
+- **Geri bildirim gönder:** sol alttaki adına ya da fotoğrafına tıklayınca açılan menüde yeni bir
+  seçenek var. Bir hata bildir, bir öneride bulun ya da aklındakini yaz; Hasbihal'i birlikte
+  geliştirelim. Gönderdiğin GitHub'da herkese açık olarak yayımlanır, ama adın yazmaz. İstersen
+  uygulamanın ve işletim sisteminin sürümünü de eklersin, hatayı bulmak kolaylaşır.
+- Yeni bir mesaj gelince sohbet bir an yukarı zıplayıp sonra aşağı inmiyor; doğrudan yeni mesaja
+  kayıyor.
+- Hiçbir oda açık değilken üstteki **Bağlı** yazısı artık üyeler düğmesinin üstüne binmiyor.
+
 ## 0.8.0
 
 - **Ekran paylaşımı büyük gelir:** biri ekranını paylaşınca, paylaşım sesli sohbet alanını kendiliğinden
