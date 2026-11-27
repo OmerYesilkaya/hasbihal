@@ -175,13 +175,17 @@ export function MessageList({
               </div>
             );
           case 'message':
+            // Spacing between items is padding on this row, never a margin: Virtuoso measures
+            // items without margins, and a mismeasured end makes following new messages jump.
             return (
-              <MessageItem
-                message={item.message}
-                startsGroup={item.startsGroup}
-                onReply={onReply}
-                onEdit={onEdit}
-              />
+              <div className="message-row" data-group-start={item.startsGroup ? true : undefined}>
+                <MessageItem
+                  message={item.message}
+                  startsGroup={item.startsGroup}
+                  onReply={onReply}
+                  onEdit={onEdit}
+                />
+              </div>
             );
         }
       }}

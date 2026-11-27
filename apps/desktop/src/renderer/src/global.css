@@ -1246,7 +1246,8 @@ input::-webkit-calendar-picker-indicator:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 14px 20px 6px;
+  /* Padding, not margin: the virtualized list measures items without their margins. */
+  padding: 14px 20px 6px;
   font-size: 12px;
   font-weight: 600;
   color: var(--hb-text-muted);
@@ -1281,8 +1282,14 @@ input::-webkit-calendar-picker-indicator:hover {
   user-select: text;
 }
 
+/* The gap above a group is the list row's padding, outside the hover highlight. Never a margin
+   on a list item: the virtualized list measures items without margins, so it would place the
+   end short and fight the follow-to-bottom scroll (a visible jump on each new message). */
+.message-row[data-group-start] {
+  padding-top: 10px;
+}
+
 .message[data-group-start] {
-  margin-top: 10px;
   padding-top: 4px;
 }
 
